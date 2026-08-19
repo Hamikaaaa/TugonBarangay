@@ -775,7 +775,7 @@ function Register() {
           {/* Header */}
 
           <div className="mb-8">
-            <div className="mb-3 flex items-center gap-2">
+            <div className="mb-3 hidden items-center gap-2 lg:flex">
               <span className="h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
 
               <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#41658A]">
