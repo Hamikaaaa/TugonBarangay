@@ -11,13 +11,21 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn(['house_number', 'street']);
-        });
+        $columns = array_filter(
+            ['house_number', 'street'],
+            fn(string $column) => Schema::hasColumn('users', $column)
+        );
+        if ($columns) {
+            Schema::table('users', function (Blueprint $table) use ($columns) {
+                $table->dropColumn($columns);
+            });
+        }
 
-        Schema::table('users', function (Blueprint $table) {
-            $table->string('address')->nullable()->after('purok');
-        });
+        if (!Schema::hasColumn('users', 'address')) {
+            Schema::table('users', function (Blueprint $table) {
+                $table->string('address')->nullable()->after('purok');
+            });
+        }
     }
 
     /**

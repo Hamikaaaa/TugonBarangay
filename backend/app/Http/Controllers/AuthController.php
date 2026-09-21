@@ -3,10 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\BarangayRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
-use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\Rules\Password;
 
 
 class AuthController extends Controller
@@ -25,23 +25,25 @@ class AuthController extends Controller
             'purok' => 'required|string|max:100',
             'address' => 'nullable|string|max:255',
 
-            'mobile_number' => 'required|string|max:20',
-            'email' => 'required|email|unique:users,email',
+            'mobile_number' => ['required', 'regex:/^09\d{9}$/'],
+            'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
 
-            'password' => 'required|string|min:8|confirmed',
-
-            'profile_photo' => [
-                'required',
-                'image',
-                'mimes:jpg,jpeg,png',
-                'max:5120',
-            ],
+            'email' => 'required|email:rfc,dns|unique:users,email',
         ]);
 
-        // Store profile photo
-        $profilePhotoPath = $request
-            ->file('profile_photo')
-            ->store('profile_photos', 'public');
+        $registryRecord = BarangayRegistry::where('first_name', $validated['first_name'])
+            ->where('last_name', $validated['last_name'])
+            ->whereDate('date_of_birth', $validated['date_of_birth'])
+            ->where('sex', $validated['sex'])
+            ->where('purok', $validated['purok'])
+            ->first();
+
+        if (!$registryRecord) {
+            return response()->json([
+                'message' => 'You are not registered in our barangay. Please contact the barangay office or email barangay@tugonbarangay.gov.ph for assistance.',
+                'errors' => ['registry' => ['You are not registered in our barangay. Please contact the barangay office or email barangay@tugonbarangay.gov.ph for assistance.']],
+            ], 422);
+        }
 
 
 
@@ -73,9 +75,9 @@ class AuthController extends Controller
 
             'password' => $validated['password'],
 
-            'profile_photo' => $profilePhotoPath,
-
             'role' => 'resident',
+            'verification_status' => 'pending',
+            'rejection_reason' => null,
         ]);
 
 
@@ -83,7 +85,7 @@ class AuthController extends Controller
 
 
         return response()->json([
-            'message' => 'Registration successful.',
+            'message' => 'Registration submitted. Your account is pending barangay verification.',
             'user' => $user,
         ], 201);
     }
