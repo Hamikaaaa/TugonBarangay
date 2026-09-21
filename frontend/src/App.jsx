@@ -7,6 +7,12 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
 import StaffDashboard from "./pages/StaffDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import Residents from "./pages/admin/Residents";
+import DocumentRequests from "./pages/admin/DocumentRequests";
+import Complaints from "./pages/admin/Complaints";
+import Chatbot from "./pages/admin/Chatbot";
+import Feedback from "./pages/admin/Feedback";
+import Reports from "./pages/admin/Reports";
 
 function App() {
   return (
@@ -47,6 +53,60 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/residents"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Residents />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/document-requests"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <DocumentRequests />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/complaints"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Complaints />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/chatbot"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Chatbot />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/feedback"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Feedback />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/reports"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Reports />
               </ProtectedRoute>
             }
           />
