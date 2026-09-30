@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\User;
+use App\Models\Admin;
+use App\Models\Resident;
+use App\Models\Staff;
 use App\Models\BarangayRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
 
@@ -28,7 +31,13 @@ class AuthController extends Controller
             'mobile_number' => ['required', 'regex:/^09\d{9}$/'],
             'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()->symbols()],
 
-            'email' => 'required|email:rfc,dns|unique:users,email',
+            'email' => [
+                'required',
+                'email:rfc,dns',
+                Rule::unique('residents', 'email'),
+                Rule::unique('staff', 'email'),
+                Rule::unique('admins', 'email'),
+            ],
         ]);
 
         $registryRecord = BarangayRegistry::where('first_name', $validated['first_name'])
@@ -56,7 +65,7 @@ class AuthController extends Controller
         );
 
         // Create user
-        $user = User::create([
+        $user = Resident::create([
             'name' => $name,
 
             'first_name' => $validated['first_name'],
@@ -75,7 +84,6 @@ class AuthController extends Controller
 
             'password' => $validated['password'],
 
-            'role' => 'resident',
             'verification_status' => 'pending',
             'rejection_reason' => null,
         ]);
@@ -96,7 +104,9 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $user = User::where('email', $credentials['email'])->first();
+        $user = Resident::where('email', $credentials['email'])->first()
+            ?? Staff::where('email', $credentials['email'])->first()
+            ?? Admin::where('email', $credentials['email'])->first();
 
         if (!$user || !Hash::check($credentials['password'], $user->password)) {
             return response()->json([

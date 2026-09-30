@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
+use App\Models\Resident;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -12,7 +12,7 @@ class UserProfilePhotoTest extends TestCase
 
     public function test_user_can_store_profile_photo_path(): void
     {
-        $user = User::create([
+        $user = Resident::create([
             'name' => 'Jane Doe',
             'first_name' => 'Jane',
             'last_name' => 'Doe',
@@ -21,7 +21,6 @@ class UserProfilePhotoTest extends TestCase
             'purok' => 'Purok 1',
             'email' => 'jane@example.com',
             'password' => 'password123',
-            'role' => 'resident',
             'profile_photo' => 'profile_photos/jane.png',
         ]);
 
