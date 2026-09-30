@@ -1,33 +1,58 @@
-import { useAuth } from "../context/AuthContext";
+import { useState } from "react";
+import ResidentLayout from "../components/resident/ResidentLayout";
+import Overview from "./resident/Overview";
+import Documents from "./resident/Documents";
+import Complaints from "./resident/Complaints";
+import BantayBot from "./resident/BantayBot";
+import Notifications from "./resident/Notifications";
+import Profile from "./resident/Profile";
 
 function ResidentDashboard() {
-  const { user, logout } = useAuth();
+  const [view, setView] = useState("dashboard");
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
-      <h1 className="text-3xl font-bold">Resident Dashboard</h1>
-
-      <p className="mt-4">Welcome, {user?.name}!</p>
-
-      <p>Role: {user?.role}</p>
-
-      {user?.verification_status !== "verified" && (
-        <div className="mt-4 max-w-xl rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-          <strong>Verification {user?.verification_status}.</strong>{" "}
-          {user?.verification_status === "rejected"
-            ? user?.rejection_reason ||
-              "Please contact the barangay office for assistance."
-            : "You can log in, but document requests and other resident services remain unavailable until barangay personnel verify your account."}
-        </div>
+    <ResidentLayout view={view} onNavigate={setView}>
+      {({ user, token, dashboard, verified, firstName, refreshDashboard }) => (
+        <>
+          {view === "dashboard" && (
+            <Overview
+              firstName={firstName}
+              verified={verified}
+              dashboard={dashboard}
+              onNavigate={setView}
+              user={user}
+            />
+          )}
+          {view === "documents" && (
+            <Documents
+              requests={dashboard.requests}
+              token={token}
+              onRefresh={refreshDashboard}
+              user={user}
+            />
+          )}
+          {view === "complaints" && (
+            <Complaints
+              token={token}
+              complaints={dashboard.complaints}
+              onRefresh={refreshDashboard}
+              verified={verified}
+            />
+          )}
+          {view === "bantaybot" && <BantayBot token={token} />}
+          {view === "notifications" && (
+            <Notifications
+              token={token}
+              unreadCount={dashboard.unread_notifications || 0}
+              onRefresh={refreshDashboard}
+            />
+          )}
+          {view === "profile" && (
+            <Profile user={user} verified={verified} token={token} />
+          )}
+        </>
       )}
-
-      <button
-        onClick={logout}
-        className="mt-6 rounded-lg bg-red-600 px-4 py-2 text-white"
-      >
-        Logout
-      </button>
-    </div>
+    </ResidentLayout>
   );
 }
 
