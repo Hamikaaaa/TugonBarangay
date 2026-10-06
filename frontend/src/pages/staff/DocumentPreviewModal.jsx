@@ -19,9 +19,11 @@ const TEMPLATE_TYPES = {
   "First-Time Jobseeker Certification": "jobseeker",
 };
 
-function DocumentPreviewModal({ request, onClose }) {
+function DocumentPreviewModal({ request, onClose, onSave }) {
   const [editing, setEditing] = useState(false);
-  const [fields, setFields] = useState(request?.details?.form_fields || {});
+  const [fields, setFields] = useState(request?.document_content || request?.details?.form_fields || {});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -43,6 +45,19 @@ function DocumentPreviewModal({ request, onClose }) {
     month: "long",
     day: "numeric",
   });
+  const saveChanges = async () => {
+    if (!onSave || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await onSave(fields);
+      setEditing(false);
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div
@@ -64,11 +79,26 @@ function DocumentPreviewModal({ request, onClose }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => setEditing((current) => !current)}
+              onClick={() => {
+                setError("");
+                setFields(request.document_content || request.details?.form_fields || {});
+                setEditing((current) => !current);
+              }}
+              disabled={saving || request.status !== "processing"}
               className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
             >
-              {editing ? "Done editing" : "Edit"}
+              {editing ? "Cancel edit" : "Edit"}
             </button>
+            {editing && (
+              <button
+                type="button"
+                onClick={saveChanges}
+                disabled={saving}
+                className="inline-flex items-center justify-center rounded-xl bg-[#2455D6] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#1948B8] disabled:opacity-50"
+              >
+                {saving ? "Saving..." : "Save changes"}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => window.print()}
@@ -90,9 +120,10 @@ function DocumentPreviewModal({ request, onClose }) {
         {editing && (
           <div className="border-b border-amber-200 bg-amber-50 px-5 py-4">
             <p className="text-sm font-bold text-amber-900">Edit mode</p>
-            <p className="mt-1 text-xs text-amber-700">Changes are shown in the preview and will be printed. They are not saved to the request until the workflow is completed.</p>
+            <p className="mt-1 text-xs text-amber-700">Save edits to this request before approving the document for release.</p>
           </div>
         )}
+        {error && <p role="alert" className="border-b border-red-200 bg-red-50 px-5 py-3 text-xs font-semibold text-red-700">{error}</p>}
 
         <div className="document-preview-scroll overflow-auto bg-slate-100 p-4 sm:p-8">
           <DocumentPaper request={request} templateType={templateType} label={label} residentName={residentName} formattedDate={formattedDate} fields={fields} editing={editing} onFieldChange={setFields} />

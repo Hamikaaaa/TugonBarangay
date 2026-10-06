@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "../context/AuthContext";
-import DocumentPreviewModal from "../components/staff/DocumentPreviewModal";
+import { useAuth } from "../../context/AuthContext";
+import DocumentPreviewModal from "./DocumentPreviewModal";
 
 const API_URL = "http://127.0.0.1:8000/api";
 

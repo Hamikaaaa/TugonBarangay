@@ -10,6 +10,7 @@ use App\Models\Feedback;
 use App\Models\ResidentNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
@@ -346,11 +347,18 @@ class ResidentController extends Controller
                     ];
                 }
 
-                $documentRequest->update([
+                $resubmission = [
                     'details' => $details,
                     'fee' => self::DOCUMENT_FEES[$documentRequest->document_type],
                     'status' => 'pending',
-                ]);
+                ];
+                if (Schema::hasColumn('document_requests', 'document_content')) {
+                    $resubmission['document_content'] = null;
+                }
+                if (Schema::hasColumn('document_requests', 'document_generated_at')) {
+                    $resubmission['document_generated_at'] = null;
+                }
+                $documentRequest->update($resubmission);
 
                 ResidentNotification::create([
                     'resident_id' => $request->user()->id,

@@ -1,10 +1,10 @@
 import AdminLayout from "../../components/admin/AdminLayout";
-import AdminWorkspacePlaceholder from "../../components/admin/AdminWorkspacePlaceholder";
+import ComplaintQueue from "../staff/ComplaintQueue";
 
 function Complaints() {
   return (
     <AdminLayout title="Complaints">
-      <AdminWorkspacePlaceholder title="Complaints" />
+      <ComplaintQueue isAdmin />
     </AdminLayout>
   );
 }

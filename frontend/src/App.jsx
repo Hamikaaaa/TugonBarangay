@@ -5,7 +5,9 @@ import ResidentDashboard from "./pages/ResidentDashboard";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
-import StaffDashboard, { StaffDocumentTypePage } from "./pages/StaffDashboardProfessional";
+import StaffHome from "./pages/staff/StaffHome";
+import { StaffDocumentTypePage } from "./pages/staff/StaffDashboardProfessional";
+import ComplaintManagement from "./pages/staff/ComplaintManagement";
 import AdminDashboard from "./pages/AdminDashboard";
 import Residents from "./pages/admin/Residents";
 import DocumentRequests from "./pages/admin/DocumentRequests";
@@ -43,7 +45,7 @@ function App() {
             path="/staff/dashboard"
             element={
               <ProtectedRoute allowedRoles={["staff"]}>
-                <StaffDashboard />
+                <StaffHome />
               </ProtectedRoute>
             }
           />
@@ -51,8 +53,17 @@ function App() {
           <Route
             path="/staff/document-types/:documentType"
             element={
-              <ProtectedRoute allowedRoles={["staff"]}>
+              <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Document Request Officer"]}>
                 <StaffDocumentTypePage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/staff/complaints"
+            element={
+              <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Complaint Management Officer"]}>
+                <ComplaintManagement />
               </ProtectedRoute>
             }
           />
