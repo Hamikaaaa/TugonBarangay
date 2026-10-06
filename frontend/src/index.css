@@ -1,1 +1,45 @@
 @import "tailwindcss";
+
+.document-paper {
+  width: 8.5in;
+  min-height: 11in;
+  box-sizing: border-box;
+}
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  .document-preview-scroll {
+    overflow: visible !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .document-paper {
+    width: 8.5in !important;
+    min-height: 11in !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .document-preview-modal > div {
+    max-height: none !important;
+    overflow: visible !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .document-preview-modal > div > div:first-child,
+  .document-preview-modal button {
+    display: none !important;
+  }
+}

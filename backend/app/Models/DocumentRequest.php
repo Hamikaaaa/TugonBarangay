@@ -17,6 +17,9 @@ class DocumentRequest extends Model
         'status',
         'fee',
         'staff_remarks',
+        'rejection_reason',
+        'document_content',
+        'document_generated_at',
         'released_at',
     ];
 
@@ -25,6 +28,8 @@ class DocumentRequest extends Model
         return [
             'details' => 'array',
             'fee' => 'decimal:2',
+            'document_content' => 'array',
+            'document_generated_at' => 'datetime',
             'released_at' => 'datetime',
         ];
     }
@@ -32,5 +37,10 @@ class DocumentRequest extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(Resident::class);
+    }
+
+    public function resident(): BelongsTo
+    {
+        return $this->belongsTo(Resident::class, 'resident_id');
     }
 }
