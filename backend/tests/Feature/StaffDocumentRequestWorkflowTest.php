@@ -6,6 +6,8 @@ use App\Models\DocumentRequest;
 use App\Models\Resident;
 use App\Models\Staff;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -77,6 +79,8 @@ class StaffDocumentRequestWorkflowTest extends TestCase
     {
         Sanctum::actingAs($this->documentOfficer);
 
+        $this->request->update(['status' => 'processing']);
+
         $this->postJson('/api/staff/document-requests/'.$this->request->id.'/generate', [
             'document_content' => [
                 'title' => 'Barangay Residency',
@@ -89,14 +93,26 @@ class StaffDocumentRequestWorkflowTest extends TestCase
 
         $this->assertDatabaseHas('document_requests', [
             'id' => $this->request->id,
-            'status' => 'pending',
+            'status' => 'processing',
         ]);
+        $this->assertNotNull($this->request->fresh()->document_generated_at);
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'ready_for_release',
+            'staff_remarks' => 'Document reviewed, signed, and sealed.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'ready_for_release');
     }
 
     public function test_document_officer_can_return_request_for_correction(): void
     {
         Sanctum::actingAs($this->documentOfficer);
 
+        $this->request->update([
+            'status' => 'processing',
+            'document_content' => ['title' => 'Old preview'],
+            'document_generated_at' => now(),
+        ]);
         $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
             'status' => 'for_correction',
             'staff_remarks' => 'Please provide a clearer ID.',
@@ -106,6 +122,8 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'id' => $this->request->id,
             'status' => 'for_correction',
             'staff_remarks' => 'Please provide a clearer ID.',
+            'document_content' => null,
+            'document_generated_at' => null,
         ]);
     }
 
@@ -143,7 +161,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         ]);
     }
 
-    public function test_document_officer_sees_only_active_queue_by_default_and_can_delete_history(): void
+    public function test_document_officer_sees_active_queue_and_cannot_delete_request_history(): void
     {
         Sanctum::actingAs($this->documentOfficer);
 
@@ -172,10 +190,52 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             ->assertJsonPath('data.0.id', $completedRequest->id);
 
         $this->deleteJson('/api/staff/document-requests/'.$completedRequest->id)
-            ->assertOk();
+            ->assertMethodNotAllowed();
 
-        $this->assertDatabaseMissing('document_requests', ['id' => $completedRequest->id]);
+        $this->assertDatabaseHas('document_requests', ['id' => $completedRequest->id, 'status' => 'completed']);
         $this->assertDatabaseHas('document_requests', ['id' => $rejectedRequest->id, 'status' => 'rejected']);
+    }
+
+    public function test_document_request_cannot_be_marked_ready_until_a_preview_has_been_generated(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $this->request->update(['status' => 'processing']);
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'ready_for_release',
+        ])->assertStatus(409);
+    }
+
+    public function test_return_for_correction_requires_staff_remarks(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'for_correction',
+        ])->assertUnprocessable();
+    }
+
+    public function test_document_officer_can_download_uploaded_requirements_privately(): void
+    {
+        Storage::fake('local');
+        $path = UploadedFile::fake()->create('valid-id.pdf', 10, 'application/pdf')
+            ->store('document-requests/'.$this->resident->id, 'local');
+        $this->request->update([
+            'details' => [
+                'requirements' => [
+                    'valid_id' => [
+                        'label' => 'Valid ID',
+                        'path' => $path,
+                        'original_name' => 'valid-id.pdf',
+                    ],
+                ],
+            ],
+        ]);
+        Sanctum::actingAs($this->documentOfficer);
+
+        $this->get('/api/staff/document-requests/'.$this->request->id.'/requirements/valid_id')
+            ->assertOk()
+            ->assertHeader('content-disposition', 'attachment; filename=valid-id.pdf');
     }
 
     public function test_document_officer_cannot_access_complaints(): void

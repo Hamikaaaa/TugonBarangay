@@ -36,7 +36,7 @@ class Complaint extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(Resident::class);
+        return $this->belongsTo(Resident::class, 'resident_id');
     }
 
     public function assignedStaff(): BelongsTo

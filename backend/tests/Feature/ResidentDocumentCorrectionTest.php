@@ -25,6 +25,8 @@ class ResidentDocumentCorrectionTest extends TestCase
             'document_type' => 'Barangay Certification',
             'status' => 'for_correction',
             'staff_remarks' => 'Please upload a clearer copy of your ID.',
+            'document_content' => ['full_name' => 'Old applicant name'],
+            'document_generated_at' => now(),
             'details' => [
                 'notes' => 'For employment',
                 'form_fields' => ['purpose' => 'Employment'],
@@ -68,6 +70,8 @@ class ResidentDocumentCorrectionTest extends TestCase
         Storage::disk('local')->assertExists($newFile);
         Storage::disk('local')->assertMissing($oldFile);
         $this->assertSame('For employment', $updatedRequest->details['notes']);
+        $this->assertNull($updatedRequest->document_content);
+        $this->assertNull($updatedRequest->document_generated_at);
     }
 
     public function test_resident_cannot_resubmit_another_residents_request(): void

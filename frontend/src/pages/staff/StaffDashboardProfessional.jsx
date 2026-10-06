@@ -6,12 +6,12 @@ import {
   ChevronDown,
   CircleAlert,
   Clock3,
+  Download,
   Eye,
   FileCheck2,
   FileText,
   Filter,
   LayoutDashboard,
-  Menu,
   MoreHorizontal,
   Printer,
   Search,
@@ -21,8 +21,9 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useAuth } from "../context/AuthContext";
-import DocumentPreviewModal from "../components/staff/DocumentPreviewModal";
+import { useAuth } from "../../context/AuthContext";
+import DocumentPreviewModal from "./DocumentPreviewModal";
+import StaffLayout from "./StaffLayout";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const DOCUMENT_TYPES = [
@@ -46,7 +47,7 @@ const STATUS_META = {
 const WORKFLOW = ["pending", "processing", "ready_for_release", "completed"];
 
 function StaffDashboardProfessional({ documentType = "" }) {
-  const { user, token, logout } = useAuth();
+  const { user, token } = useAuth();
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -55,7 +56,6 @@ function StaffDashboardProfessional({ documentType = "" }) {
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState("created_at");
   const [sortDirection, setSortDirection] = useState("desc");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [previewRequest, setPreviewRequest] = useState(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -63,6 +63,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
   const [notice, setNotice] = useState("");
   const [staffRemarks, setStaffRemarks] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
+  const [downloadingRequirement, setDownloadingRequirement] = useState("");
 
   const loadRequests = useCallback(async () => {
     if (!token) return;
@@ -96,6 +97,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
   const counts = useMemo(() => ({
     pending: requests.filter((request) => request.status === "pending").length,
     processing: requests.filter((request) => request.status === "processing").length,
+    for_correction: requests.filter((request) => request.status === "for_correction").length,
     ready_for_release: requests.filter((request) => request.status === "ready_for_release").length,
     completed: requests.filter((request) => request.status === "completed").length,
     rejected: requests.filter((request) => request.status === "rejected").length,
@@ -123,7 +125,6 @@ function StaffDashboardProfessional({ documentType = "" }) {
   const selectDocumentType = (nextDocumentType) => {
     setActiveDocumentType(nextDocumentType);
     setSelectedRequest(null);
-    setSidebarOpen(false);
     navigate(nextDocumentType ? `/staff/document-types/${encodeURIComponent(nextDocumentType)}` : "/staff/dashboard");
   };
 
@@ -131,6 +132,85 @@ function StaffDashboardProfessional({ documentType = "" }) {
     setSelectedRequest(request);
     setStaffRemarks(request.staff_remarks || "");
     setRejectionReason(request.rejection_reason || "");
+  };
+
+  const openPreview = async (request) => {
+    if (!request || !token) return;
+    if (request.status !== "processing") {
+      if (request.document_content) {
+        setSelectedRequest(request);
+        setStaffRemarks(request.staff_remarks || "");
+        setRejectionReason(request.rejection_reason || "");
+        setPreviewRequest(request);
+      }
+      return;
+    }
+
+    setSubmitting(true);
+    setError("");
+    setStaffRemarks(request.staff_remarks || "");
+    setRejectionReason(request.rejection_reason || "");
+    try {
+      const response = await fetch(`${API_URL}/staff/document-requests/${request.id}/generate`, {
+        method: "POST",
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          document_content: request.document_content || request.details?.form_fields || {},
+          staff_remarks: request.staff_remarks || "",
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to generate document preview.");
+      setSelectedRequest(payload.data);
+      setStaffRemarks(payload.data.staff_remarks || "");
+      setPreviewRequest(payload.data);
+    } catch (previewError) {
+      setError(previewError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const saveDocumentContent = async (documentContent) => {
+    if (!previewRequest || !token) throw new Error("Select a document request first.");
+    const response = await fetch(`${API_URL}/staff/document-requests/${previewRequest.id}/generate`, {
+      method: "POST",
+      headers: { ...authHeaders(token), "Content-Type": "application/json" },
+      body: JSON.stringify({ document_content: documentContent, staff_remarks: staffRemarks }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.message || "Unable to save document edits.");
+    setSelectedRequest(payload.data);
+    setPreviewRequest(payload.data);
+    setRequests((current) => current.map((request) => request.id === payload.data.id ? { ...request, ...payload.data } : request));
+    setNotice("Document edits saved. Review the preview again before release.");
+  };
+
+  const downloadRequirement = async (request, requirementKey, fileName) => {
+    if (!token || downloadingRequirement) return;
+    const downloadKey = `${request.id}-${requirementKey}`;
+    setDownloadingRequirement(downloadKey);
+    setError("");
+    try {
+      const response = await fetch(
+        `${API_URL}/staff/document-requests/${request.id}/requirements/${encodeURIComponent(requirementKey)}`,
+        { headers: authHeaders(token) },
+      );
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.message || "Unable to download requirement.");
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = fileName || `request-${request.id}-${requirementKey}`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setError(downloadError.message);
+    } finally {
+      setDownloadingRequirement("");
+    }
   };
 
   const updateStatus = async (status) => {
@@ -166,46 +246,21 @@ function StaffDashboardProfessional({ documentType = "" }) {
 
   const currentIndex = selectedRequest ? WORKFLOW.indexOf(selectedRequest.status) : -1;
 
+  const navigationItems = DOCUMENT_TYPES.map((item) => ({
+    ...item,
+    path: item.value ? `/staff/document-types/${encodeURIComponent(item.value)}` : "/staff/dashboard",
+  }));
+
   return (
-    <div className="min-h-screen bg-[#F4F7FA] text-slate-800">
-      <StaffSidebar
-        activeDocumentType={activeDocumentType}
-        open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        onSelect={selectDocumentType}
-        onLogout={logout}
-        user={user}
-      />
-
-      <div className="min-w-0 lg:pl-72">
-        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
-          <div className="flex h-[76px] items-center justify-between gap-4 px-5 sm:px-7 lg:px-9">
-            <div className="flex min-w-0 items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setSidebarOpen(true)}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600 lg:hidden"
-                aria-label="Open navigation"
-              >
-                <Menu size={19} />
-              </button>
-              <div className="min-w-0">
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#2455D6]">TugonBarangay Staff Portal</p>
-                <h1 className="truncate text-xl font-bold tracking-tight text-[#132A4A] sm:text-2xl">Document Processing</h1>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="hidden text-right sm:block">
-                <p className="text-sm font-bold text-slate-800">{user?.name || "Document Officer"}</p>
-                <p className="text-[11px] text-slate-500">{user?.designation || "Staff"}</p>
-              </div>
-              <button type="button" onClick={logout} className="inline-flex h-10 items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 text-xs font-bold text-red-700 transition hover:bg-red-100">
-                <X size={15} /> <span className="hidden sm:inline">Logout</span>
-              </button>
-            </div>
-          </div>
-        </header>
-
+    <StaffLayout
+      title="Document Processing"
+      navigationItems={navigationItems}
+      activePath={documentType ? `/staff/document-types/${encodeURIComponent(documentType)}` : "/staff/dashboard"}
+      onNavigate={(path) => {
+        const item = navigationItems.find((navigationItem) => navigationItem.path === path);
+        if (item) selectDocumentType(item.value);
+      }}
+    >
         <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
           {!documentType && (
             <>
@@ -230,6 +285,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
                 <SummaryCard label="Total Requests" value={requests.length} icon={Archive} color="blue" note="All document types" />
                 <SummaryCard label="Pending Requests" value={counts.pending} icon={Clock3} color="amber" note="Awaiting review" />
                 <SummaryCard label="Processing" value={counts.processing} icon={Settings2} color="blue" note="Under review" />
+                <SummaryCard label="For Correction" value={counts.for_correction} icon={CircleAlert} color="red" note="Awaiting resident updates" />
                 <SummaryCard label="Ready for Release" value={counts.ready_for_release} icon={FileCheck2} color="emerald" note="Awaiting completion" />
                 <SummaryCard label="Completed" value={counts.completed} icon={CheckCircle2} color="green" note="Released documents" />
                 <SummaryCard label="Rejected" value={counts.rejected} icon={CircleAlert} color="red" note="Closed requests" />
@@ -345,10 +401,10 @@ function StaffDashboardProfessional({ documentType = "" }) {
                               <button type="button" onClick={() => selectRequest(request)} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 text-[10px] font-bold text-slate-600 transition hover:border-[#2455D6] hover:text-[#2455D6]" aria-label={`View details for request ${request.id}`}>
                                 <Eye size={13} /> View
                               </button>
-                              <button type="button" onClick={() => setPreviewRequest(request)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#EAF1FF] text-[#2455D6] transition hover:bg-[#D9E6FF]" aria-label={`Preview request ${request.id}`}>
+                              <button type="button" onClick={() => openPreview(request)} disabled={submitting || (request.status !== "processing" && !request.document_content)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-[#EAF1FF] text-[#2455D6] transition hover:bg-[#D9E6FF] disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Preview request ${request.id}`}>
                                 <FileText size={13} />
                               </button>
-                              <button type="button" onClick={() => setPreviewRequest(request)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50" aria-label={`Print request ${request.id}`}>
+                              <button type="button" onClick={() => openPreview(request)} disabled={submitting || (request.status !== "processing" && !request.document_content)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40" aria-label={`Print request ${request.id}`}>
                                 <Printer size={13} />
                               </button>
                             </div>
@@ -373,8 +429,8 @@ function StaffDashboardProfessional({ documentType = "" }) {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setPreviewRequest(selectedRequest)} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white transition hover:bg-[#1948B8]"><Eye size={14} /> Preview</button>
-                  <button type="button" onClick={() => setPreviewRequest(selectedRequest)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50"><Printer size={14} /> Print</button>
+                  <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting || (selectedRequest.status !== "processing" && !selectedRequest.document_content)} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white transition hover:bg-[#1948B8] disabled:cursor-not-allowed disabled:opacity-40"><Eye size={14} /> Preview document</button>
+                  <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting || (selectedRequest.status !== "processing" && !selectedRequest.document_content)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"><Printer size={14} /> Print</button>
                 </div>
               </div>
 
@@ -393,7 +449,18 @@ function StaffDashboardProfessional({ documentType = "" }) {
                       {Object.entries(selectedRequest.details?.requirements || {}).map(([key, requirement]) => (
                         <div key={key} className="rounded-lg border border-slate-200 bg-white p-3">
                           <p className="text-xs font-bold text-slate-700">{requirement.label || key.replaceAll("_", " ")}</p>
-                          <p className="mt-1 truncate text-[10px] text-slate-500">{requirement.original_name || requirement.path || "Not uploaded"}</p>
+                          <p className="mt-1 truncate text-[10px] text-slate-500">{requirement.original_name || "Not uploaded"}</p>
+                          {requirement.path && (
+                            <button
+                              type="button"
+                              onClick={() => downloadRequirement(selectedRequest, key, requirement.original_name)}
+                              disabled={downloadingRequirement === `${selectedRequest.id}-${key}`}
+                              className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-bold text-[#2455D6] hover:underline disabled:opacity-50"
+                            >
+                              <Download size={12} />
+                              {downloadingRequirement === `${selectedRequest.id}-${key}` ? "Downloading..." : "View uploaded requirement"}
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -424,6 +491,11 @@ function StaffDashboardProfessional({ documentType = "" }) {
                       );
                     })}
                   </ol>
+                  {selectedRequest.status === "for_correction" && (
+                    <div className="mt-4 rounded-xl border border-orange-200 bg-orange-50 p-3 text-xs leading-5 text-orange-800">
+                      Waiting for the resident to resubmit the requested requirements. The request returns to Pending for verification.
+                    </div>
+                  )}
 
                   <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
                     <label htmlFor="staff-remarks" className="text-xs font-bold text-slate-800">Staff remarks</label>
@@ -436,21 +508,28 @@ function StaffDashboardProfessional({ documentType = "" }) {
                     />
                     <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
                       {selectedRequest.status === "pending" && (
-                        <button type="button" onClick={() => updateStatus("processing")} disabled={submitting} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#2455D6] text-xs font-bold text-white transition hover:bg-[#1948B8] disabled:opacity-50"><Settings2 size={14} /> Start processing</button>
+                        <button type="button" onClick={() => updateStatus("processing")} disabled={submitting} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#2455D6] text-xs font-bold text-white transition hover:bg-[#1948B8] disabled:opacity-50"><Settings2 size={14} /> Requirements valid — approve and process</button>
                       )}
                       {selectedRequest.status === "processing" && (
-                        <button type="button" onClick={() => updateStatus("ready_for_release")} disabled={submitting} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#2455D6] text-xs font-bold text-white transition hover:bg-[#1948B8] disabled:opacity-50"><FileCheck2 size={14} /> Mark ready for release</button>
+                        <>
+                          <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-[#2455D6] text-xs font-bold text-white transition hover:bg-[#1948B8] disabled:opacity-50"><Eye size={14} /> Generate / review document</button>
+                          <button type="button" onClick={() => updateStatus("ready_for_release")} disabled={submitting || !selectedRequest.document_content} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-50"><FileCheck2 size={14} /> Document checked, signed and sealed — ready for release</button>
+                        </>
                       )}
                       {selectedRequest.status === "ready_for_release" && (
-                        <button type="button" onClick={() => updateStatus("completed")} disabled={submitting} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-emerald-600 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"><CheckCircle2 size={14} /> Complete request</button>
+                        <button type="button" onClick={() => updateStatus("completed")} disabled={submitting} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-emerald-600 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50"><CheckCircle2 size={14} /> Resident claimed — complete request</button>
                       )}
-                      {selectedRequest.status === "pending" && (
-                        <button type="button" onClick={() => updateStatus("rejected")} disabled={submitting || !rejectionReason.trim()} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:opacity-50"><CircleAlert size={14} /> Reject request</button>
+                      {["pending", "processing"].includes(selectedRequest.status) && (
+                        <>
+                          <button type="button" onClick={() => updateStatus("for_correction")} disabled={submitting || !staffRemarks.trim()} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 text-xs font-bold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"><CircleAlert size={14} /> Return for correction</button>
+                          <button type="button" onClick={() => updateStatus("rejected")} disabled={submitting || !staffRemarks.trim() || !rejectionReason.trim()} className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-red-200 bg-red-50 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:opacity-50"><CircleAlert size={14} /> Reject — issue cannot be corrected</button>
+                        </>
                       )}
                     </div>
-                    {selectedRequest.status === "pending" && (
-                      <textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Enter rejection reason..." className="mt-2 min-h-16 w-full resize-y rounded-lg border border-red-200 bg-white p-3 text-xs outline-none focus:ring-2 focus:ring-red-100" />
+                    {["pending", "processing"].includes(selectedRequest.status) && (
+                      <textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Rejection reason (required only if the issue cannot be corrected)..." className="mt-2 min-h-16 w-full resize-y rounded-lg border border-red-200 bg-white p-3 text-xs outline-none focus:ring-2 focus:ring-red-100" />
                     )}
+                    {["pending", "processing"].includes(selectedRequest.status) && <p className="mt-2 text-[10px] leading-4 text-slate-500">Add staff remarks before returning a request for correction or rejecting it. Rejection also requires a reason.</p>}
                   </div>
                 </aside>
               </div>
@@ -463,57 +542,9 @@ function StaffDashboardProfessional({ documentType = "" }) {
             </section>
           )}
         </main>
-      </div>
 
-      {previewRequest && <DocumentPreviewModal request={previewRequest} onClose={() => setPreviewRequest(null)} />}
-    </div>
-  );
-}
-
-function StaffSidebar({ activeDocumentType, open, onClose, onSelect, onLogout, user }) {
-  return (
-    <>
-      {open && <button type="button" onClick={onClose} className="fixed inset-0 z-40 bg-[#071B3D]/60 lg:hidden" aria-label="Close navigation" />}
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,88vw)] flex-col bg-[#123F70] px-5 py-6 text-white shadow-2xl transition-transform duration-300 lg:w-72 lg:translate-x-0 lg:shadow-none ${open ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="flex items-center gap-3 border-b border-white/10 px-2 pb-5">
-          <img src="/images/logo-white-version.png" alt="TugonBarangay" className="h-12 w-12 object-contain" />
-          <div>
-            <h1 className="text-lg font-bold tracking-tight">Tugon<span className="text-[#FF6B6B]">Barangay</span></h1>
-            <p className="mt-0.5 text-[9px] font-bold uppercase tracking-[0.15em] text-blue-100/70">Staff Portal</p>
-          </div>
-          <button type="button" onClick={onClose} className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-lg text-blue-100 hover:bg-white/10 lg:hidden" aria-label="Close navigation"><X size={18} /></button>
-        </div>
-
-        <nav className="mt-7" aria-label="Document types">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-200/60">Document types</p>
-          <div className="space-y-1">
-            {DOCUMENT_TYPES.map((documentType) => {
-              const active = activeDocumentType === documentType.value;
-              return (
-                <button key={documentType.label} type="button" onClick={() => onSelect(documentType.value)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${active ? "bg-white text-[#123F70] shadow-lg" : "text-blue-100 hover:bg-white/10"}`}>
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${active ? "bg-[#EAF1FF] text-[#2455D6]" : "bg-white/10 text-blue-100"}`}>{documentType.value ? <FileText size={15} /> : <LayoutDashboard size={15} />}</span>
-                  <span className="truncate">{documentType.label}</span>
-                  {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#EF4444]" />}
-                </button>
-              );
-            })}
-          </div>
-        </nav>
-
-        <div className="mt-auto pt-6">
-          <div className="rounded-xl bg-white/10 p-3">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-bold text-[#2455D6]">{(user?.name || "D").charAt(0)}</span>
-              <div className="min-w-0">
-                <p className="truncate text-xs font-bold">{user?.name || "Document Officer"}</p>
-                <p className="truncate text-[10px] text-blue-100/60">{user?.designation || "Staff"}</p>
-              </div>
-            </div>
-          </div>
-          <button type="button" onClick={onLogout} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-red-100 transition hover:bg-red-500/10"><X size={15} /> Logout</button>
-        </div>
-      </aside>
-    </>
+      {previewRequest && <DocumentPreviewModal key={previewRequest.id} request={previewRequest} onClose={() => setPreviewRequest(null)} onSave={saveDocumentContent} />}
+    </StaffLayout>
   );
 }
 
