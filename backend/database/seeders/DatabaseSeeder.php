@@ -11,9 +11,19 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         Staff::updateOrCreate(
-            ['email' => 'staff@tugonbarangay.test'],
+            ['email' => 'document-staff@tugonbarangay.test'],
             [
-                'name' => 'Test Staff',
+                'name' => 'Document Request Officer',
+                'designation' => Staff::DOCUMENT_REQUEST_OFFICER,
+                'password' => 'password123',
+            ]
+        );
+
+        Staff::updateOrCreate(
+            ['email' => 'complaint-staff@tugonbarangay.test'],
+            [
+                'name' => 'Complaint Management Officer',
+                'designation' => Staff::COMPLAINT_MANAGEMENT_OFFICER,
                 'password' => 'password123',
             ]
         );

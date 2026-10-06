@@ -42,6 +42,7 @@ class ResidentDocumentRequestTest extends TestCase
 
         $response->assertCreated()
             ->assertJsonPath('request.document_type', 'Barangay Certification')
+            ->assertJsonPath('request.fee', '80.00')
             ->assertJsonPath('request.details.notes', 'For employment')
             ->assertJsonPath('request.details.form_fields.purpose', 'Employment')
             ->assertJsonPath('request.details.requirements.valid_id.label', 'Valid government-issued ID');
@@ -118,6 +119,7 @@ class ResidentDocumentRequestTest extends TestCase
             ],
         ])->assertCreated()
             ->assertJsonPath('request.document_type', 'Barangay Residency')
+            ->assertJsonPath('request.fee', '140.00')
             ->assertJsonPath('request.details.requirements', []);
     }
 

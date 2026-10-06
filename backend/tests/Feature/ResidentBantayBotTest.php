@@ -110,12 +110,12 @@ class ResidentBantayBotTest extends TestCase
             ->assertJsonPath('data.0.status', 'replied');
     }
 
-    public function test_staff_can_reply_to_escalation_and_notify_the_resident(): void
+    public function test_admin_can_reply_to_escalation_and_notify_the_resident(): void
     {
         $resident = Resident::factory()->create();
-        $staff = Staff::create([
-            'name' => 'Test Staff',
-            'email' => 'bot-staff@example.com',
+        $admin = Admin::create([
+            'name' => 'Test Admin',
+            'email' => 'bot-admin@example.com',
             'password' => 'Password123!',
         ]);
         $escalation = ChatbotEscalation::create([
@@ -123,7 +123,7 @@ class ResidentBantayBotTest extends TestCase
             'question' => 'How do I check my request?',
             'faq_category' => 'Request Status',
         ]);
-        Sanctum::actingAs($staff);
+        Sanctum::actingAs($admin);
 
         $this->getJson('/api/admin/bantaybot/escalations')
             ->assertOk()

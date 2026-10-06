@@ -5,7 +5,7 @@ import ResidentDashboard from "./pages/ResidentDashboard";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { AuthProvider } from "./context/AuthContext";
-import StaffDashboard from "./pages/StaffDashboard";
+import StaffDashboard, { StaffDocumentTypePage } from "./pages/StaffDashboardProfessional";
 import AdminDashboard from "./pages/AdminDashboard";
 import Residents from "./pages/admin/Residents";
 import DocumentRequests from "./pages/admin/DocumentRequests";
@@ -44,6 +44,15 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["staff"]}>
                 <StaffDashboard />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/staff/document-types/:documentType"
+            element={
+              <ProtectedRoute allowedRoles={["staff"]}>
+                <StaffDocumentTypePage />
               </ProtectedRoute>
             }
           />

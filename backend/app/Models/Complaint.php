@@ -38,4 +38,9 @@ class Complaint extends Model
     {
         return $this->belongsTo(Resident::class);
     }
+
+    public function assignedStaff(): BelongsTo
+    {
+        return $this->belongsTo(Staff::class, 'assigned_staff_id');
+    }
 }

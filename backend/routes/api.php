@@ -45,4 +45,20 @@ Route::middleware(['auth:sanctum', 'role:admin,staff'])->prefix('admin')->group(
     Route::get('/pending-residents', [AdminController::class, 'pendingResidents']);
     Route::patch('/residents/{user}/verify', [AdminController::class, 'verifyResident']);
     Route::patch('/residents/{user}/reject', [AdminController::class, 'rejectResident']);
+    Route::get('/document-requests', [\App\Http\Controllers\StaffController::class, 'documentRequests']);
+    Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\StaffController::class, 'showDocumentRequest']);
+    Route::patch('/document-requests/{documentRequest}/status', [\App\Http\Controllers\StaffController::class, 'updateDocumentRequestStatus']);
+    Route::delete('/document-requests/{documentRequest}', [\App\Http\Controllers\StaffController::class, 'destroyDocumentRequest']);
+});
+
+Route::middleware(['auth:sanctum', 'role:staff', 'designation:Document Request Officer'])->prefix('staff')->group(function () {
+    Route::get('/document-requests', [\App\Http\Controllers\StaffController::class, 'documentRequests']);
+    Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\StaffController::class, 'showDocumentRequest']);
+    Route::post('/document-requests/{documentRequest}/generate', [\App\Http\Controllers\StaffController::class, 'generateDocumentPreview']);
+    Route::patch('/document-requests/{documentRequest}/status', [\App\Http\Controllers\StaffController::class, 'updateDocumentRequestStatus']);
+    Route::delete('/document-requests/{documentRequest}', [\App\Http\Controllers\StaffController::class, 'destroyDocumentRequest']);
+});
+
+Route::middleware(['auth:sanctum', 'role:staff', 'designation:Complaint Management Officer'])->prefix('staff')->group(function () {
+    Route::get('/complaints', [\App\Http\Controllers\StaffController::class, 'complaints']);
 });

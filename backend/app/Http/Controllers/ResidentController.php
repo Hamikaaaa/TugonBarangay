@@ -15,6 +15,14 @@ use Illuminate\Validation\Rule;
 
 class ResidentController extends Controller
 {
+    private const DOCUMENT_FEES = [
+        'Barangay Certification' => 80,
+        'Barangay Residency' => 140,
+        'Barangay Indigency' => 0,
+        'Construction Permit' => 0,
+        'Business Permit' => 0,
+    ];
+
     private const DOCUMENT_REQUIREMENTS = [
         'Barangay Certification' => [
             'valid_id' => ['label' => 'Valid government-issued ID', 'required' => true],
@@ -242,6 +250,7 @@ class ResidentController extends Controller
                         'form_fields' => $validated['form_fields'],
                         'requirements' => $uploadedRequirements,
                     ],
+                    'fee' => self::DOCUMENT_FEES[$validated['document_type']],
                     'status' => 'pending',
                 ]);
 
@@ -339,6 +348,7 @@ class ResidentController extends Controller
 
                 $documentRequest->update([
                     'details' => $details,
+                    'fee' => self::DOCUMENT_FEES[$documentRequest->document_type],
                     'status' => 'pending',
                 ]);
 
