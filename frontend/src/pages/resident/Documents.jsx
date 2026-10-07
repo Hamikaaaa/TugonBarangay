@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import {
   inputClass,
@@ -8,26 +8,23 @@ import {
 import { RequestRow } from "../../components/resident/ResidentUI";
 import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
 
-const PURPOSE_OPTIONS = [
-  "Employment",
-  "School Requirement",
-  "Financial Assistance",
-  "Legal Requirement",
-  "Scholarship",
-  "Loan/Application",
-  "Other",
-];
-
 const APPLICANT_FIELDS = {
   full_name: { label: "Full Name", type: "text" },
+  address: {
+    label: "House/Building No., Street, and Subdivision",
+    type: "text",
+    required: false,
+  },
+  purok: { label: "Purok", type: "text" },
   date_of_birth: { label: "Date of Birth", type: "date" },
+  age: { label: "Age", type: "number", readOnly: true },
   sex: { label: "Sex", type: "select", options: ["Female", "Male", "Other"] },
+  citizenship: { label: "Citizenship", type: "text" },
   civil_status: {
     label: "Civil Status",
     type: "select",
     options: ["Single", "Married", "Widowed", "Separated", "Other"],
   },
-  purok: { label: "Purok", type: "text" },
   contact_number: { label: "Contact Number", type: "tel" },
   email_address: { label: "Email Address", type: "email" },
 };
@@ -44,10 +41,13 @@ function getApplicantDefaults(user = {}) {
 
   return {
     full_name: fullName || user.name || "",
+    address: user.address || "",
     date_of_birth: user.date_of_birth || "",
+    age: calculateAge(user.date_of_birth),
     sex: user.sex || "",
     civil_status: user.civil_status || "",
     purok: user.purok || "",
+    citizenship: "",
     contact_number: user.mobile_number || "",
     email_address: user.email || "",
     municipality_city: user.municipality_city || "Consolacion",
@@ -57,77 +57,114 @@ function getApplicantDefaults(user = {}) {
   };
 }
 
+function calculateAge(dateOfBirth) {
+  if (!dateOfBirth) return "";
+  const birthDate = new Date(`${dateOfBirth.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(birthDate.getTime())) return "";
+
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const beforeBirthday =
+    today.getMonth() < birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() &&
+      today.getDate() < birthDate.getDate());
+  if (beforeBirthday) age -= 1;
+  return age >= 0 ? String(age) : "";
+}
+
+const GENERAL_REQUEST_PURPOSES = [
+  "Employment",
+  "School enrollment or scholarship",
+  "Business or business permit",
+  "Travel",
+  "Bank or loan application",
+  "Other",
+];
+
 const DOCUMENT_TYPES = [
   {
-    label: "Barangay Certification",
+    label: "Barangay Clearance",
+    value: "Barangay Certification",
+    fee: 80,
     applicantFields: [
       "full_name",
+      "address",
+      "purok",
       "date_of_birth",
+      "age",
       "sex",
       "civil_status",
-      "purok",
-      "contact_number",
-      "email_address",
+      "citizenship",
     ],
     fields: [
       {
         key: "purpose",
-        label: "Purpose of certification",
+        label: "Purpose of request",
         type: "select",
-        options: PURPOSE_OPTIONS,
+        options: GENERAL_REQUEST_PURPOSES,
       },
       {
-        key: "additional_details",
-        label: "Additional details or reason for requesting",
-        type: "textarea",
-        required: false,
+        key: "purpose_other",
+        label: "Please specify your purpose",
+        type: "text",
+        submit: false,
+        showWhen: { key: "purpose", value: "Other" },
         requiredWhen: { key: "purpose", value: "Other" },
       },
     ],
     requirements: [
+      { key: "purok_certificate", label: "Purok Certificate", required: true },
       { key: "valid_id", label: "Valid government-issued ID", required: true },
     ],
   },
   {
-    label: "Barangay Residency",
+    label: "Certificate of Residency",
+    value: "Barangay Residency",
+    fee: 130,
     applicantFields: [
       "full_name",
+      "address",
+      "purok",
       "date_of_birth",
+      "age",
       "sex",
       "civil_status",
-      "purok",
-      "municipality_city",
-      "province",
     ],
     fields: [
       {
         key: "years_of_residency",
-        label: "Years of residency",
+        label: "Length of residency (years)",
         type: "number",
         min: "0",
         step: "1",
       },
       {
         key: "months_of_residency",
-        label: "Additional months",
+        label: "Additional months of residency",
         type: "number",
+        required: false,
         min: "0",
         max: "11",
         step: "1",
       },
-      { key: "purpose", label: "Purpose of request", type: "text" },
+      {
+        key: "purpose",
+        label: "Purpose of request",
+        type: "select",
+        options: GENERAL_REQUEST_PURPOSES,
+      },
+      {
+        key: "purpose_other",
+        label: "Please specify your purpose",
+        type: "text",
+        submit: false,
+        showWhen: { key: "purpose", value: "Other" },
+        requiredWhen: { key: "purpose", value: "Other" },
+      },
     ],
     requirements: [
-      {
-        key: "valid_id",
-        label: "Valid ID showing your address",
-        required: false,
-      },
-      {
-        key: "proof_of_residency",
-        label: "Other supporting proof (if requested)",
-        required: false,
-      },
+      { key: "purok_certificate", label: "Purok Certificate", required: true },
+      { key: "valid_id", label: "Valid government-issued ID", required: true },
     ],
   },
   {
@@ -165,139 +202,6 @@ const DOCUMENT_TYPES = [
     ],
     requirements: [
       { key: "valid_id", label: "Valid government-issued ID", required: true },
-    ],
-  },
-  {
-    label: "Construction Permit",
-    notice:
-      "This request covers the barangay clearance portion. Municipal building permit requirements may be handled separately by the Building Official.",
-    applicantFields: ["full_name", "contact_number", "email_address"],
-    fields: [
-      { key: "valid_id_type", label: "Valid ID type", type: "text" },
-      { key: "valid_id_number", label: "Valid ID number", type: "text" },
-      {
-        key: "property_owner_name",
-        label: "Property owner's name",
-        type: "text",
-      },
-      {
-        key: "property_street_number",
-        label: "Property street/house number (if needed)",
-        type: "text",
-        required: false,
-      },
-      { key: "property_purok", label: "Purok", type: "text" },
-      {
-        key: "lot_number",
-        label: "Lot number (if available)",
-        type: "text",
-        required: false,
-      },
-      {
-        key: "tax_declaration_number",
-        label: "Tax Declaration number (if available)",
-        type: "text",
-        required: false,
-      },
-      {
-        key: "title_number",
-        label: "TCT/OCT number (if available)",
-        type: "text",
-        required: false,
-      },
-      {
-        key: "property_ownership",
-        label: "Applicant's relationship to property",
-        type: "select",
-        options: ["Owner", "Authorized Representative"],
-      },
-      {
-        key: "construction_type",
-        label: "Type of construction",
-        type: "select",
-        options: [
-          "New construction",
-          "Renovation",
-          "Repair",
-          "Extension",
-          "Fencing",
-        ],
-      },
-      {
-        key: "structure_type",
-        label: "Type of structure",
-        type: "select",
-        options: ["Residential", "Commercial", "Other"],
-      },
-      {
-        key: "structure_details",
-        label: "Specify structure (if Other)",
-        type: "text",
-        showWhen: { key: "structure_type", value: "Other" },
-      },
-      {
-        key: "number_of_floors",
-        label: "Number of floors",
-        type: "number",
-        min: "1",
-        step: "1",
-      },
-      {
-        key: "estimated_project_cost",
-        label: "Estimated project cost (PHP)",
-        type: "number",
-        min: "0",
-        step: "0.01",
-      },
-      {
-        key: "proposed_construction_date",
-        label: "Proposed construction date",
-        type: "date",
-      },
-      {
-        key: "project_description",
-        label: "Brief construction description",
-        type: "textarea",
-      },
-    ],
-    requirements: [
-      { key: "valid_id", label: "Valid ID", required: true },
-      {
-        key: "proof_of_ownership",
-        label: "Proof of ownership",
-        required: false,
-      },
-      {
-        key: "title_or_tax_declaration",
-        label: "TCT/OCT or Tax Declaration",
-        required: false,
-      },
-      {
-        key: "lease_or_authorization",
-        label: "Lease or owner authorization",
-        required: false,
-        requiredWhen: {
-          key: "property_ownership",
-          value: "Authorized Representative",
-        },
-      },
-      {
-        key: "architectural_plans",
-        label: "Building/architectural plans",
-        required: false,
-      },
-      { key: "structural_plans", label: "Structural plans", required: false },
-      { key: "electrical_plans", label: "Electrical plans", required: false },
-      {
-        key: "plumbing_plans",
-        label: "Plumbing/sanitary plans",
-        required: false,
-      },
-      {
-        key: "other_plans",
-        label: "Other plans required by the Building Official",
-        required: false,
-      },
     ],
   },
   {
@@ -402,6 +306,7 @@ function conditionMatches(condition, values) {
 }
 
 function Documents({ requests, token, onRefresh, user }) {
+  const [catalogTypes, setCatalogTypes] = useState(null);
   const [documentType, setDocumentType] = useState("");
   const [formFields, setFormFields] = useState(() =>
     getApplicantDefaults(user),
@@ -423,6 +328,23 @@ function Documents({ requests, token, onRefresh, user }) {
   const [historyError, setHistoryError] = useState("");
   const [reloadHistory, setReloadHistory] = useState(0);
   const formRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    residentApi("/resident/document-types", token)
+      .then((result) => {
+        if (active) setCatalogTypes(result.data || []);
+      })
+      .catch((error) => {
+        if (active) {
+          setCatalogTypes([]);
+          setMessage(error.message);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   const changeHistoryPage = (page) => {
     setHistoryLoading(true);
@@ -459,9 +381,26 @@ function Documents({ requests, token, onRefresh, user }) {
       active = false;
     };
   }, [historyPage, reloadHistory, token]);
-  const selectedDocument = DOCUMENT_TYPES.find(
-    (document) => document.label === documentType,
+  const availableDocuments = useMemo(() => {
+    if (catalogTypes === null) return DOCUMENT_TYPES;
+    const mappedCatalog = catalogTypes.map((type) => ({
+      ...type,
+      applicantFields: (type.applicant_fields || []).map((field) => field.key),
+      applicantFieldConfigs: type.applicant_fields || [],
+    }));
+    const configuredValues = new Set(mappedCatalog.map((type) => type.value));
+    const builtInFallbacks = DOCUMENT_TYPES.filter(
+      (type) => !configuredValues.has(type.value || type.label),
+    );
+    return [...mappedCatalog, ...builtInFallbacks];
+  }, [catalogTypes]);
+  const selectedDocument = availableDocuments.find(
+    (document) => (document.value || document.label) === documentType,
   );
+  const oneTimeAlreadyRequested =
+    selectedDocument?.one_time &&
+    selectedDocument.available === false &&
+    !editingRequest;
   const requiredFileCount =
     selectedDocument?.requirements.filter(
       (requirement) =>
@@ -470,11 +409,32 @@ function Documents({ requests, token, onRefresh, user }) {
     ).length || 0;
 
   const startCorrection = (request) => {
+    const existingFields = request.details?.form_fields || {};
+    const requestDocument = availableDocuments.find(
+      (document) => (document.value || document.label) === request.document_type,
+    );
+    const purposeOptions =
+      requestDocument?.fields.find((field) => field.key === "purpose")?.options || [];
+    const supportsCustomPurpose = requestDocument?.fields.some(
+      (field) => field.key === "purpose_other",
+    );
+    const hasCustomPurpose =
+      (supportsCustomPurpose ||
+        ["Barangay Certification", "Barangay Residency"].includes(request.document_type)) &&
+      existingFields.purpose &&
+      !purposeOptions.includes(existingFields.purpose);
+
     setEditingRequest(request);
     setDocumentType(request.document_type);
     setFormFields({
       ...getApplicantDefaults(user),
-      ...(request.details?.form_fields || {}),
+      ...existingFields,
+      ...(hasCustomPurpose
+        ? { purpose: "Other", purpose_other: existingFields.purpose }
+        : {}),
+      age: calculateAge(
+        request.details?.form_fields?.date_of_birth || user?.date_of_birth,
+      ),
     });
     setNotes(request.details?.notes || "");
     setRequirementFiles({});
@@ -504,11 +464,19 @@ function Documents({ requests, token, onRefresh, user }) {
         ...selectedDocument.applicantFields.map((key) => ({ key })),
         ...selectedDocument.fields.filter(
           (field) =>
-            !field.showWhen || conditionMatches(field.showWhen, formFields),
+            field.submit !== false &&
+            (!field.showWhen || conditionMatches(field.showWhen, formFields)),
         ),
       ];
       requestFieldDefinitions.forEach(({ key }) => {
-        const value = formFields[key];
+        const value =
+          key === "age" && formFields.date_of_birth
+            ? calculateAge(formFields.date_of_birth)
+            : key === "purpose" &&
+                formFields.purpose === "Other" &&
+                selectedDocument.fields.some((field) => field.key === "purpose_other")
+              ? formFields.purpose_other
+              : formFields[key];
         if (value !== undefined && value !== "") {
           formData.append(`form_fields[${key}]`, value.trim());
         }
@@ -529,6 +497,17 @@ function Documents({ requests, token, onRefresh, user }) {
           ? `Correction submitted. Request ${data.request.id} is pending verification.`
           : `Request submitted. Your Request ID is ${data.request.id}.`,
       );
+      if (!editingRequest && selectedDocument.one_time) {
+        setCatalogTypes((current) =>
+          (current || []).map((type) => type.value === documentType
+            ? {
+                ...type,
+                available: false,
+                unavailable_reason: "This one-time certificate has already been requested or issued.",
+              }
+            : type),
+        );
+      }
       if (!editingRequest) setFeedbackOpen(true);
       setEditingRequest(null);
       setDocumentType("");
@@ -636,6 +615,7 @@ function Documents({ requests, token, onRefresh, user }) {
               </span>
               <select
                 required
+                disabled={catalogTypes === null}
                 value={documentType}
                 disabled={Boolean(editingRequest)}
                 onChange={(event) => {
@@ -645,9 +625,18 @@ function Documents({ requests, token, onRefresh, user }) {
                 }}
                 className={inputClass}
               >
-                <option value="">Select a document</option>
-                {DOCUMENT_TYPES.map((document) => (
-                  <option key={document.label}>{document.label}</option>
+                <option value="">
+                  {catalogTypes === null ? "Loading document types..." : "Select a document"}
+                </option>
+                {availableDocuments.map((document) => (
+                  <option
+                    key={document.value || document.label}
+                    value={document.value || document.label}
+                    disabled={document.one_time && document.available === false}
+                  >
+                    {document.label}
+                    {document.one_time && document.available === false ? " (Already requested)" : ""}
+                  </option>
                 ))}
               </select>
             </label>
@@ -660,6 +649,11 @@ function Documents({ requests, token, onRefresh, user }) {
                   {selectedDocument.notice}
                 </p>
               )}
+              {oneTimeAlreadyRequested && (
+                <p role="alert" className="mt-5 rounded-xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+                  {selectedDocument.unavailable_reason || "This document can only be requested once."}
+                </p>
+              )}
 
               <div className="mt-6 border-t border-slate-100 pt-5">
                 <h3 className="text-sm font-bold text-[#172B4D]">
@@ -669,9 +663,22 @@ function Documents({ requests, token, onRefresh, user }) {
                   Profile details are filled in when available. You can complete
                   any missing information.
                 </p>
+                {selectedDocument.fee_mode === "assessed" ? (
+                  <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
+                              Fee will be assessed by barangay staff based on your business information.
+                            </p>
+                ) : selectedDocument.fee !== undefined && (
+                            <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
+                              {Number(selectedDocument.fee) === 0
+                                ? `${selectedDocument.label} has no fee.`
+                                : `${selectedDocument.label} fee: ₱${Number(selectedDocument.fee).toFixed(2)}. Pay this at the barangay when you visit to claim your certificate.`}
+                  </p>
+                )}
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   {selectedDocument.applicantFields.map((key) => {
-                    const field = APPLICANT_FIELDS[key] || {
+                    const field = selectedDocument.applicantFieldConfigs?.find(
+                      (item) => item.key === key,
+                    ) || APPLICANT_FIELDS[key] || {
                       label:
                         key === "municipality_city"
                           ? "Municipality/City"
@@ -687,7 +694,7 @@ function Documents({ requests, token, onRefresh, user }) {
                         </span>
                         {field.type === "select" ? (
                           <select
-                            required
+                            required={field.required !== false && !field.requiredWhen}
                             value={formFields[key] || ""}
                             onChange={(event) =>
                               setFormFields((current) => ({
@@ -706,16 +713,20 @@ function Documents({ requests, token, onRefresh, user }) {
                           </select>
                         ) : (
                           <input
-                            required
+                            required={!field.readOnly && field.required !== false && !field.requiredWhen}
                             type={field.type}
                             value={formFields[key] || ""}
+                            readOnly={field.readOnly}
                             onChange={(event) =>
                               setFormFields((current) => ({
                                 ...current,
                                 [key]: event.target.value,
+                                ...(key === "date_of_birth"
+                                  ? { age: calculateAge(event.target.value) }
+                                  : {}),
                               }))
                             }
-                            className={inputClass}
+                            className={`${inputClass} ${field.readOnly ? "bg-slate-100 text-slate-500" : ""}`}
                           />
                         )}
                       </label>
@@ -735,13 +746,15 @@ function Documents({ requests, token, onRefresh, user }) {
                   {selectedDocument.fields
                     .filter(
                       (field) =>
-                        !field.showWhen ||
-                        conditionMatches(field.showWhen, formFields),
+                        (!field.showWhen ||
+                          conditionMatches(field.showWhen, formFields)) &&
+                        (!field.requiredWhen ||
+                          conditionMatches(field.requiredWhen, formFields)),
                     )
                     .map((field) => {
-                      const required =
-                        field.required !== false ||
-                        conditionMatches(field.requiredWhen, formFields);
+                        const required = field.requiredWhen
+                          ? conditionMatches(field.requiredWhen, formFields)
+                          : field.required !== false;
                       const controlProps = {
                         required,
                         value: formFields[field.key] || "",
@@ -897,7 +910,7 @@ function Documents({ requests, token, onRefresh, user }) {
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || oneTimeAlreadyRequested}
             className={`${primaryButtonClass} mt-5`}
           >
             {submitting

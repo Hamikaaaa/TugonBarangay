@@ -2,21 +2,26 @@ import { useEffect, useState } from "react";
 
 const DOCUMENT_LABELS = {
   "Barangay Certification": "Barangay Clearance",
+  "Barangay Certificate": "Barangay Certificate",
   "Barangay Residency": "Certificate of Residency",
   "Business Permit": "Business Clearance",
+  "Barangay Indigency": "Certificate of Indigency",
   "Certificate of Good Moral Character": "Certificate of Good Moral Character",
-  "First-Time Jobseeker Certification": "First-Time Jobseeker Certification",
+  "First-Time Jobseeker Certification": "First-Time Job Seeker Certification",
 };
 
 const TEMPLATE_TYPES = {
   "Barangay Certification": "barangay",
+  "Barangay Certificate": "barangay",
   "Barangay Clearance": "barangay",
   "Barangay Residency": "residency",
   "Certificate of Residency": "residency",
-  "Business Permit": "business",
+  "Business Permit": "generic",
+  "Barangay Indigency": "generic",
   "Business Clearance": "business",
   "Certificate of Good Moral Character": "character",
   "First-Time Jobseeker Certification": "jobseeker",
+  "First-Time Job Seeker Certification": "jobseeker",
 };
 
 function DocumentPreviewModal({ request, onClose, onSave }) {
@@ -37,8 +42,8 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
   if (!request) return null;
 
   const documentType = request.document_type;
-  const templateType = TEMPLATE_TYPES[documentType] || "barangay";
-  const label = DOCUMENT_LABELS[documentType] || documentType;
+  const templateType = TEMPLATE_TYPES[documentType] || "generic";
+  const label = request.document_type_label || DOCUMENT_LABELS[documentType] || documentType;
   const residentName = fields.full_name || request.resident?.name || "Resident Name";
   const formattedDate = new Date(request.created_at).toLocaleDateString("en-US", {
     year: "numeric",
@@ -85,7 +90,7 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
                 setEditing((current) => !current);
               }}
               disabled={saving || request.status !== "processing"}
-              className="inline-flex items-center justify-center rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              className="inline-flex items-center justify-center rounded-xl border border-[#E6ECF5] px-4 py-2.5 text-sm font-bold text-[#55708F] transition hover:bg-[#F6F8FC] hover:text-[#172B4D] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
             >
               {editing ? "Cancel edit" : "Edit"}
             </button>
@@ -94,7 +99,7 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
                 type="button"
                 onClick={saveChanges}
                 disabled={saving}
-                className="inline-flex items-center justify-center rounded-xl bg-[#2455D6] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#1948B8] disabled:opacity-50"
+                className="inline-flex items-center justify-center rounded-xl bg-[#2455D6] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50"
               >
                 {saving ? "Saving..." : "Save changes"}
               </button>
@@ -102,14 +107,14 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center justify-center rounded-xl bg-[#2455D6] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#1948B8]"
+              className="inline-flex items-center justify-center rounded-xl bg-[#2455D6] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30"
             >
               Print
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-xl text-slate-500 hover:bg-slate-50"
+              className="flex h-10 w-10 items-center justify-center rounded-xl border border-[#E6ECF5] text-xl text-[#55708F] transition hover:bg-[#F6F8FC] hover:text-[#2455D6] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
               aria-label="Close preview"
             >
               ×
@@ -118,19 +123,49 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
         </div>
 
         {editing && (
-          <div className="border-b border-amber-200 bg-amber-50 px-5 py-4">
-            <p className="text-sm font-bold text-amber-900">Edit mode</p>
-            <p className="mt-1 text-xs text-amber-700">Save edits to this request before approving the document for release.</p>
+          <div className="border-b border-[#F1D9A8] bg-[#FFF7E7] px-5 py-4">
+            <p className="text-sm font-bold text-[#805900]">Edit mode</p>
+            <p className="mt-1 text-xs text-[#805900]">Save edits to this request before approving the document for release.</p>
           </div>
         )}
-        {error && <p role="alert" className="border-b border-red-200 bg-red-50 px-5 py-3 text-xs font-semibold text-red-700">{error}</p>}
+        {error && <p role="alert" className="border-b border-[#F2D4D0] bg-[#FFF0EE] px-5 py-3 text-xs font-semibold text-[#C74444]">{error}</p>}
 
         <div className="document-preview-scroll overflow-auto bg-slate-100 p-4 sm:p-8">
-          <DocumentPaper request={request} templateType={templateType} label={label} residentName={residentName} formattedDate={formattedDate} fields={fields} editing={editing} onFieldChange={setFields} />
+          <DocumentPaper
+            request={request}
+            templateType={templateType}
+            label={label}
+            residentName={residentName}
+            formattedDate={formattedDate}
+            fields={fields}
+            editing={editing}
+            onFieldChange={(fieldName, value) => setFields((current) => ({
+              ...current,
+              [fieldName]: value,
+              ...(fieldName === "date_of_birth"
+                ? { age: calculateAge(value) }
+                : {}),
+            }))}
+          />
         </div>
       </div>
     </div>
   );
+}
+
+function renderDocumentTemplate(template, fields, request, residentName, label, formattedDate) {
+  const values = {
+    ...fields,
+    resident_name: residentName,
+    document_title: label,
+    document_number: String(request.id).padStart(6, "0"),
+    date_issued: formattedDate,
+  };
+
+  return template.replace(/\{\{([a-z][a-z0-9_]*)\}\}/gi, (placeholder, key) => {
+    const value = values[key];
+    return value === undefined || value === null ? placeholder : String(value);
+  });
 }
 
 function DocumentPaper({ request, templateType, label, residentName, formattedDate, fields, editing, onFieldChange }) {
@@ -154,11 +189,20 @@ function DocumentPaper({ request, templateType, label, residentName, formattedDa
       </header>
 
       <div className="flex-1 py-5">
-        {templateType === "barangay" && <BarangayTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
-        {templateType === "residency" && <ResidencyTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
-        {templateType === "business" && <BusinessTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
-        {templateType === "character" && <CharacterTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
-        {templateType === "jobseeker" && <JobseekerTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
+        {request.type?.template ? (
+          <p className="whitespace-pre-wrap text-[11px] leading-6 text-slate-700">
+            {renderDocumentTemplate(request.type.template, fields, request, residentName, label, formattedDate)}
+          </p>
+        ) : (
+          <>
+            {templateType === "barangay" && <BarangayTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
+            {templateType === "residency" && <ResidencyTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
+            {templateType === "business" && <BusinessTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
+            {templateType === "character" && <CharacterTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
+            {templateType === "jobseeker" && <JobseekerTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
+            {templateType === "generic" && <GenericTemplate label={label} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
+          </>
+        )}
       </div>
 
       <footer className="grid grid-cols-[1fr_auto] gap-8 border-t border-slate-200 pt-4">
@@ -206,9 +250,10 @@ function DetailLine({ label, value, fieldName, editing, onFieldChange }) {
       <dd className="text-[10px] font-semibold text-slate-700">
         {editing ? (
           <input
+            type={fieldName === "date_of_birth" ? "date" : "text"}
             value={value || ""}
             onChange={(event) => onFieldChange(fieldName, event.target.value)}
-            className="w-full rounded border border-amber-300 bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+            className="w-full rounded border border-[#F1D9A8] bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 outline-none focus:border-[#805900] focus:ring-2 focus:ring-[#805900]/15"
           />
         ) : (
           value || "—"
@@ -216,6 +261,22 @@ function DetailLine({ label, value, fieldName, editing, onFieldChange }) {
       </dd>
     </div>
   );
+}
+
+function calculateAge(dateOfBirth) {
+  if (!dateOfBirth) return "";
+  const birthDate = new Date(`${dateOfBirth.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(birthDate.getTime())) return "";
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  if (
+    today.getMonth() < birthDate.getMonth() ||
+    (today.getMonth() === birthDate.getMonth() &&
+      today.getDate() < birthDate.getDate())
+  ) {
+    age -= 1;
+  }
+  return age >= 0 ? String(age) : "";
 }
 
 function BarangayTemplate({ residentName, fields, editing, onFieldChange }) {
@@ -231,18 +292,20 @@ function BarangayTemplate({ residentName, fields, editing, onFieldChange }) {
           <textarea
             value={fields.purpose || ""}
             onChange={(event) => onFieldChange("purpose", event.target.value)}
-            className="min-h-16 w-full rounded border border-amber-300 bg-white p-2 text-[10px] leading-4 text-slate-700 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+            className="min-h-16 w-full rounded border border-[#F1D9A8] bg-white p-2 text-[10px] leading-4 text-slate-700 outline-none focus:border-[#805900] focus:ring-2 focus:ring-[#805900]/15"
           />
         ) : (
           <p className="text-[11px] leading-5 text-slate-600">{fields.purpose || fields.additional_details || "The resident has requested official barangay verification for the stated purpose."}</p>
         )}
       </Section>
       <Section title="Resident information">
+        <DetailLine label="Address" value={fields.address} fieldName="address" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Purok" value={fields.purok} fieldName="purok" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Age" value={fields.age} fieldName="age" editing={false} onFieldChange={onFieldChange} />
         <DetailLine label="Date of birth" value={fields.date_of_birth} fieldName="date_of_birth" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Sex" value={fields.sex} fieldName="sex" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Civil status" value={fields.civil_status} fieldName="civil_status" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Purok" value={fields.purok} fieldName="purok" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Contact" value={fields.contact_number || fields.email_address} fieldName="contact_number" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Citizenship" value={fields.citizenship} fieldName="citizenship" editing={editing} onFieldChange={onFieldChange} />
       </Section>
       <p className="mt-1 text-[9px] leading-4 text-slate-500">The certificate is valid for the purpose stated above and is subject to barangay policy. It is not a substitute for any other official document.</p>
     </>
@@ -259,17 +322,21 @@ function ResidencyTemplate({ residentName, fields, editing, onFieldChange }) {
           <input
             value={residentName}
             onChange={(event) => onFieldChange("full_name", event.target.value)}
-            className="mt-2 w-full rounded border border-amber-300 bg-white px-3 py-2 text-center text-[18px] font-bold text-[#123F70] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+            className="mt-2 w-full rounded border border-[#F1D9A8] bg-white px-3 py-2 text-center text-[18px] font-bold text-[#123F70] outline-none focus:border-[#805900] focus:ring-2 focus:ring-[#805900]/15"
           />
         ) : (
           <p className="mt-1 text-[18px] font-bold text-[#123F70]">{residentName}</p>
         )}
       </div>
       <Section title="Residency details">
-        <DetailLine label="Municipality / city" value={fields.municipality_city} fieldName="municipality_city" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Province" value={fields.province} fieldName="province" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Years of residency" value={fields.years_of_residency} fieldName="years_of_residency" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Months of residency" value={fields.months_of_residency} fieldName="months_of_residency" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Address" value={fields.address} fieldName="address" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Purok" value={fields.purok} fieldName="purok" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Age" value={fields.age} fieldName="age" editing={false} onFieldChange={onFieldChange} />
+        <DetailLine label="Date of birth" value={fields.date_of_birth} fieldName="date_of_birth" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Sex" value={fields.sex} fieldName="sex" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Civil status" value={fields.civil_status} fieldName="civil_status" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Length of residency (years)" value={fields.years_of_residency} fieldName="years_of_residency" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Additional months of residency" value={fields.months_of_residency} fieldName="months_of_residency" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Purpose" value={fields.purpose} fieldName="purpose" editing={editing} onFieldChange={onFieldChange} />
       </Section>
       <p className="text-[9px] leading-4 text-slate-500">This certificate confirms the resident’s stated period of residence within the barangay and is issued based on the information provided.</p>
@@ -287,7 +354,7 @@ function BusinessTemplate({ residentName, fields, editing, onFieldChange }) {
           <input
             value={residentName}
             onChange={(event) => onFieldChange("full_name", event.target.value)}
-            className="mt-2 w-full rounded border border-amber-300 bg-white px-3 py-2 text-center text-[18px] font-bold text-[#123F70] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+            className="mt-2 w-full rounded border border-[#F1D9A8] bg-white px-3 py-2 text-center text-[18px] font-bold text-[#123F70] outline-none focus:border-[#805900] focus:ring-2 focus:ring-[#805900]/15"
           />
         ) : (
           <p className="mt-1 text-[18px] font-bold text-[#123F70]">{residentName}</p>
@@ -318,18 +385,23 @@ function CharacterTemplate({ residentName, fields, editing, onFieldChange }) {
           <input
             value={residentName}
             onChange={(event) => onFieldChange("full_name", event.target.value)}
-            className="mt-2 w-full rounded border border-amber-300 bg-white px-3 py-2 text-center text-[18px] font-bold text-[#123F70] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+            className="mt-2 w-full rounded border border-[#F1D9A8] bg-white px-3 py-2 text-center text-[18px] font-bold text-[#123F70] outline-none focus:border-[#805900] focus:ring-2 focus:ring-[#805900]/15"
           />
         ) : (
           <p className="mt-1 text-[18px] font-bold text-[#123F70]">{residentName}</p>
         )}
       </div>
       <Section title="Personal information">
+        <DetailLine label="Address" value={fields.address} fieldName="address" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Date of birth" value={fields.date_of_birth} fieldName="date_of_birth" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Age" value={fields.age} fieldName="age" editing={false} onFieldChange={onFieldChange} />
         <DetailLine label="Sex" value={fields.sex} fieldName="sex" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Citizenship" value={fields.citizenship} fieldName="citizenship" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Civil status" value={fields.civil_status} fieldName="civil_status" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Purok" value={fields.purok} fieldName="purok" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Contact" value={fields.contact_number || fields.email_address} fieldName="contact_number" editing={editing} onFieldChange={onFieldChange} />
+      </Section>
+      <Section title="Purpose of request">
+        <DetailLine label="Purpose" value={fields.purpose} fieldName="purpose" editing={editing} onFieldChange={onFieldChange} />
       </Section>
       <Section title="Declaration">
         <p className="text-[11px] leading-5 text-slate-600">It is hereby certified that the person named above is of good moral character and has demonstrated responsible, lawful, and respectful conduct within the community.</p>
@@ -349,25 +421,52 @@ function JobseekerTemplate({ residentName, fields, editing, onFieldChange }) {
           <input
             value={residentName}
             onChange={(event) => onFieldChange("full_name", event.target.value)}
-            className="mt-2 w-full rounded border border-amber-300 bg-white px-3 py-2 text-center text-[18px] font-bold text-[#123F70] outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
+            className="mt-2 w-full rounded border border-[#F1D9A8] bg-white px-3 py-2 text-center text-[18px] font-bold text-[#123F70] outline-none focus:border-[#805900] focus:ring-2 focus:ring-[#805900]/15"
           />
         ) : (
           <p className="mt-1 text-[18px] font-bold text-[#123F70]">{residentName}</p>
         )}
       </div>
       <Section title="Personal information">
+        <DetailLine label="Address" value={fields.address} fieldName="address" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Date of birth" value={fields.date_of_birth} fieldName="date_of_birth" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Age" value={fields.age} fieldName="age" editing={false} onFieldChange={onFieldChange} />
         <DetailLine label="Sex" value={fields.sex} fieldName="sex" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Citizenship" value={fields.citizenship} fieldName="citizenship" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Civil status" value={fields.civil_status} fieldName="civil_status" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Purok" value={fields.purok} fieldName="purok" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Contact" value={fields.contact_number || fields.email_address} fieldName="contact_number" editing={editing} onFieldChange={onFieldChange} />
       </Section>
       <Section title="Employment information">
-        <DetailLine label="Primary skill" value={fields.primary_skill} fieldName="primary_skill" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Education" value={fields.education} fieldName="education" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Employment goal" value={fields.employment_goal || fields.purpose} fieldName="employment_goal" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Purpose" value={fields.purpose} fieldName="purpose" editing={editing} onFieldChange={onFieldChange} />
       </Section>
       <p className="text-[9px] leading-4 text-slate-500">This certification confirms that the resident is a first-time job seeker and has completed the required barangay verification process.</p>
+    </>
+  );
+}
+
+function GenericTemplate({ label, residentName, fields, editing, onFieldChange }) {
+  return (
+    <>
+      <TemplateHeading title={label} subtitle="Official barangay document" />
+      <div className="mb-5 rounded-sm bg-[#F5F8FF] p-4 text-center">
+        <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">This document is issued to</p>
+        <p className="mt-1 text-[18px] font-bold text-[#123F70]">{residentName}</p>
+      </div>
+      <Section title="Request information">
+        {Object.entries(fields).map(([key, value]) => (
+          <DetailLine
+            key={key}
+            label={key.replaceAll("_", " ")}
+            value={value}
+            fieldName={key}
+            editing={editing}
+            onFieldChange={onFieldChange}
+          />
+        ))}
+      </Section>
+      <p className="mt-4 text-[9px] leading-4 text-slate-500">
+        This document is prepared from the information and supporting requirements reviewed by barangay staff.
+      </p>
     </>
   );
 }

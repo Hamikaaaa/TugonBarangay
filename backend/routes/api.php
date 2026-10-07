@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\DocumentTypeController;
 use App\Http\Controllers\ResidentController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,7 @@ Route::post('/logout', [AuthController::class, 'logout'])
 
 Route::middleware(['auth:sanctum', 'role:resident'])->prefix('resident')->group(function () {
     Route::get('/dashboard', [ResidentController::class, 'dashboard']);
+    Route::get('/document-types', [DocumentTypeController::class, 'residentIndex']);
     Route::get('/requests', [ResidentController::class, 'requests']);
     Route::post('/requests', [ResidentController::class, 'storeRequest'])
         ->middleware('verified');
@@ -40,28 +42,33 @@ Route::middleware(['auth:sanctum', 'role:resident'])->prefix('resident')->group(
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
+    Route::get('/document-types', [DocumentTypeController::class, 'adminIndex']);
+    Route::post('/document-types', [DocumentTypeController::class, 'store']);
+    Route::put('/document-types/{documentType}', [DocumentTypeController::class, 'update']);
+    Route::delete('/document-types/{documentType}', [DocumentTypeController::class, 'destroy']);
+    Route::get('/document-requests/overview', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'overview']);
+    Route::get('/document-request-events', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'events']);
+    Route::get('/document-requests', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'index']);
+    Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'show']);
     Route::get('/bantaybot/escalations', [ResidentController::class, 'adminBotEscalations']);
     Route::patch('/bantaybot/escalations/{chatbotEscalation}/reply', [ResidentController::class, 'replyToBotEscalation']);
     Route::get('/pending-residents', [AdminController::class, 'pendingResidents']);
     Route::patch('/residents/{user}/verify', [AdminController::class, 'verifyResident']);
     Route::patch('/residents/{user}/reject', [AdminController::class, 'rejectResident']);
-    Route::get('/document-requests', [\App\Http\Controllers\StaffController::class, 'documentRequests']);
-    Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\StaffController::class, 'showDocumentRequest']);
-    Route::post('/document-requests/{documentRequest}/generate', [\App\Http\Controllers\StaffController::class, 'generateDocumentPreview']);
-    Route::get('/document-requests/{documentRequest}/requirements/{requirement}', [\App\Http\Controllers\StaffController::class, 'downloadDocumentRequirement']);
-    Route::patch('/document-requests/{documentRequest}/status', [\App\Http\Controllers\StaffController::class, 'updateDocumentRequestStatus']);
-    Route::delete('/document-requests/{documentRequest}', [\App\Http\Controllers\StaffController::class, 'destroyDocumentRequest']);
     Route::get('/complaints', [\App\Http\Controllers\StaffController::class, 'complaints']);
     Route::patch('/complaints/{complaint}/status', [\App\Http\Controllers\StaffController::class, 'updateComplaintStatus']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);
 });
 
 Route::middleware(['auth:sanctum', 'role:staff', 'designation:Document Request Officer'])->prefix('staff')->group(function () {
+    Route::get('/document-types', [DocumentTypeController::class, 'staffIndex']);
+    Route::get('/document-request-dashboard', [\App\Http\Controllers\StaffController::class, 'documentRequestDashboard']);
     Route::get('/document-requests', [\App\Http\Controllers\StaffController::class, 'documentRequests']);
     Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\StaffController::class, 'showDocumentRequest']);
     Route::post('/document-requests/{documentRequest}/generate', [\App\Http\Controllers\StaffController::class, 'generateDocumentPreview']);
     Route::get('/document-requests/{documentRequest}/requirements/{requirement}', [\App\Http\Controllers\StaffController::class, 'downloadDocumentRequirement']);
     Route::patch('/document-requests/{documentRequest}/status', [\App\Http\Controllers\StaffController::class, 'updateDocumentRequestStatus']);
+    Route::patch('/document-requests/{documentRequest}/fee', [\App\Http\Controllers\StaffController::class, 'updateDocumentRequestFee']);
 });
 
 Route::middleware(['auth:sanctum', 'role:staff', 'designation:Complaint Management Officer'])->prefix('staff')->group(function () {
