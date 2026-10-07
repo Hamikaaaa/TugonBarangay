@@ -24,7 +24,15 @@ function StatCard({ label, value, hint, color }) {
 
 function RequestRow({ request }) {
   const [expanded, setExpanded] = useState(false);
-  const title = request.title || request.document_type;
+  const documentLabels = {
+    "Barangay Certification": "Barangay Clearance",
+    "Barangay Certificate": "Barangay Certificate",
+    "Barangay Residency": "Certificate of Residency",
+    "Barangay Indigency": "Certificate of Indigency",
+    "Business Permit": "Business Clearance",
+    "First-Time Jobseeker Certification": "First-Time Job Seeker Certification",
+  };
+  const title = request.title || request.document_type_label || documentLabels[request.document_type] || request.document_type;
   const date =
     request.date || new Date(request.created_at).toLocaleDateString();
   const status = request.status.replaceAll("_", " ");
@@ -38,6 +46,7 @@ function RequestRow({ request }) {
   const detailsId = `request-${request.id}-details`;
   const statusClasses = {
     pending: "bg-[#FFF7E7] text-[#B87900]",
+    "under review": "bg-violet-50 text-violet-700",
     "for correction": "bg-[#FFF0EE] text-[#C74444]",
     processing: "bg-[#EEF4FF] text-[#2455D6]",
     "ready for release": "bg-[#ECF9F1] text-[#21864A]",
@@ -92,6 +101,13 @@ function RequestRow({ request }) {
         >
           {hasDetails ? (
             <div className="space-y-4">
+              <p className="text-sm font-semibold text-[#172B4D]">
+                Fee: {request.details?.fee_mode === "assessed" && !request.details?.fee_assessed
+                  ? "To be assessed by barangay staff"
+                  : Number(request.fee || 0) === 0
+                    ? "No fee"
+                    : `₱${Number(request.fee || 0).toFixed(2)} payable upon release`}
+              </p>
               {Object.keys(formFields).length > 0 && (
                 <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
                   {Object.entries(formFields).map(([key, value]) => (

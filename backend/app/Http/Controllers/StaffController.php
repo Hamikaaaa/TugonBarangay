@@ -4,7 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Complaint;
 use App\Models\DocumentRequest;
+use App\Models\DocumentRequestEvent;
+use App\Models\DocumentType;
+use App\Models\Resident;
 use App\Models\ResidentNotification;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Schema;
@@ -13,17 +17,41 @@ class StaffController extends Controller
 {
     public function documentRequests(Request $request)
     {
-        $query = DocumentRequest::query()->with('resident');
+        $validated = $request->validate([
+            'status' => ['sometimes', 'string', 'in:all,pending,under_review,processing,for_correction,ready_for_release,completed,rejected'],
+            'document_type' => ['sometimes', 'string', 'max:100'],
+            'search' => ['sometimes', 'string', 'max:150'],
+            'from' => ['sometimes', 'date_format:Y-m-d'],
+            'to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:from'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'sort_by' => ['sometimes', 'string', 'in:created_at,id,document_type,resident_name'],
+            'sort_direction' => ['sometimes', 'string', 'in:asc,desc'],
+        ]);
+        $query = DocumentRequest::query()->with(['resident', 'type', 'assignedStaff']);
 
-        if ($request->has('status')) {
-            $status = $request->status;
-            $query->where('status', $status);
+        if (array_key_exists('status', $validated)) {
+            $status = $validated['status'];
+            if ($status !== 'all') {
+                $query->where('status', $status);
+            }
         } else {
             $query->whereNotIn('status', ['completed', 'rejected']);
         }
 
-        if ($request->filled('search')) {
-            $search = trim($request->search);
+        if (!empty($validated['document_type'])) {
+            $query->where('document_type', $validated['document_type']);
+        }
+
+        if (!empty($validated['from'])) {
+            $query->whereDate('created_at', '>=', $validated['from']);
+        }
+
+        if (!empty($validated['to'])) {
+            $query->whereDate('created_at', '<=', $validated['to']);
+        }
+
+        if (!empty($validated['search'])) {
+            $search = trim($validated['search']);
             $query->where(function ($q) use ($search) {
                 $q->where('id', 'like', "%{$search}%")
                     ->orWhere('document_type', 'like', "%{$search}%")
@@ -34,13 +62,100 @@ class StaffController extends Controller
             });
         }
 
-        return $query->latest()->paginate(min(max($request->integer('per_page', 10), 1), 100));
+        $direction = $validated['sort_direction'] ?? 'desc';
+        $sortBy = $validated['sort_by'] ?? 'created_at';
+        if ($sortBy === 'resident_name') {
+            $query->orderBy(
+                Resident::query()
+                    ->select('name')
+                    ->whereColumn('residents.id', 'document_requests.resident_id'),
+                $direction,
+            );
+        } else {
+            $query->orderBy($sortBy, $direction);
+        }
+
+        return $query->paginate($validated['per_page'] ?? 25);
+    }
+
+    public function documentRequestDashboard()
+    {
+        $statuses = ['pending', 'under_review', 'processing', 'for_correction', 'ready_for_release', 'completed', 'rejected'];
+        $counts = DocumentRequest::query()
+            ->selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
+        $typeCounts = DocumentRequest::query()
+            ->selectRaw('document_type, status, COUNT(*) as count')
+            ->groupBy('document_type', 'status')
+            ->get()
+            ->groupBy('document_type');
+        $types = DocumentType::query()
+            ->whereNotNull('value')
+            ->where('active', true)
+            ->orderBy('label')
+            ->get(['value', 'label'])
+            ->map(fn (DocumentType $type) => [
+                'value' => $type->value,
+                'label' => $type->label,
+            ]);
+
+        foreach ($typeCounts as $value => $statusCounts) {
+            if (!$types->contains('value', $value)) {
+                $types->push([
+                    'value' => $value,
+                    'label' => DocumentType::where('value', $value)->value('label') ?? $value,
+                ]);
+            }
+        }
+
+        $summaryByType = $types->map(function (array $type) use ($typeCounts, $statuses) {
+            $countsForType = $typeCounts->get($type['value'], collect())->keyBy('status');
+            $result = [
+                'value' => $type['value'],
+                'label' => $type['label'],
+                'total' => $countsForType->sum('count'),
+            ];
+            foreach ($statuses as $status) {
+                $result[$status] = (int) ($countsForType->get($status)?->count ?? 0);
+            }
+
+            return $result;
+        })->values();
+
+        $relations = ['resident', 'type', 'assignedStaff'];
+        $attention = DocumentRequest::query()
+            ->with($relations)
+            ->whereIn('status', ['pending', 'under_review', 'processing', 'for_correction', 'ready_for_release'])
+            ->orderByRaw("CASE status WHEN 'for_correction' THEN 0 WHEN 'pending' THEN 1 WHEN 'under_review' THEN 2 ELSE 3 END")
+            ->orderBy('created_at')
+            ->limit(8)
+            ->get();
+        $recent = DocumentRequest::query()
+            ->with($relations)
+            ->whereNotIn('id', $attention->modelKeys())
+            ->orderByDesc('updated_at')
+            ->limit(10)
+            ->get();
+
+        return response()->json([
+            'data' => [
+                'total' => (int) $counts->sum(),
+                'counts' => collect($statuses)->mapWithKeys(fn (string $status) => [
+                    $status => (int) ($counts[$status] ?? 0),
+                ]),
+                'summary_by_type' => $summaryByType,
+                'attention' => $attention,
+                'recent' => $recent,
+                'updated_at' => Carbon::now()->toIso8601String(),
+            ],
+        ]);
     }
 
     public function showDocumentRequest(DocumentRequest $documentRequest)
     {
         return response()->json([
-            'data' => $documentRequest->load('resident'),
+            'data' => $documentRequest->load(['resident', 'type', 'assignedStaff']),
         ]);
     }
 
@@ -52,11 +167,27 @@ class StaffController extends Controller
             ], 409);
         }
 
-        $validated = $request->validate([
+        $rules = [
             'document_content' => ['sometimes', 'required', 'array'],
             'staff_remarks' => ['nullable', 'string', 'max:2000'],
-        ]);
-        $preview = $validated['document_content'] ?? $this->buildDocumentPayload($documentRequest);
+        ];
+        $configuredType = DocumentType::where('value', $documentRequest->document_type)->first();
+        $configuredFields = collect($configuredType?->applicant_fields ?? [])
+            ->merge($configuredType?->fields ?? []);
+        $derivesAge = $configuredFields->contains('key', 'date_of_birth')
+            && $configuredFields->contains('key', 'age');
+        if ($derivesAge || in_array($documentRequest->document_type, ['Barangay Certification', 'Barangay Residency'], true)) {
+            $rules['document_content.date_of_birth'] = ['required', 'date', 'before_or_equal:today'];
+        }
+        $validated = $request->validate($rules);
+        $hadPreview = $documentRequest->document_generated_at !== null;
+        $preview = $request->input('document_content', $this->buildDocumentPayload($documentRequest));
+        if (
+            ($derivesAge || in_array($documentRequest->document_type, ['Barangay Certification', 'Barangay Residency'], true))
+            && !empty($preview['date_of_birth'])
+        ) {
+            $preview['age'] = Carbon::parse($preview['date_of_birth'])->age;
+        }
 
         if (Schema::hasColumn('document_requests', 'document_content')) {
             $documentRequest->document_content = $preview;
@@ -71,32 +202,33 @@ class StaffController extends Controller
         }
 
         $documentRequest->save();
+        DocumentRequestEvent::record(
+            $documentRequest,
+            $request->user(),
+            $hadPreview ? 'document_edited' : 'preview_generated',
+            $documentRequest->status,
+            $documentRequest->status,
+        );
 
         return response()->json([
             'message' => 'Document preview generated successfully.',
-            'data' => $documentRequest->fresh()->load('resident'),
+            'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']),
         ]);
     }
 
     public function updateDocumentRequestStatus(Request $request, DocumentRequest $documentRequest)
     {
-        $status = $request->input('status');
-        $allowed = [
-            'pending',
-            'processing',
-            'for_correction',
-            'ready_for_release',
-            'completed',
-            'rejected',
-        ];
-
-        if (!in_array($status, $allowed, true)) {
-            return response()->json(['message' => 'Invalid document status.'], 422);
-        }
+        $validated = $request->validate([
+            'status' => ['required', 'string', 'in:pending,under_review,processing,for_correction,ready_for_release,completed,rejected'],
+            'staff_remarks' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'rejection_reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
+        ]);
+        $status = $validated['status'];
 
         $validTransitions = [
-            'pending' => ['processing', 'for_correction', 'rejected'],
-            'processing' => ['ready_for_release', 'for_correction'],
+            'pending' => ['under_review', 'for_correction', 'rejected'],
+            'under_review' => ['processing', 'for_correction', 'rejected'],
+            'processing' => ['ready_for_release', 'for_correction', 'rejected'],
             'ready_for_release' => ['completed'],
             'completed' => [],
             'rejected' => [],
@@ -108,19 +240,19 @@ class StaffController extends Controller
             ], 409);
         }
 
-        if ($status === 'for_correction' && blank($request->input('staff_remarks'))) {
+        if ($status === 'for_correction' && blank($validated['staff_remarks'] ?? null)) {
             return response()->json([
                 'message' => 'Staff remarks explaining the required correction are required.',
             ], 422);
         }
 
-        if ($status === 'rejected' && blank($request->input('staff_remarks'))) {
+        if ($status === 'rejected' && blank($validated['staff_remarks'] ?? null)) {
             return response()->json([
                 'message' => 'Staff remarks explaining the rejection are required.',
             ], 422);
         }
 
-        if ($status === 'rejected' && blank($request->input('rejection_reason'))) {
+        if ($status === 'rejected' && blank($validated['rejection_reason'] ?? null)) {
             return response()->json([
                 'message' => 'A rejection reason is required.',
             ], 422);
@@ -134,17 +266,28 @@ class StaffController extends Controller
                 'message' => 'Generate and review the document before marking it ready for release.',
             ], 409);
         }
+        if ($status === 'ready_for_release' && ($documentRequest->details['fee_mode'] ?? null) === 'assessed'
+            && empty($documentRequest->details['fee_assessed'])) {
+            return response()->json([
+                'message' => 'Assess and save the business fee before marking the document ready for release.',
+            ], 409);
+        }
 
+        $previousStatus = $documentRequest->status;
         $update = [
             'status' => $status,
+            'status_changed_at' => now(),
         ];
+        if (in_array($status, ['under_review', 'processing'], true) && !$documentRequest->assigned_staff_id) {
+            $update['assigned_staff_id'] = $request->user()->id;
+        }
 
-        if ($request->has('staff_remarks')) {
-            $update['staff_remarks'] = $request->input('staff_remarks');
+        if (array_key_exists('staff_remarks', $validated)) {
+            $update['staff_remarks'] = $validated['staff_remarks'];
         }
 
         if ($status === 'rejected') {
-            $update['rejection_reason'] = $request->input('rejection_reason');
+            $update['rejection_reason'] = $validated['rejection_reason'];
         } elseif (Schema::hasColumn('document_requests', 'rejection_reason')) {
             $update['rejection_reason'] = null;
         }
@@ -164,13 +307,25 @@ class StaffController extends Controller
 
         $documentRequest->fill($update);
         $documentRequest->save();
+        DocumentRequestEvent::record(
+            $documentRequest,
+            $request->user(),
+            'status_changed',
+            $previousStatus,
+            $status,
+            array_filter([
+                'staff_remarks' => $validated['staff_remarks'] ?? null,
+                'rejection_reason' => $validated['rejection_reason'] ?? null,
+            ], fn ($value) => $value !== null && $value !== ''),
+        );
 
         $messages = [
+            'under_review' => ['Document request under review', 'Your document request is being reviewed by barangay staff.'],
             'processing' => ['Document request approved', 'Your requirements were verified and your document request is now being processed.'],
-            'for_correction' => ['Correction needed for your document request', $request->input('staff_remarks')],
+            'for_correction' => ['Correction needed for your document request', $validated['staff_remarks'] ?? null],
             'ready_for_release' => ['Document ready for release', 'Your document is ready. Please claim it at the barangay office.'],
             'completed' => ['Document request completed', 'Your document request was marked complete after release.'],
-            'rejected' => ['Document request rejected', $request->input('rejection_reason')],
+            'rejected' => ['Document request rejected', $validated['rejection_reason'] ?? null],
         ];
         [$notificationTitle, $notificationMessage] = $messages[$status];
         ResidentNotification::create([
@@ -182,7 +337,47 @@ class StaffController extends Controller
 
         return response()->json([
             'message' => 'Document request updated successfully.',
-            'data' => $documentRequest->fresh()->load('resident'),
+            'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']),
+        ]);
+    }
+
+    public function updateDocumentRequestFee(Request $request, DocumentRequest $documentRequest)
+    {
+        $validated = $request->validate([
+            'fee' => ['required', 'numeric', 'min:0', 'max:1000000000'],
+        ]);
+        abort_unless(
+            ($documentRequest->details['fee_mode'] ?? null) === 'assessed',
+            422,
+            'This document type does not use an assessed fee.',
+        );
+        abort_unless(in_array($documentRequest->status, ['pending', 'under_review', 'processing'], true), 409, 'The fee can only be assessed before release.');
+
+        $previousFee = (float) $documentRequest->fee;
+        $documentRequest->fee = $validated['fee'];
+        $details = $documentRequest->details ?? [];
+        $details['fee_assessed'] = true;
+        $documentRequest->details = $details;
+        $documentRequest->save();
+        DocumentRequestEvent::record(
+            $documentRequest,
+            $request->user(),
+            'fee_assessed',
+            $documentRequest->status,
+            $documentRequest->status,
+            ['previous_fee' => $previousFee, 'fee' => (float) $documentRequest->fee],
+        );
+        $documentLabel = $documentRequest->document_type_label;
+        ResidentNotification::create([
+            'resident_id' => $documentRequest->resident_id,
+            'type' => 'document_request_fee_assessed',
+            'title' => "{$documentLabel} fee assessed",
+            'message' => "The fee for your {$documentLabel} request is ₱".number_format((float) $documentRequest->fee, 2).'. It is payable at the barangay upon release.',
+        ]);
+
+        return response()->json([
+            'message' => 'Assessed fee updated.',
+            'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']),
         ]);
     }
 
@@ -193,9 +388,11 @@ class StaffController extends Controller
         abort_unless(is_array($file) && !empty($file['path']), 404);
         abort_unless(Storage::disk('local')->exists($file['path']), 404);
 
-        return Storage::disk('local')->download(
+        return Storage::disk('local')->response(
             $file['path'],
             $file['original_name'] ?? basename($file['path']),
+            ['Cache-Control' => 'private, no-store'],
+            'inline',
         );
     }
 

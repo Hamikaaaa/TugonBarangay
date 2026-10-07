@@ -49,6 +49,18 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_admin_cannot_view_staff_document_requests(): void
+    {
+        $admin = \App\Models\Admin::create([
+            'name' => 'Test Admin',
+            'email' => 'admin@example.com',
+            'password' => 'password123',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/staff/document-requests')->assertForbidden();
+    }
+
     public function test_document_officer_can_view_and_process_document_requests(): void
     {
         Sanctum::actingAs($this->documentOfficer);
@@ -62,6 +74,12 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             ->assertJsonPath('data.id', $this->request->id);
 
         $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'under_review',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'under_review');
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
             'status' => 'processing',
             'staff_remarks' => 'Requirements are complete.',
         ])
@@ -72,6 +90,15 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'id' => $this->request->id,
             'status' => 'processing',
             'staff_remarks' => 'Requirements are complete.',
+            'assigned_staff_id' => $this->documentOfficer->id,
+        ]);
+        $this->assertDatabaseHas('document_request_events', [
+            'document_request_id' => $this->request->id,
+            'actor_id' => $this->documentOfficer->id,
+            'actor_role' => 'staff',
+            'action' => 'status_changed',
+            'from_status' => 'under_review',
+            'to_status' => 'processing',
         ]);
     }
 
@@ -85,6 +112,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'document_content' => [
                 'title' => 'Barangay Residency',
                 'resident_name' => 'Resident User',
+                'date_of_birth' => '1990-01-15',
             ],
             'staff_remarks' => 'Preview created for review.',
         ])->assertOk()
@@ -102,6 +130,48 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'staff_remarks' => 'Document reviewed, signed, and sealed.',
         ])->assertOk()
             ->assertJsonPath('data.status', 'ready_for_release');
+    }
+
+    public function test_residency_preview_includes_request_details_and_recalculates_age_from_birth_date(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $residencyRequest = DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'document_type' => 'Barangay Residency',
+            'status' => 'processing',
+            'details' => [
+                'form_fields' => [
+                    'full_name' => 'Resident User',
+                    'address' => '123 Main Street',
+                    'purok' => 'Purok 1',
+                    'date_of_birth' => '1990-01-15',
+                    'age' => 1,
+                    'sex' => 'Female',
+                    'civil_status' => 'Single',
+                    'years_of_residency' => 5,
+                    'purpose' => 'Employment',
+                ],
+                'requirements' => [],
+            ],
+        ]);
+
+        $this->postJson('/api/staff/document-requests/'.$residencyRequest->id.'/generate', [
+            'document_content' => [
+                'full_name' => 'Resident User',
+                'address' => '123 Main Street',
+                'purok' => 'Purok 1',
+                'date_of_birth' => '1990-01-15',
+                'age' => 1,
+                'sex' => 'Female',
+                'civil_status' => 'Single',
+                'years_of_residency' => 5,
+                'purpose' => 'Employment',
+            ],
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.document_content.address', '123 Main Street')
+            ->assertJsonPath('data.document_content.purok', 'Purok 1')
+            ->assertJsonPath('data.document_content.age', \Carbon\Carbon::parse('1990-01-15')->age);
     }
 
     public function test_document_officer_can_return_request_for_correction(): void
@@ -142,6 +212,61 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'status' => 'rejected',
             'rejection_reason' => 'The request cannot be approved under the barangay policy.',
         ]);
+    }
+
+    public function test_document_officer_can_reject_a_request_during_processing(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $this->request->update(['status' => 'processing']);
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'rejected',
+            'staff_remarks' => 'The declared purpose cannot be verified.',
+            'rejection_reason' => 'The request does not meet barangay requirements.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'rejected');
+
+        $this->assertDatabaseHas('document_request_events', [
+            'document_request_id' => $this->request->id,
+            'actor_id' => $this->documentOfficer->id,
+            'from_status' => 'processing',
+            'to_status' => 'rejected',
+        ]);
+    }
+
+    public function test_staff_dashboard_prioritizes_attention_and_avoids_duplicate_recent_rows(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $this->request->update(['status' => 'for_correction']);
+
+        $recentRequest = DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'document_type' => 'Barangay Residency',
+            'status' => 'completed',
+        ]);
+
+        $this->getJson('/api/staff/document-request-dashboard')
+            ->assertOk()
+            ->assertJsonPath('data.counts.for_correction', 1)
+            ->assertJsonPath('data.counts.completed', 1)
+            ->assertJsonPath('data.attention.0.id', $this->request->id)
+            ->assertJsonPath('data.recent.0.id', $recentRequest->id)
+            ->assertJsonCount(1, 'data.recent');
+    }
+
+    public function test_staff_request_queue_sorts_resident_names_on_the_server(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $earlierResident = Resident::factory()->create(['name' => 'Aaron Resident']);
+        $earlierRequest = DocumentRequest::factory()->create([
+            'resident_id' => $earlierResident->id,
+            'document_type' => 'Barangay Residency',
+            'status' => 'pending',
+        ]);
+
+        $this->getJson('/api/staff/document-requests?sort_by=resident_name&sort_direction=asc')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $earlierRequest->id);
     }
 
     public function test_document_officer_can_release_request(): void
@@ -215,7 +340,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         ])->assertUnprocessable();
     }
 
-    public function test_document_officer_can_download_uploaded_requirements_privately(): void
+    public function test_document_officer_can_view_uploaded_requirements_inline(): void
     {
         Storage::fake('local');
         $path = UploadedFile::fake()->create('valid-id.pdf', 10, 'application/pdf')
@@ -235,7 +360,8 @@ class StaffDocumentRequestWorkflowTest extends TestCase
 
         $this->get('/api/staff/document-requests/'.$this->request->id.'/requirements/valid_id')
             ->assertOk()
-            ->assertHeader('content-disposition', 'attachment; filename=valid-id.pdf');
+            ->assertHeader('cache-control', 'no-store, private')
+            ->assertHeader('content-disposition', 'inline; filename=valid-id.pdf');
     }
 
     public function test_document_officer_cannot_access_complaints(): void

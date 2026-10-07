@@ -6,8 +6,11 @@ use App\Models\ChatbotFaq;
 use App\Models\ChatbotEscalation;
 use App\Models\Complaint;
 use App\Models\DocumentRequest;
+use App\Models\DocumentRequestEvent;
+use App\Models\DocumentType;
 use App\Models\Feedback;
 use App\Models\ResidentNotification;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -18,37 +21,22 @@ class ResidentController extends Controller
 {
     private const DOCUMENT_FEES = [
         'Barangay Certification' => 80,
-        'Barangay Residency' => 140,
+        'Barangay Residency' => 130,
         'Barangay Indigency' => 0,
-        'Construction Permit' => 0,
         'Business Permit' => 0,
     ];
 
     private const DOCUMENT_REQUIREMENTS = [
         'Barangay Certification' => [
+            'purok_certificate' => ['label' => 'Purok Certificate', 'required' => true],
             'valid_id' => ['label' => 'Valid government-issued ID', 'required' => true],
         ],
         'Barangay Residency' => [
-            'valid_id' => ['label' => 'Valid ID showing your address', 'required' => false],
-            'proof_of_residency' => ['label' => 'Other supporting proof', 'required' => false],
+            'purok_certificate' => ['label' => 'Purok Certificate', 'required' => true],
+            'valid_id' => ['label' => 'Valid government-issued ID', 'required' => true],
         ],
         'Barangay Indigency' => [
             'valid_id' => ['label' => 'Valid government-issued ID', 'required' => true],
-        ],
-        'Construction Permit' => [
-            'valid_id' => ['label' => 'Valid ID', 'required' => true],
-            'proof_of_ownership' => ['label' => 'Proof of ownership', 'required' => false],
-            'title_or_tax_declaration' => ['label' => 'TCT/OCT or Tax Declaration', 'required' => false],
-            'lease_or_authorization' => [
-                'label' => 'Lease or owner authorization',
-                'required' => false,
-                'required_if' => 'required_if:form_fields.property_ownership,Authorized Representative',
-            ],
-            'architectural_plans' => ['label' => 'Building/architectural plans', 'required' => false],
-            'structural_plans' => ['label' => 'Structural plans', 'required' => false],
-            'electrical_plans' => ['label' => 'Electrical plans', 'required' => false],
-            'plumbing_plans' => ['label' => 'Plumbing/sanitary plans', 'required' => false],
-            'other_plans' => ['label' => 'Other plans required by the Building Official', 'required' => false],
         ],
         'Business Permit' => [
             'valid_id' => ['label' => 'Valid government-issued ID', 'required' => true],
@@ -66,9 +54,12 @@ class ResidentController extends Controller
     private const APPLICANT_FIELD_RULES = [
         'full_name' => ['required', 'string', 'max:255'],
         'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
+        'age' => ['required', 'integer', 'min:0', 'max:150'],
         'sex' => ['required', 'string', 'max:50'],
         'civil_status' => ['required', 'in:Single,Married,Widowed,Separated,Other'],
         'purok' => ['required', 'string', 'max:100'],
+        'address' => ['nullable', 'string', 'max:255'],
+        'citizenship' => ['required', 'string', 'max:100'],
         'contact_number' => ['required', 'string', 'max:30'],
         'email_address' => ['required', 'email', 'max:255'],
         'municipality_city' => ['required', 'string', 'max:100'],
@@ -79,20 +70,21 @@ class ResidentController extends Controller
         'Barangay Certification' => [
             'full_name',
             'date_of_birth',
+            'age',
             'sex',
             'civil_status',
+            'citizenship',
+            'address',
             'purok',
-            'contact_number',
-            'email_address',
         ],
         'Barangay Residency' => [
             'full_name',
+            'address',
+            'purok',
             'date_of_birth',
+            'age',
             'sex',
             'civil_status',
-            'purok',
-            'municipality_city',
-            'province',
         ],
         'Barangay Indigency' => [
             'full_name',
@@ -102,14 +94,12 @@ class ResidentController extends Controller
             'purok',
             'contact_number',
         ],
-        'Construction Permit' => ['full_name', 'contact_number', 'email_address'],
         'Business Permit' => ['full_name', 'contact_number', 'email_address'],
     ];
 
     private const DOCUMENT_FORM_FIELDS = [
         'Barangay Certification' => [
-            'purpose' => ['required', 'in:Employment,School Requirement,Financial Assistance,Legal Requirement,Scholarship,Loan/Application,Other'],
-            'additional_details' => ['nullable', 'required_if:form_fields.purpose,Other', 'string', 'max:2000'],
+            'purpose' => ['required', 'string', 'max:255'],
         ],
         'Barangay Residency' => [
             'years_of_residency' => ['required', 'integer', 'min:0', 'max:150'],
@@ -119,24 +109,6 @@ class ResidentController extends Controller
         'Barangay Indigency' => [
             'purpose' => ['required', 'in:Medical Assistance,Educational Assistance,Financial Assistance,Scholarship,Legal Assistance,Social Welfare Assistance,Other'],
             'additional_details' => ['nullable', 'required_if:form_fields.purpose,Other', 'string', 'max:2000'],
-        ],
-        'Construction Permit' => [
-            'valid_id_type' => ['required', 'string', 'max:100'],
-            'valid_id_number' => ['required', 'string', 'max:100'],
-            'property_owner_name' => ['required', 'string', 'max:255'],
-            'property_street_number' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'property_purok' => ['required', 'string', 'max:100'],
-            'lot_number' => ['sometimes', 'nullable', 'string', 'max:100'],
-            'tax_declaration_number' => ['sometimes', 'nullable', 'string', 'max:100'],
-            'title_number' => ['sometimes', 'nullable', 'string', 'max:100'],
-            'property_ownership' => ['required', 'in:Owner,Authorized Representative'],
-            'construction_type' => ['required', 'in:New construction,Renovation,Repair,Extension,Fencing'],
-            'structure_type' => ['required', 'in:Residential,Commercial,Other'],
-            'structure_details' => ['nullable', 'required_if:form_fields.structure_type,Other', 'string', 'max:255'],
-            'number_of_floors' => ['required', 'integer', 'min:1', 'max:200'],
-            'estimated_project_cost' => ['required', 'numeric', 'min:0', 'max:1000000000'],
-            'proposed_construction_date' => ['required', 'date'],
-            'project_description' => ['required', 'string', 'max:2000'],
         ],
         'Business Permit' => [
             'business_ownership' => ['required', 'in:Sole Proprietorship,Partnership,Corporation,Cooperative,Other'],
@@ -178,18 +150,42 @@ class ResidentController extends Controller
 
     public function requests(Request $request)
     {
-        return DocumentRequest::where('resident_id', $request->user()->id)->latest()->paginate(10);
+        return DocumentRequest::where('resident_id', $request->user()->id)
+            ->with('type')
+            ->latest()
+            ->paginate(10);
     }
 
     public function storeRequest(Request $request)
     {
         $documentType = $request->input('document_type');
+        $configuredType = DocumentType::where('value', $documentType)->where('active', true)->first();
+        $managedValues = DocumentType::whereNotNull('value')->pluck('value')->all();
+        $legacyValues = array_values(array_diff(array_keys(self::DOCUMENT_REQUIREMENTS), $managedValues));
         $rules = [
-            'document_type' => ['required', Rule::in(array_keys(self::DOCUMENT_REQUIREMENTS))],
+            'document_type' => [
+                'required',
+                Rule::in(array_values(array_unique(array_merge(
+                    $legacyValues,
+                    DocumentType::where('active', true)->pluck('value')->all(),
+                )))),
+            ],
             'notes' => ['nullable', 'string', 'max:2000'],
         ];
 
-        if (isset(self::DOCUMENT_REQUIREMENTS[$documentType])) {
+        if ($configuredType) {
+            $applicantFields = $configuredType->applicant_fields ?? [];
+            $documentFields = $configuredType->fields ?? [];
+            $requirements = $configuredType->requirements ?? [];
+            $rules += $this->configuredDocumentRules(
+                $applicantFields,
+                $documentFields,
+                $requirements,
+                false,
+                [],
+                $request->input('form_fields', []),
+            );
+        } elseif (isset(self::DOCUMENT_REQUIREMENTS[$documentType])) {
             $applicantFields = self::DOCUMENT_APPLICANT_FIELDS[$documentType];
             $documentFields = self::DOCUMENT_FORM_FIELDS[$documentType];
             $requirements = self::DOCUMENT_REQUIREMENTS[$documentType];
@@ -220,15 +216,37 @@ class ResidentController extends Controller
         }
 
         $validated = $request->validate($rules);
-        $requirements = self::DOCUMENT_REQUIREMENTS[$validated['document_type']];
+        if ($configuredType && $this->hasField($configuredType, 'age') && $this->hasField($configuredType, 'date_of_birth')) {
+            $validated['form_fields']['age'] = Carbon::parse($validated['form_fields']['date_of_birth'])->age;
+        } elseif (in_array($validated['document_type'], ['Barangay Certification', 'Barangay Residency'], true)) {
+            $validated['form_fields']['age'] = Carbon::parse($validated['form_fields']['date_of_birth'])->age;
+        }
+        $requirements = $configuredType
+            ? ($configuredType->requirements ?? [])
+            : self::DOCUMENT_REQUIREMENTS[$validated['document_type']];
+        $fee = $configuredType
+            ? ($configuredType->fee_mode === 'fixed' ? $configuredType->fee : 0)
+            : self::DOCUMENT_FEES[$validated['document_type']];
         $storedPaths = [];
         $userId = $request->user()->id;
 
         try {
-            $documentRequest = DB::transaction(function () use ($request, $validated, $requirements, $userId, &$storedPaths) {
+            $documentRequest = DB::transaction(function () use ($request, $validated, $requirements, $userId, $fee, $configuredType, &$storedPaths) {
+                if ($configuredType?->one_time) {
+                    \App\Models\Resident::whereKey($userId)->lockForUpdate()->firstOrFail();
+                    abort_if(
+                        DocumentRequest::where('resident_id', $userId)
+                            ->where('document_type', $validated['document_type'])
+                            ->where('status', '!=', 'rejected')
+                            ->exists(),
+                        409,
+                        'This one-time certificate has already been requested or issued.',
+                    );
+                }
                 $uploadedRequirements = [];
 
-                foreach ($requirements as $key => $requirement) {
+                foreach ($requirements as $index => $requirement) {
+                    $key = $requirement['key'] ?? $index;
                     $file = $request->file("requirements.{$key}");
                     if (!$file) {
                         continue;
@@ -250,10 +268,19 @@ class ResidentController extends Controller
                         'notes' => $validated['notes'] ?? null,
                         'form_fields' => $validated['form_fields'],
                         'requirements' => $uploadedRequirements,
+                        'fee_mode' => $configuredType?->fee_mode ?? 'fixed',
+                        'fee_assessed' => $configuredType?->fee_mode !== 'assessed',
                     ],
-                    'fee' => self::DOCUMENT_FEES[$validated['document_type']],
+                    'fee' => $fee,
                     'status' => 'pending',
                 ]);
+                DocumentRequestEvent::record(
+                    $documentRequest,
+                    $request->user(),
+                    'request_submitted',
+                    null,
+                    'pending',
+                );
 
                 ResidentNotification::create([
                     'resident_id' => $userId,
@@ -281,9 +308,16 @@ class ResidentController extends Controller
         abort_unless($documentRequest->status === 'for_correction', 409);
 
         $documentType = $documentRequest->document_type;
-        $applicantFields = self::DOCUMENT_APPLICANT_FIELDS[$documentType];
-        $documentFields = self::DOCUMENT_FORM_FIELDS[$documentType];
-        $requirements = self::DOCUMENT_REQUIREMENTS[$documentType];
+        $configuredType = DocumentType::where('value', $documentType)->first();
+        $applicantFields = $configuredType
+            ? array_column($configuredType->applicant_fields ?? [], 'key')
+            : self::DOCUMENT_APPLICANT_FIELDS[$documentType];
+        $documentFields = $configuredType
+            ? array_column($configuredType->fields ?? [], 'key')
+            : self::DOCUMENT_FORM_FIELDS[$documentType];
+        $requirements = $configuredType
+            ? ($configuredType->requirements ?? [])
+            : self::DOCUMENT_REQUIREMENTS[$documentType];
         $existingRequirements = $documentRequest->details['requirements'] ?? [];
         $allFieldKeys = array_merge($applicantFields, array_keys($documentFields));
         $rules = [
@@ -292,32 +326,55 @@ class ResidentController extends Controller
             'requirements' => ['sometimes', 'array:' . implode(',', array_keys($requirements))],
         ];
 
-        foreach ($applicantFields as $key) {
-            $rules["form_fields.{$key}"] = self::APPLICANT_FIELD_RULES[$key];
-        }
-
-        foreach ($documentFields as $key => $fieldRules) {
-            $rules["form_fields.{$key}"] = $fieldRules;
-        }
-
-        foreach ($requirements as $key => $requirement) {
-            $fileRules = [
-                $requirement['required'] && !isset($existingRequirements[$key]['path'])
-                    ? 'required'
-                    : 'sometimes',
-                'file',
-                'mimes:pdf,jpg,jpeg,png',
-                'max:5120',
-            ];
-            if (isset($requirement['required_if'])) {
-                array_unshift($fileRules, $requirement['required_if']);
+        if ($configuredType) {
+            $allFieldKeys = array_merge(
+                array_column($configuredType->applicant_fields ?? [], 'key'),
+                array_column($configuredType->fields ?? [], 'key'),
+            );
+            $rules['form_fields'] = ['required', 'array:' . implode(',', $allFieldKeys)];
+            $rules = array_merge($rules, $this->configuredDocumentRules(
+                $configuredType->applicant_fields ?? [],
+                $configuredType->fields ?? [],
+                $requirements,
+                true,
+                $existingRequirements,
+                $request->input('form_fields', []),
+            ));
+        } else {
+            foreach ($applicantFields as $key) {
+                $rules["form_fields.{$key}"] = self::APPLICANT_FIELD_RULES[$key];
             }
-            $rules["requirements.{$key}"] = $fileRules;
+
+            foreach ($documentFields as $key => $fieldRules) {
+                $rules["form_fields.{$key}"] = $fieldRules;
+            }
+
+            foreach ($requirements as $key => $requirement) {
+                $fileRules = [
+                    $requirement['required'] && !isset($existingRequirements[$key]['path'])
+                        ? 'required'
+                        : 'sometimes',
+                    'file',
+                    'mimes:pdf,jpg,jpeg,png',
+                    'max:5120',
+                ];
+                if (isset($requirement['required_if'])) {
+                    array_unshift($fileRules, $requirement['required_if']);
+                }
+                $rules["requirements.{$key}"] = $fileRules;
+            }
         }
 
         $validated = $request->validate($rules);
+        if (($configuredType && $this->hasField($configuredType, 'age') && $this->hasField($configuredType, 'date_of_birth'))
+            || in_array($documentType, ['Barangay Certification', 'Barangay Residency'], true)) {
+            $validated['form_fields']['age'] = Carbon::parse($validated['form_fields']['date_of_birth'])->age;
+        }
         $details = $documentRequest->details ?? [];
         $details['form_fields'] = $validated['form_fields'];
+        if ($configuredType?->fee_mode === 'assessed') {
+            $details['fee_assessed'] = false;
+        }
         if (array_key_exists('notes', $validated)) {
             $details['notes'] = $validated['notes'];
         } else {
@@ -327,8 +384,9 @@ class ResidentController extends Controller
         $replacedPaths = [];
 
         try {
-            DB::transaction(function () use ($request, $documentRequest, $requirements, $validated, &$details, &$storedPaths, &$replacedPaths) {
-                foreach ($requirements as $key => $requirement) {
+            DB::transaction(function () use ($request, $documentRequest, $requirements, $validated, $configuredType, &$details, &$storedPaths, &$replacedPaths) {
+                foreach ($requirements as $index => $requirement) {
+                    $key = $requirement['key'] ?? $index;
                     $file = $request->file("requirements.{$key}");
                     if (!$file) {
                         continue;
@@ -347,10 +405,14 @@ class ResidentController extends Controller
                     ];
                 }
 
+                $previousStatus = $documentRequest->status;
                 $resubmission = [
                     'details' => $details,
-                    'fee' => self::DOCUMENT_FEES[$documentRequest->document_type],
+                    'fee' => $configuredType
+                        ? ($configuredType->fee_mode === 'fixed' ? $configuredType->fee : 0)
+                        : self::DOCUMENT_FEES[$documentRequest->document_type],
                     'status' => 'pending',
+                    'status_changed_at' => now(),
                 ];
                 if (Schema::hasColumn('document_requests', 'document_content')) {
                     $resubmission['document_content'] = null;
@@ -359,6 +421,13 @@ class ResidentController extends Controller
                     $resubmission['document_generated_at'] = null;
                 }
                 $documentRequest->update($resubmission);
+                DocumentRequestEvent::record(
+                    $documentRequest,
+                    $request->user(),
+                    'request_resubmitted',
+                    $previousStatus,
+                    'pending',
+                );
 
                 ResidentNotification::create([
                     'resident_id' => $request->user()->id,
@@ -644,6 +713,109 @@ class ResidentController extends Controller
         $text = preg_replace('/[^a-z0-9\s]/', ' ', $text) ?? $text;
 
         return trim(preg_replace('/\s+/', ' ', $text) ?? $text);
+    }
+
+    private function configuredDocumentRules(
+        array $applicantFields,
+        array $documentFields,
+        array $requirements,
+        bool $correction,
+        array $existingRequirements = [],
+        array $formValues = [],
+    ): array {
+        $fields = array_merge($applicantFields, $documentFields);
+        $keys = array_column($fields, 'key');
+        $rules = [
+            'form_fields' => ['required', 'array:' . implode(',', $keys)],
+            'requirements' => ['sometimes', 'array:' . implode(',', array_column($requirements, 'key'))],
+        ];
+
+        foreach ($fields as $field) {
+            $key = $field['key'];
+            $requiredWhen = $field['requiredWhen'] ?? null;
+            $showWhen = $field['showWhen'] ?? null;
+            $isVisible = !$showWhen || $this->conditionMatches($showWhen, $formValues);
+            $isRequired = $requiredWhen
+                ? $this->conditionMatches($requiredWhen, $formValues)
+                : ($field['required'] ?? true);
+            $isRequired = $isRequired && $isVisible;
+            $required = $isRequired ? 'required' : 'sometimes';
+            $fieldRules = [$required];
+            if (!$isRequired) {
+                $fieldRules[] = 'nullable';
+            }
+            switch ($field['type']) {
+                case 'number':
+                    $fieldRules[] = 'numeric';
+                    if (isset($field['min'])) {
+                        $fieldRules[] = 'min:'.$field['min'];
+                    }
+                    if (isset($field['max'])) {
+                        $fieldRules[] = 'max:'.$field['max'];
+                    }
+                    break;
+                case 'date':
+                    $fieldRules[] = 'date';
+                    if ($key === 'date_of_birth') {
+                        $fieldRules[] = 'before_or_equal:today';
+                    }
+                    break;
+                case 'email':
+                    $fieldRules[] = 'email';
+                    $fieldRules[] = 'max:255';
+                    break;
+                case 'select':
+                    $supportsCustomPurpose = $key === 'purpose'
+                        && in_array('Other', $field['options'] ?? [], true)
+                        && collect($fields)->contains('key', 'purpose_other');
+                    if ($supportsCustomPurpose) {
+                        $fieldRules[] = 'string';
+                        $fieldRules[] = 'max:255';
+                    } else {
+                        $fieldRules[] = Rule::in($field['options'] ?? []);
+                    }
+                    break;
+                default:
+                    $fieldRules[] = 'string';
+                    $fieldRules[] = 'max:'.($field['maxLength'] ?? 2000);
+                    break;
+            }
+            $rules["form_fields.{$key}"] = $fieldRules;
+        }
+
+        foreach ($requirements as $requirement) {
+            $key = $requirement['key'];
+            $isConditionallyRequired = isset($requirement['requiredWhen'])
+                && $this->conditionMatches($requirement['requiredWhen'], $formValues);
+            $rules["requirements.{$key}"] = [
+                (($requirement['required'] ?? false) || $isConditionallyRequired)
+                    && (!$correction || empty($existingRequirements[$key]['path']))
+                    ? 'required'
+                    : 'sometimes',
+                'file',
+                'mimes:pdf,jpg,jpeg,png',
+                'max:5120',
+            ];
+        }
+
+        return $rules;
+    }
+
+    private function conditionMatches(array $condition, array $values): bool
+    {
+        $expected = $condition['value'] ?? null;
+        $actual = $values[$condition['key'] ?? ''] ?? null;
+
+        return is_array($expected)
+            ? in_array($actual, $expected, true)
+            : $actual === $expected;
+    }
+
+    private function hasField(DocumentType $documentType, string $key): bool
+    {
+        return collect($documentType->applicant_fields ?? [])
+            ->merge($documentType->fields ?? [])
+            ->contains('key', $key);
     }
 
     private function botSearchTerms(string $text): array

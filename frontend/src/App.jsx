@@ -10,7 +10,8 @@ import { StaffDocumentTypePage } from "./pages/staff/StaffDashboardProfessional"
 import ComplaintManagement from "./pages/staff/ComplaintManagement";
 import AdminDashboard from "./pages/AdminDashboard";
 import Residents from "./pages/admin/Residents";
-import DocumentRequests from "./pages/admin/DocumentRequests";
+import DocumentTypes from "./pages/admin/DocumentTypes";
+import DocumentRequestHistory from "./pages/admin/DocumentRequestHistory";
 import Complaints from "./pages/admin/Complaints";
 import Chatbot from "./pages/admin/Chatbot";
 import Feedback from "./pages/admin/Feedback";
@@ -90,7 +91,16 @@ function App() {
             path="/admin/document-requests"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
-                <DocumentRequests />
+                <DocumentRequestHistory />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/document-types"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <DocumentTypes />
               </ProtectedRoute>
             }
           />

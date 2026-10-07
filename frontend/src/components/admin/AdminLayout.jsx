@@ -6,9 +6,14 @@ const navigation = [
   { label: "Dashboard", path: "/admin/dashboard", icon: "⌂" },
   { label: "Residents", path: "/admin/residents", icon: "♟" },
   {
-    label: "Document Request",
+    label: "Document Request History",
     path: "/admin/document-requests",
-    icon: "▣",
+    icon: "▤",
+  },
+  {
+    label: "Document Types",
+    path: "/admin/document-types",
+    icon: "⚙",
   },
   { label: "Complaints", path: "/admin/complaints", icon: "!" },
   { label: "Chatbot", path: "/admin/chatbot", icon: "✦" },
@@ -25,7 +30,6 @@ function AdminLayout({ children, title }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
   const activeItem = navigation.find((item) => item.path === location.pathname);
   const activePanel = activeItem?.label || title;
 
@@ -115,7 +119,9 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
                 key={item.path}
                 type="button"
                 onClick={() => onSelect(item.path)}
-                className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-all duration-200 ${
+                className={`group flex w-full items-center gap-3 rounded-xl py-3 text-left text-sm font-medium transition-all duration-200 ${
+                  item.subItem ? "pl-6 pr-3" : "px-3"
+                } ${
                   activePath === item.path
                     ? "bg-white text-[#123F70] shadow-lg"
                     : "text-blue-100 hover:bg-white/10"

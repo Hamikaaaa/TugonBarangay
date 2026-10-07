@@ -1,10 +1,16 @@
-import { useState } from "react";
-import { LayoutDashboard, Menu, MessageSquareWarning, FileText, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CalendarDays, LayoutDashboard, Menu, MessageSquareWarning, FileText, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 function StaffLayout({ title, navigationItems, activePath, onNavigate, children }) {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentDateTime(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#F5F7FB] text-[#172B4D]">
@@ -23,16 +29,16 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, children 
             <img src="/images/logo-white-version.png" alt="TugonBarangay" className="h-12 w-12 object-contain" />
             <div>
               <p className="text-lg font-bold tracking-tight">Tugon<span className="text-[#FF6B6B]">Barangay</span></p>
-              <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.15em] text-blue-100/70">Staff Portal</p>
+              <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.15em] text-white/70">Staff Portal</p>
             </div>
-            <button type="button" onClick={() => setSidebarOpen(false)} className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-blue-100 hover:bg-white/10 lg:hidden" aria-label="Close navigation">
+            <button type="button" onClick={() => setSidebarOpen(false)} className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-white/80 hover:bg-white/10 lg:hidden" aria-label="Close navigation">
               <X size={18} />
             </button>
           </div>
         </div>
 
         <nav className="mt-7" aria-label="Staff workspace">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-200/60">Workspace</p>
+          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Workspace</p>
           <div className="space-y-1">
             {navigationItems.map((item) => {
               const active = activePath === item.path;
@@ -46,13 +52,13 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, children 
                     setSidebarOpen(false);
                   }}
                   aria-current={active ? "page" : undefined}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${active ? "bg-white text-[#123F70] shadow-lg" : "text-blue-100 hover:bg-white/10"}`}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${active ? "bg-white text-[#123F70] shadow-lg" : "text-white/85 hover:bg-white/10"}`}
                 >
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-[#EAF1FF] text-[#2455D6]" : "bg-white/10 text-blue-100"}`}>
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-[#EAF1FF] text-[#2455D6]" : "bg-white/10 text-white/85"}`}>
                     <Icon size={15} />
                   </span>
                   <span className="truncate">{item.label}</span>
-                  {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#EF4444]" />}
+                  {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#FF6B6B]" />}
                 </button>
               );
             })}
@@ -65,12 +71,12 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, children 
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-bold text-[#2455D6]">{(user?.name || "S").charAt(0)}</span>
               <div className="min-w-0">
                 <p className="truncate text-xs font-bold">{user?.name || "Staff"}</p>
-                <p className="truncate text-[10px] text-blue-100/60">{user?.designation || "Staff"}</p>
+                <p className="truncate text-[10px] text-white/65">{user?.designation || "Staff"}</p>
               </div>
             </div>
           </div>
-          <button type="button" onClick={logout} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-red-100 transition hover:bg-red-500/10">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-400/10"><X size={15} /></span>
+          <button type="button" onClick={logout} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-[#FFD0D0] transition hover:bg-[#FF6B6B]/15">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FF6B6B]/15"><X size={15} /></span>
             Logout
           </button>
         </div>
@@ -88,9 +94,42 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, children 
                 <h1 className="mt-0.5 truncate text-xl font-bold tracking-tight text-[#172B4D] sm:text-2xl">{title}</h1>
               </div>
             </div>
-            <div className="hidden text-right sm:block">
-              <p className="max-w-[220px] truncate text-sm font-bold text-[#172B4D]">{user?.name || "Staff"}</p>
-              <p className="mt-0.5 text-[10px] text-slate-400">{user?.designation || "Staff"}</p>
+            <div className="flex items-center gap-2 sm:gap-5">
+              <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[#2455D6]" aria-label="Current date and time in Manila">
+                <CalendarDays size={14} className="shrink-0 sm:h-4 sm:w-4" />
+                <div className="text-right">
+                  <p className="text-xs font-bold text-[#172B4D]">
+                    <span className="sm:hidden">
+                      {currentDateTime.toLocaleDateString("en-PH", {
+                        timeZone: "Asia/Manila",
+                        day: "2-digit",
+                        month: "short",
+                      })}
+                    </span>
+                    <span className="hidden sm:inline">
+                      {currentDateTime.toLocaleDateString("en-PH", {
+                        timeZone: "Asia/Manila",
+                        weekday: "short",
+                        year: "numeric",
+                        month: "short",
+                        day: "numeric",
+                      })}
+                    </span>
+                  </p>
+                  <time dateTime={currentDateTime.toISOString()} className="mt-0.5 block text-[10px] font-semibold text-[#55708F]">
+                    {currentDateTime.toLocaleTimeString("en-PH", {
+                      timeZone: "Asia/Manila",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })} PHT
+                  </time>
+                </div>
+              </div>
+              <div className="hidden text-right lg:block">
+                <p className="max-w-[220px] truncate text-sm font-bold text-[#172B4D]">{user?.name || "Staff"}</p>
+                <p className="mt-0.5 text-[10px] text-[#55708F]">{user?.designation || "Staff"}</p>
+              </div>
             </div>
           </div>
         </header>
