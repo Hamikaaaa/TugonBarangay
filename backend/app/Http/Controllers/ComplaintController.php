@@ -101,6 +101,23 @@ class ComplaintController extends Controller
         ]);
     }
 
+    public function destroyCategory($id)
+    {
+        $category = ComplaintCategory::findOrFail($id);
+
+        if (Complaint::query()->where('category', $category->name)->exists()) {
+            return response()->json([
+                'message' => 'This category is used by existing complaints and cannot be deleted. Disable it to prevent new submissions instead.',
+            ], 409);
+        }
+
+        $category->delete();
+
+        return response()->json([
+            'message' => 'Complaint category deleted.',
+        ]);
+    }
+
     public function storeStatus(Request $request)
     {
         $data = $request->validate([

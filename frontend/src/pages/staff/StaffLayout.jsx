@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Archive, CalendarDays, CheckCircle2, ChevronDown, Clock3, FileText, LayoutDashboard, LoaderCircle, Menu, MessageSquareWarning, X, XCircle } from "lucide-react";
+import { Archive, CalendarDays, CheckCircle2, ChevronDown, Clock3, FileText, LayoutDashboard, LoaderCircle, LogOut, Menu, MessageSquareWarning, X, XCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 function StaffLayout({ title, navigationItems, activePath, onNavigate, selectedNavigationChild, onNavigationChildSelect, children }) {
@@ -45,7 +45,7 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, selectedN
               const active = activePath === item.path;
               const hasChildren = Boolean(item.children?.length);
               const expanded = expandedNavigation === item.path;
-              const Icon = item.value
+              const Icon = item.icon || (item.value
                 ? FileText
                 : item.label === "Pending"
                   ? Clock3
@@ -59,7 +59,7 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, selectedN
                           ? Archive
                     : item.label === "Complaints"
                       ? MessageSquareWarning
-                      : LayoutDashboard;
+                      : LayoutDashboard);
               return (
                 <div key={item.path}>
                   <button
@@ -74,16 +74,16 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, selectedN
                     }}
                     aria-current={active ? "page" : undefined}
                     aria-expanded={hasChildren ? expanded : undefined}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${active ? "bg-white text-[#123F70] shadow-lg" : "text-white/85 hover:bg-white/10"}`}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${active ? "bg-white text-[#123F70] shadow-lg" : "text-white/85 hover:bg-white/10"}`}
                   >
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-[#EAF1FF] text-[#2455D6]" : "bg-white/10 text-white/85"}`}>
                       <Icon size={15} />
                     </span>
-                    <span className="truncate">{item.label}</span>
+                    <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">{item.label}</span>
                     {hasChildren ? (
-                      <ChevronDown size={15} className={`ml-auto transition-transform ${expanded ? "rotate-180" : ""}`} />
+                      <ChevronDown size={15} className={`shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
                     ) : active ? (
-                      <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#FF6B6B]" />
+                      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF6B6B]" />
                     ) : null}
                   </button>
                   {hasChildren && expanded && (
@@ -124,7 +124,7 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, selectedN
             </div>
           </div>
           <button type="button" onClick={logout} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-[#FFD0D0] transition hover:bg-[#FF6B6B]/15">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FF6B6B]/15"><X size={15} /></span>
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FF6B6B]/15"><LogOut size={15} aria-hidden="true" /></span>
             Logout
           </button>
         </div>

@@ -61,13 +61,13 @@ function Login() {
 
       // Redirect according to role
       if (data.user.role === "resident") {
-        navigate("/resident/dashboard");
+        navigate("/resident/dashboard", { replace: true });
       } else if (data.user.role === "staff") {
-        navigate("/staff/dashboard");
+        navigate("/staff/dashboard", { replace: true });
       } else if (data.user.role === "admin") {
-        navigate("/admin/dashboard");
+        navigate("/admin/dashboard", { replace: true });
       } else {
-        navigate("/unauthorized");
+        navigate("/unauthorized", { replace: true });
       }
     } catch (error) {
       console.error(error);

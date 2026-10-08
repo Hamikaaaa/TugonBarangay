@@ -58,6 +58,12 @@ class StaffComplaintWorkflowTest extends TestCase
             'staff_remarks' => 'The location is being checked.',
         ])->assertOk()
             ->assertJsonPath('data.status', 'in_progress');
+        $this->assertDatabaseHas('notifications', [
+            'resident_id' => $this->resident->id,
+            'type' => 'complaint_status_updated',
+            'title' => 'Update on complaint CMP-'.str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT),
+            'message' => "The status of your complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT)." is now In progress.\n\nStaff remarks: The location is being checked.",
+        ]);
 
         $this->patchJson('/api/staff/complaints/'.$this->complaint->id.'/status', [
             'status' => 'resolved',
@@ -66,12 +72,45 @@ class StaffComplaintWorkflowTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('data.status', 'resolved');
 
+        $this->assertDatabaseHas('notifications', [
+            'resident_id' => $this->resident->id,
+            'type' => 'complaint_status_updated',
+            'message' => "The status of your complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT)." is now Resolved.\n\nStaff remarks: Inspection complete.\n\nCase resolution: The drainage was cleared.",
+        ]);
+        Sanctum::actingAs($this->resident);
+        $this->getJson('/api/resident/notifications')
+            ->assertOk()
+            ->assertJsonPath('data.0.type', 'complaint_status_updated')
+            ->assertJsonPath('data.0.message', "The status of your complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT)." is now Resolved.\n\nStaff remarks: Inspection complete.\n\nCase resolution: The drainage was cleared.");
+
         $this->assertDatabaseHas('complaints', [
             'id' => $this->complaint->id,
             'status' => 'resolved',
             'staff_remarks' => 'Inspection complete.',
             'resolution_details' => 'The drainage was cleared.',
         ]);
+    }
+
+    public function test_complaint_status_update_notifies_resident_with_staff_remarks(): void
+    {
+        $this->withoutMiddleware([
+            \App\Http\Middleware\RoleMiddleware::class,
+            \App\Http\Middleware\DesignationMiddleware::class,
+        ]);
+        Sanctum::actingAs($this->complaintOfficer);
+        $this->assertSame('pending', $this->complaint->fresh()->status);
+
+        $this->patchJson('/api/staff/complaints/'.$this->complaint->id.'/status', [
+            'status' => 'in_progress',
+            'staff_remarks' => 'The location is being checked.',
+        ])->assertOk();
+
+        Sanctum::actingAs($this->resident);
+        $this->getJson('/api/resident/notifications')
+            ->assertOk()
+            ->assertJsonPath('data.0.type', 'complaint_status_updated')
+            ->assertJsonPath('data.0.title', 'Update on complaint CMP-'.str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT))
+            ->assertJsonPath('data.0.message', "The status of your complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT)." is now In progress.\n\nStaff remarks: The location is being checked.");
     }
 
     public function test_complaint_officer_can_load_one_complaint_for_review(): void

@@ -73,6 +73,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/complaint-categories', [\App\Http\Controllers\ComplaintController::class, 'categories']);
     Route::post('/complaint-categories', [\App\Http\Controllers\ComplaintController::class, 'storeCategory']);
     Route::patch('/complaint-categories/{id}', [\App\Http\Controllers\ComplaintController::class, 'updateCategory']);
+    Route::delete('/complaint-categories/{id}', [\App\Http\Controllers\ComplaintController::class, 'destroyCategory']);
     Route::get('/complaints', [\App\Http\Controllers\StaffController::class, 'complaints']);
     Route::patch('/complaints/{complaint}/status', [\App\Http\Controllers\StaffController::class, 'updateComplaintStatus']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);

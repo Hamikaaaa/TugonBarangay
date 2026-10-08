@@ -28,6 +28,7 @@ const EMPTY_FORM = {
   subject: "",
   incident_date: "",
   location: "",
+  involved_persons: "",
   description: "",
   relevant_information: "",
 };
@@ -166,7 +167,10 @@ function ComplaintRow({ complaint, token }) {
               label="Incident date"
               value={formatDate(complaint.incident_date)}
             />
-            <Detail label="Location" value={complaint.location} />
+            <Detail label="Incident location" value={complaint.location} />
+            {complaint.involved_persons && (
+              <Detail label="Person(s) involved" value={complaint.involved_persons} />
+            )}
             <Detail
               label="Submitted"
               value={formatDate(complaint.created_at)}
@@ -191,7 +195,7 @@ function ComplaintRow({ complaint, token }) {
                 label={
                   complaint.status === "rejected"
                     ? "Reason provided"
-                    : "Staff update"
+                    : "Case resolution"
                 }
                 value={complaint.resolution_details}
                 wide
@@ -252,7 +256,14 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
 
     residentApi("/resident/complaint-categories", token)
       .then((result) => {
-        if (active) setComplaintCategories(result.data || []);
+        const categories = Array.isArray(result.data)
+          ? result.data.filter((category) => typeof category === "string" && category.trim())
+          : [];
+        if (active) {
+          setComplaintCategories(
+            categories.length ? categories : COMPLAINT_CATEGORIES,
+          );
+        }
       })
       .catch(() => {
         if (active) setComplaintCategories(COMPLAINT_CATEGORIES);
@@ -508,7 +519,7 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
             </label>
             <label className="block">
               <span className="text-sm font-bold text-slate-700">
-                Location{" "}
+                Incident location{" "}
                 <span className="font-normal text-slate-400">(optional)</span>
               </span>
               <span className="relative block">
@@ -524,6 +535,24 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
                   placeholder="Street, purok, or landmark"
                   className={`${inputClass} pl-10`}
                 />
+              </span>
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-700">
+                Person(s) involved{" "}
+                <span className="font-normal text-slate-400">(optional)</span>
+              </span>
+              <input
+                maxLength={1000}
+                name="involved_persons"
+                value={form.involved_persons}
+                onChange={updateField}
+                placeholder="Name(s), if known and relevant"
+                className={inputClass}
+              />
+              <span className="mt-1 block text-xs text-slate-500">
+                Leave blank if you do not know their name. This is shared only
+                with authorized barangay personnel reviewing your complaint.
               </span>
             </label>
           </div>

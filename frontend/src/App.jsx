@@ -4,6 +4,7 @@ import Register from "./pages/Register";
 import ResidentDashboard from "./pages/ResidentDashboard";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
+import PublicOnlyRoute from "./components/PublicOnlyRoute";
 import { AuthProvider } from "./context/AuthContext";
 import StaffHome from "./pages/staff/StaffHome";
 import { StaffDocumentTypePage } from "./pages/staff/StaffDashboardProfessional";
@@ -14,7 +15,6 @@ import Residents from "./pages/admin/Residents";
 import DocumentTypes from "./pages/admin/DocumentTypes";
 import DocumentRequestHistory from "./pages/admin/DocumentRequestHistory";
 import Complaints from "./pages/admin/Complaints";
-import AddComplaintCategory from "./pages/admin/AddComplaintCategory.jsx";
 import Chatbot from "./pages/admin/Chatbot";
 import Feedback from "./pages/admin/Feedback";
 import Reports from "./pages/admin/Reports";
@@ -26,8 +26,22 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <Route
+            path="/login"
+            element={
+              <PublicOnlyRoute>
+                <Login />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicOnlyRoute>
+                <Register />
+              </PublicOnlyRoute>
+            }
+          />
 
           {/* Resident Route */}
           <Route
@@ -143,16 +157,15 @@ function App() {
           />
 
           <Route
-            path="/admin/complaints/categories/new"
+            path="/admin/complaints"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
-                <AddComplaintCategory />
+                <Complaints />
               </ProtectedRoute>
             }
           />
-
           <Route
-            path="/admin/complaints"
+            path="/admin/complaints/categories/new"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <Complaints />

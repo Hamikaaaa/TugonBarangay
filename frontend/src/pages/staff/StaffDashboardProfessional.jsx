@@ -2,22 +2,27 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   Archive,
+  BadgeCheck,
+  BriefcaseBusiness,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CircleAlert,
   Clock3,
   Eye,
   FileCheck2,
   FileText,
   Filter,
-  LayoutDashboard,
   Search,
   Settings2,
   X,
+  XCircle,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import DocumentPreviewModal from "./DocumentPreviewModal";
 import FeeAssessment from "../../components/document/FeeAssessment";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import StaffLayout from "./StaffLayout";
 
 const API_URL = "http://127.0.0.1:8000/api";
@@ -59,6 +64,16 @@ Object.assign(DOCUMENT_LABELS, {
   "First-Time Jobseeker Certification": "First-Time Job Seeker Certification",
 });
 
+const DOCUMENT_TYPE_ICONS = {
+  "Barangay Certification": FileCheck2,
+  "Barangay Residency": BadgeCheck,
+  "Business Permit": BriefcaseBusiness,
+  "Certificate of Good Moral Character": BadgeCheck,
+  "First-Time Jobseeker Certification": BriefcaseBusiness,
+  "Barangay Certificate": FileCheck2,
+  "Barangay Indigency": FileCheck2,
+};
+
 const STATUS_META = {
   pending: { label: "Pending", className: "bg-[#FFF7E7] text-[#805900] ring-[#F1D9A8]", icon: Clock3 },
   under_review: { label: "Under Review", className: "bg-[#EEF4FF] text-[#2455D6] ring-[#D9E6FF]", icon: Search },
@@ -88,7 +103,7 @@ const WORKFLOW_GUIDANCE = {
 };
 
 function StaffDashboardProfessional({ documentType = "" }) {
-  const { user, token } = useAuth();
+  const { token } = useAuth();
   const navigate = useNavigate();
   const [documentTypes, setDocumentTypes] = useState(
     () => readCachedDocumentTypes() || DEFAULT_DOCUMENT_TYPES,
@@ -394,6 +409,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
     { label: "Dashboard", value: "", path: "/staff/dashboard" },
     ...offeredDocumentTypes.map((item) => ({
       ...item,
+      icon: DOCUMENT_TYPE_ICONS[item.value] || FileText,
       path: `/staff/document-types/${encodeURIComponent(item.value)}`,
     })),
   ];
@@ -404,7 +420,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
 
   return (
     <StaffLayout
-      title="Document Processing"
+      title={documentType ? `${activeDocumentLabel} Requests` : "Document Requests"}
       navigationItems={navigationItems}
       activePath={documentType ? `/staff/document-types/${encodeURIComponent(documentType)}` : "/staff/dashboard"}
       onNavigate={(path) => {
@@ -413,18 +429,20 @@ function StaffDashboardProfessional({ documentType = "" }) {
       }}
     >
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
+          <div className="mb-7">
+            <AdminPageHeader
+              eyebrow="Document request management"
+              title={documentType ? `${activeDocumentLabel} requests` : "Document request dashboard"}
+              description={
+                documentType
+                  ? `Review resident applications and process ${activeDocumentLabel} requests.`
+                  : "Review, process, and prepare resident documents from one central workspace."
+              }
+            />
+          </div>
+
           {!documentType && (
             <>
-              <section className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-                <div>
-                  <div className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#2455D6]">
-                    <LayoutDashboard size={15} /> Dashboard overview
-                  </div>
-                  <h2 className="text-2xl font-bold tracking-tight text-[#172B4D] sm:text-3xl">Welcome, {user?.name?.split(" ")[0] || "Officer"}</h2>
-                  <p className="mt-2 text-sm text-slate-500">Review, process, and prepare resident documents from one central workspace.</p>
-                </div>
-              </section>
-
               <section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Daily request workload">
                 <SummaryCard label="Pending Requests" value={counts.pending} icon={Clock3} color="amber" note="Awaiting initial review" onClick={() => quickFilter("pending")} />
                 <SummaryCard label="Under Review" value={counts.under_review} icon={Search} color="blue" note="Requirements being checked" onClick={() => quickFilter("under_review")} />
@@ -586,7 +604,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
                           </td>
                           <td className="px-5 py-4">
                             <div className="flex items-center justify-end gap-1.5">
-                              <button type="button" onClick={() => viewRequest(request)} className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-[#D9E6FF] bg-white px-2.5 text-[10px] font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20" aria-label={`View details for request ${request.id}`}>
+                              <button type="button" onClick={() => viewRequest(request)} className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-[#D9E6FF] bg-white px-3 py-2 text-xs font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20" aria-label={`View details for request ${request.id}`}>
                                 <Eye size={13} /> View
                               </button>
                             </div>
@@ -602,8 +620,8 @@ function StaffDashboardProfessional({ documentType = "" }) {
               <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
                 <span>Page {requestPage} of {requestLastPage}</span>
                 <div className="flex gap-2">
-                  <button type="button" disabled={requestPage <= 1} onClick={() => loadRequests(requestPage - 1)} className="rounded-lg border border-[#D9E6FF] bg-white px-3 py-1.5 font-semibold text-[#2455D6] transition hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
-                  <button type="button" disabled={requestPage >= requestLastPage} onClick={() => loadRequests(requestPage + 1)} className="rounded-lg border border-[#D9E6FF] bg-white px-3 py-1.5 font-semibold text-[#2455D6] transition hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+                  <button type="button" disabled={requestPage <= 1} onClick={() => loadRequests(requestPage - 1)} aria-label="Previous request page" className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#D9E6FF] bg-white text-[#2455D6] transition hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16} /></button>
+                  <button type="button" disabled={requestPage >= requestLastPage} onClick={() => loadRequests(requestPage + 1)} aria-label="Next request page" className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#D9E6FF] bg-white text-[#2455D6] transition hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20 disabled:cursor-not-allowed disabled:opacity-40"><ChevronRight size={16} /></button>
                 </div>
               </div>
             )}
@@ -748,7 +766,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
                       {["pending", "under_review", "processing"].includes(selectedRequest.status) && (
                         <>
                           <button type="button" onClick={() => updateStatus("for_correction")} disabled={submitting || !staffRemarks.trim()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#F1D9A8] bg-[#FFF7E7] px-3 py-2 text-xs font-bold text-[#805900] transition hover:bg-[#FFF0D1] disabled:opacity-50"><CircleAlert size={14} /> Return to resident for correction</button>
-                          <button type="button" onClick={() => updateStatus("rejected")} disabled={submitting || !staffRemarks.trim() || !rejectionReason.trim()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#F2D4D0] bg-[#FFF0EE] px-3 py-2 text-xs font-bold text-[#C74444] transition hover:bg-[#FFE5E2] disabled:opacity-50"><CircleAlert size={14} /> Reject request</button>
+                          <button type="button" onClick={() => updateStatus("rejected")} disabled={submitting || !staffRemarks.trim() || !rejectionReason.trim()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#F2D4D0] bg-[#FFF0EE] px-3 py-2 text-xs font-bold text-[#C74444] transition hover:bg-[#FFE5E2] focus:outline-none focus:ring-2 focus:ring-[#C74444]/20 disabled:cursor-not-allowed disabled:opacity-50"><XCircle size={14} /> Reject request</button>
                         </>
                       )}
                     </div>

@@ -475,6 +475,7 @@ class ResidentController extends Controller
             'description' => ['required', 'string', 'max:5000'],
             'incident_date' => ['nullable', 'date'],
             'location' => ['nullable', 'string', 'max:255'],
+            'involved_persons' => ['nullable', 'string', 'max:1000'],
             'relevant_information' => ['nullable', 'string', 'max:5000'],
             'evidence' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'],
         ]);
