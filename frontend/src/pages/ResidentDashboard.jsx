@@ -37,9 +37,12 @@ function ResidentDashboard() {
               complaints={dashboard.complaints}
               onRefresh={refreshDashboard}
               verified={verified}
+              userId={user.id}
             />
           )}
-          {view === "bantaybot" && <BantayBot token={token} />}
+          {view === "bantaybot" && (
+            <BantayBot token={token} userId={user.id} />
+          )}
           {view === "notifications" && (
             <Notifications
               token={token}

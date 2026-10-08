@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
+import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
 import { useAuth } from "../../context/AuthContext";
+import { primaryButtonClass } from "../../utils/buttonStyles";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const fieldTypes = ["text", "textarea", "number", "date", "email", "tel", "select"];
@@ -146,32 +149,28 @@ function DocumentTypes() {
 
   return (
     <AdminLayout title="Document Types">
-      <section className="pt-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#2455D6]">
-              Resident service configuration
-            </p>
-            <h2 className="mt-2 text-3xl font-bold text-[#172B4D]">Document types</h2>
-            <p className="mt-1 max-w-2xl text-sm text-slate-500">
-              Configure document types, resident information fields, fees, required uploads, and certificate templates.
-              Staff handle request review, decisions, and release workflow.
-            </p>
-          </div>
+      <section className="space-y-6 pt-6">
+        <AdminPageHeader
+          eyebrow="Resident service configuration"
+          title="Document types"
+          description="Configure document types, resident information fields, fees, required uploads, and certificate templates. Staff handle request review, decisions, and release workflow."
+        >
           <button
             type="button"
             onClick={() => setDraft(blankType())}
-            className="rounded-xl bg-[#2455D6] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#1948B8]"
+            className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#2455D6] shadow-lg transition hover:-translate-y-0.5 hover:bg-[#EEF4FF] hover:shadow-xl active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Add document type
           </button>
-        </div>
+        </AdminPageHeader>
 
-        {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-        {notice && <p role="status" className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
+        <DocumentRequestTabs />
+
+        {error && <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+        {notice && <p role="status" className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
 
         {draft && (
-          <form onSubmit={saveType} className="mt-6 space-y-5 rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
+          <form onSubmit={saveType} className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-bold text-[#172B4D]">{draft.id ? "Edit document type" : "New document type"}</h3>
               <button type="button" onClick={() => setDraft(null)} className="text-sm font-semibold text-slate-500 hover:text-slate-800">Cancel</button>
@@ -238,11 +237,11 @@ function DocumentTypes() {
                 {draft.requirements.length === 0 && <p className="text-xs text-slate-400">No upload requirements configured.</p>}
               </div>
             </div>
-            <button disabled={saving} className="rounded-xl bg-[#2455D6] px-5 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? "Saving..." : "Save document type"}</button>
+            <button disabled={saving} className={primaryButtonClass}>{saving ? "Saving..." : "Save document type"}</button>
           </form>
         )}
 
-        <div className="mt-6 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           {loading ? <p className="p-6 text-sm text-slate-500">Loading document types...</p> : (
             <div className="divide-y divide-slate-100">
               {types.map((type) => (

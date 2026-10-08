@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { Search, X } from "lucide-react";
 import AdminLayout from "../../components/admin/AdminLayout";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
+import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
 import { useAuth } from "../../context/AuthContext";
 
 const API_URL = "http://127.0.0.1:8000/api";
@@ -112,21 +114,18 @@ function DocumentRequestHistory() {
 
   return (
     <AdminLayout title="Document Request Oversight">
-      <section className="pt-6">
-        <div>
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#2455D6]">
-            Read-only oversight
-          </p>
-          <h2 className="mt-2 text-3xl font-bold text-[#172B4D]">Document request oversight</h2>
-          <p className="mt-1 max-w-3xl text-sm text-slate-500">
-            Monitor request volume, delays, staff workload, outcomes, processing history, and audit activity.
-            Requests pending or processing for more than three days are marked delayed.
-          </p>
-        </div>
+      <section className="space-y-6 pt-6">
+        <AdminPageHeader
+          eyebrow="Read-only oversight"
+          title="Document request oversight"
+          description="Monitor request volume, delays, staff workload, outcomes, processing history, and audit activity. Requests pending or processing for more than three days are marked delayed."
+        />
 
-        {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+        <DocumentRequestTabs />
 
-        <div className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {error && <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {cards.map(([label, value, tone]) => (
             <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-xs font-semibold text-slate-500">{label}</p>
@@ -135,7 +134,7 @@ function DocumentRequestHistory() {
           ))}
         </div>
 
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="font-bold text-[#172B4D]">Staff workload</h3>
@@ -158,7 +157,7 @@ function DocumentRequestHistory() {
           )}
         </div>
 
-        <div className="mt-6">
+        <div>
           <div className="flex gap-2 border-b border-slate-200">
             <button
               type="button"

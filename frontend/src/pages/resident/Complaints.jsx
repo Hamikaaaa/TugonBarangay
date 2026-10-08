@@ -18,6 +18,7 @@ import {
   primaryButtonClass,
   residentApi,
 } from "../../services/residentApi";
+import { shouldPromptForFeatureFeedback } from "../../services/featureFeedback";
 import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
 import { COMPLAINT_CATEGORIES } from "../../constants/complaintCategories";
 
@@ -227,7 +228,7 @@ function ComplaintRow({ complaint, token }) {
   );
 }
 
-function Complaints({ token, complaints = [], onRefresh, verified }) {
+function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [complaintCategories, setComplaintCategories] = useState(COMPLAINT_CATEGORIES);
   const [evidence, setEvidence] = useState(null);
@@ -322,7 +323,9 @@ function Complaints({ token, complaints = [], onRefresh, verified }) {
             ? `Complaint submitted and flagged for priority staff review. Your reference number is CMP-${String(result.complaint.id).padStart(5, "0")}.`
             : `Complaint submitted. Your reference number is CMP-${String(result.complaint.id).padStart(5, "0")}.`,
       });
-      setFeedbackOpen(true);
+      if (shouldPromptForFeatureFeedback(userId, "complaint")) {
+        setFeedbackOpen(true);
+      }
       setForm(EMPTY_FORM);
       setEvidence(null);
       if (fileInput.current) fileInput.current.value = "";
