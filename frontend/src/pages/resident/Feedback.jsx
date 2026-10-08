@@ -55,6 +55,7 @@ function Feedback({ token }) {
             <option value="general">General service</option>
             <option value="document_request">Document request</option>
             <option value="complaint">Complaint</option>
+            <option value="bantaybot">BantayBot</option>
           </select>
         </label>
         <fieldset className="mt-6">

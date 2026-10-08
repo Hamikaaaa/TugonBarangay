@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ChatbotFaq;
 use App\Models\ChatbotEscalation;
+use App\Models\ChatbotMessage;
 use App\Models\Complaint;
 use App\Models\DocumentRequest;
 use App\Models\DocumentRequestEvent;
@@ -596,10 +597,56 @@ class ResidentController extends Controller
         return ChatbotFaq::where('is_active', true)->orderBy('category')->get();
     }
 
+    public function botMessages(Request $request)
+    {
+        $messages = ChatbotMessage::where('resident_id', $request->user()->id)
+            ->oldest('created_at')
+            ->oldest('id')
+            ->get()
+            ->map(fn(ChatbotMessage $message) => [
+                'id' => $message->id,
+                'question' => $message->question,
+                'sent_at' => $message->created_at?->toISOString(),
+                'received_at' => $message->answered_at?->toISOString(),
+                'answer' => [
+                    'answer' => $message->answer,
+                    'matched' => $message->matched,
+                    'intent' => $message->intent,
+                    'faq' => $message->faq_category
+                        ? ['category' => $message->faq_category]
+                        : null,
+                ],
+            ]);
+
+        return response()->json(['data' => $messages]);
+    }
+
     public function askBot(Request $request)
     {
         $validated = $request->validate(['question' => ['required', 'string', 'max:1000']]);
         $normalizedQuestion = $this->normalizeBotText($validated['question']);
+        if ($this->isBotGreeting($normalizedQuestion)) {
+            $answer = 'Hello! Good day, and welcome to BantayBot. How can I help you with barangay services today?';
+            $message = ChatbotMessage::create([
+                'resident_id' => $request->user()->id,
+                'question' => $validated['question'],
+                'answer' => $answer,
+                'matched' => true,
+                'intent' => 'greeting',
+                'answered_at' => now(),
+            ]);
+
+            return response()->json([
+                'id' => $message->id,
+                'sent_at' => $message->created_at?->toISOString(),
+                'received_at' => $message->answered_at?->toISOString(),
+                'matched' => true,
+                'intent' => 'greeting',
+                'answer' => $answer,
+                'faq' => null,
+            ]);
+        }
+
         $faqs = ChatbotFaq::where('is_active', true)->get();
         $faq = $faqs->first(
             fn(ChatbotFaq $candidate) => $this->normalizeBotText($candidate->question) === $normalizedQuestion,
@@ -625,9 +672,24 @@ class ResidentController extends Controller
             }
         }
 
+        $matched = (bool) $faq;
+        $answer = $faq?->answer ?? 'I do not have a confident answer for that question. You can rephrase it or escalate it to barangay staff for follow-up.';
+        $message = ChatbotMessage::create([
+            'resident_id' => $request->user()->id,
+            'faq_id' => $faq?->id,
+            'question' => $validated['question'],
+            'answer' => $answer,
+            'faq_category' => $faq?->category,
+            'matched' => $matched,
+            'answered_at' => now(),
+        ]);
+
         return response()->json([
-            'matched' => (bool) $faq,
-            'answer' => $faq?->answer ?? 'I do not have a confident answer for that question. You can rephrase it or escalate it to barangay staff for follow-up.',
+            'id' => $message->id,
+            'sent_at' => $message->created_at?->toISOString(),
+            'received_at' => $message->answered_at?->toISOString(),
+            'matched' => $matched,
+            'answer' => $answer,
             'faq' => $faq,
         ]);
     }
@@ -674,7 +736,70 @@ class ResidentController extends Controller
 
     public function adminBotEscalations()
     {
-        return ChatbotEscalation::latest()->paginate(20);
+        return ChatbotEscalation::with('resident:id,name,email')
+            ->latest()
+            ->paginate(20);
+    }
+
+    public function adminBotFaqs()
+    {
+        return response()->json([
+            'data' => ChatbotFaq::orderBy('category')->orderBy('question')->get(),
+        ]);
+    }
+
+    public function adminBotStats()
+    {
+        return response()->json([
+            'questions' => ChatbotFaq::count(),
+            'categories' => ChatbotFaq::distinct('category')->count('category'),
+            'escalations' => ChatbotEscalation::count(),
+            'pending' => ChatbotEscalation::where('status', 'pending')->count(),
+            'replied' => ChatbotEscalation::where('status', 'replied')->count(),
+            'questions_by_category' => ChatbotFaq::selectRaw('category, COUNT(*) as count')
+                ->groupBy('category')
+                ->orderBy('category')
+                ->get(),
+        ]);
+    }
+
+    public function storeBotFaq(Request $request)
+    {
+        $validated = $request->validate([
+            'category' => ['required', 'string', 'max:100'],
+            'question' => ['required', 'string', 'max:255'],
+            'answer' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $faq = ChatbotFaq::create($validated + ['is_active' => true]);
+
+        return response()->json([
+            'message' => 'Chatbot question added.',
+            'faq' => $faq,
+        ], 201);
+    }
+
+    public function updateBotFaq(Request $request, ChatbotFaq $chatbotFaq)
+    {
+        $validated = $request->validate([
+            'category' => ['required', 'string', 'max:100'],
+            'question' => ['required', 'string', 'max:255'],
+            'answer' => ['required', 'string', 'max:5000'],
+        ]);
+
+        $chatbotFaq->update($validated);
+
+        return response()->json([
+            'message' => 'Chatbot question updated.',
+            'faq' => $chatbotFaq->fresh(),
+        ]);
+    }
+
+    public function destroyBotFaq(ChatbotFaq $chatbotFaq)
+    {
+        $chatbotFaq->delete();
+
+        return response()->json(['message' => 'Chatbot question deleted.']);
     }
 
     public function replyToBotEscalation(Request $request, ChatbotEscalation $chatbotEscalation)
@@ -713,6 +838,38 @@ class ResidentController extends Controller
         $text = preg_replace('/[^a-z0-9\s]/', ' ', $text) ?? $text;
 
         return trim(preg_replace('/\s+/', ' ', $text) ?? $text);
+    }
+
+    private function isBotGreeting(string $normalizedQuestion): bool
+    {
+        $greetings = [
+            'hi',
+            'hello',
+            'hey',
+            'good morning',
+            'good afternoon',
+            'good evening',
+            'good day',
+            'greetings',
+            'kamusta',
+            'kumusta',
+            'magandang umaga',
+            'magandang hapon',
+            'magandang gabi',
+            'maayong buntag',
+            'maayong hapon',
+            'maayong gabii',
+            'how are you',
+            'how are you doing',
+        ];
+
+        $greeting = preg_replace(
+            '/(?:\s+(?:po|bantaybot|there|and how are you(?: doing)?|how are you(?: doing)?))+$/',
+            '',
+            $normalizedQuestion,
+        ) ?? $normalizedQuestion;
+
+        return in_array($greeting, $greetings, true);
     }
 
     private function configuredDocumentRules(

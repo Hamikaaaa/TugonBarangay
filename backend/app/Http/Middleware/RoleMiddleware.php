@@ -26,6 +26,12 @@ class RoleMiddleware
             ], 403);
         }
 
+        if ($user->role === 'staff' && !$user->is_active) {
+            return response()->json([
+                'message' => 'This staff account is disabled.',
+            ], 403);
+        }
+
         return $next($request);
     }
 }

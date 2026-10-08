@@ -21,6 +21,11 @@ class Feedback extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(Resident::class);
+        return $this->belongsTo(Resident::class, 'resident_id');
+    }
+
+    public function resident(): BelongsTo
+    {
+        return $this->user();
     }
 }

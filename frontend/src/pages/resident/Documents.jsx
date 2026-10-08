@@ -5,6 +5,7 @@ import {
   primaryButtonClass,
   residentApi,
 } from "../../services/residentApi";
+import { shouldPromptForFeatureFeedback } from "../../services/featureFeedback";
 import { RequestRow } from "../../components/resident/ResidentUI";
 import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
 
@@ -508,7 +509,12 @@ function Documents({ requests, token, onRefresh, user }) {
             : type),
         );
       }
-      if (!editingRequest) setFeedbackOpen(true);
+      if (
+        !editingRequest &&
+        shouldPromptForFeatureFeedback(user?.id, "document_request")
+      ) {
+        setFeedbackOpen(true);
+      }
       setEditingRequest(null);
       setDocumentType("");
       setFormFields(getApplicantDefaults(user));
