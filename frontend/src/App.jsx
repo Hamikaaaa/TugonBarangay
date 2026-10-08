@@ -16,6 +16,7 @@ import Complaints from "./pages/admin/Complaints";
 import Chatbot from "./pages/admin/Chatbot";
 import Feedback from "./pages/admin/Feedback";
 import Reports from "./pages/admin/Reports";
+import StaffAccounts from "./pages/admin/StaffAccounts";
 
 function App() {
   return (
@@ -79,7 +80,32 @@ function App() {
           />
 
           <Route
+            path="/admin/staff-accounts"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <StaffAccounts />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/admin/residents"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Residents />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/residents/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Residents />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/residents/verification"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <Residents />
@@ -116,6 +142,30 @@ function App() {
 
           <Route
             path="/admin/chatbot"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Chatbot />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/chatbot/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Chatbot />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/chatbot/questions"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Chatbot />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/chatbot/escalations"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <Chatbot />

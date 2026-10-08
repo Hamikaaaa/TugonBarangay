@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, FileText, Search, ShieldAlert, X } from "lucide-react";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
+import { primaryButtonClass } from "../../utils/buttonStyles";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const STATUS_LABELS = {
@@ -118,20 +120,28 @@ function ComplaintQueue({ isAdmin = false }) {
   }, [counts, openComplaints, totalComplaints]);
 
   return (
-    <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
-      <section className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#2455D6]">
-            <AlertCircle size={15} /> Complaint oversight
-          </p>
-          <h2 className="text-2xl font-bold tracking-tight text-[#132A4A] sm:text-3xl">Complaint queue</h2>
-          <p className="mt-2 text-sm text-slate-500">Review resident complaints, document actions, and track resolutions.</p>
-        </div>
-        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-          <p className="text-xs font-bold text-slate-800">{isAdmin ? "Administrator oversight" : "Assigned workspace"}</p>
-          <p className="mt-1 text-[11px] text-emerald-600">Complaint management</p>
-        </div>
-      </section>
+    <div className={isAdmin ? "w-full space-y-6 pt-6" : "mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8"}>
+      {isAdmin ? (
+        <AdminPageHeader
+          eyebrow="Complaint oversight"
+          title="Complaint queue"
+          description="Review resident complaints, document actions, and track resolutions."
+        />
+      ) : (
+        <section className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#2455D6]">
+              <AlertCircle size={15} /> Complaint oversight
+            </p>
+            <h2 className="text-2xl font-bold tracking-tight text-[#132A4A] sm:text-3xl">Complaint queue</h2>
+            <p className="mt-2 text-sm text-slate-500">Review resident complaints, document actions, and track resolutions.</p>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-xs font-bold text-slate-800">Assigned workspace</p>
+            <p className="mt-1 text-[11px] text-emerald-600">Complaint management</p>
+          </div>
+        </section>
+      )}
 
       <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Complaint summary">
         {visibleStatus.map(({ label, value, icon: Icon, color }) => (
@@ -254,7 +264,7 @@ function ComplaintQueue({ isAdmin = false }) {
             </label>
             <div className="mt-4 flex flex-wrap gap-2">
               {(TRANSITIONS[selected.status] || []).map((status) => (
-                <button key={status} type="button" disabled={submitting || (["resolved", "rejected"].includes(status) && !resolutionDetails.trim())} onClick={() => updateComplaint(status)} className={`rounded-xl px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${status === "rejected" ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100" : "bg-[#2455D6] text-white hover:bg-[#1948B8]"}`}>
+                <button key={status} type="button" disabled={submitting || (["resolved", "rejected"].includes(status) && !resolutionDetails.trim())} onClick={() => updateComplaint(status)} className={status === "rejected" ? "rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50" : isAdmin ? primaryButtonClass : "rounded-xl bg-[#2455D6] px-3 py-2 text-xs font-bold text-white transition hover:bg-[#1948B8] disabled:cursor-not-allowed disabled:opacity-50"}>
                   {submitting ? "Saving..." : STATUS_LABELS[status]}
                 </button>
               ))}

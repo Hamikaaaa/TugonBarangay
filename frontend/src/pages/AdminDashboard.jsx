@@ -1,5 +1,23 @@
+import {
+  Activity,
+  AlertTriangle,
+  ArrowRight,
+  Bell,
+  ChartNoAxesColumn,
+  CircleCheck,
+  ClipboardList,
+  FileText,
+  Home,
+  LogOut,
+  Menu,
+  MessageSquareWarning,
+  Search,
+  Star,
+  UsersRound,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { primaryButtonClass } from "../utils/buttonStyles";
 import AdminLayout from "../components/admin/AdminLayout";
 
 const API_URL = "http://127.0.0.1:8000/api";
@@ -269,7 +287,7 @@ export function AdminSidebar({
             "
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-400/10">
-              ↪
+              <LogOut className="h-4 w-4" aria-hidden="true" />
             </span>
             Logout
           </button>
@@ -284,9 +302,17 @@ export function AdminSidebar({
 ========================================================= */
 
 function getNavigationIcon(index) {
-  const icons = ["⌂", "♟", "▣", "!", "✦", "★", "▥"];
-
-  return icons[index];
+  const icons = [
+    Home,
+    UsersRound,
+    ClipboardList,
+    MessageSquareWarning,
+    Activity,
+    Star,
+    ChartNoAxesColumn,
+  ];
+  const Icon = icons[index];
+  return Icon ? <Icon className="h-4 w-4" aria-hidden="true" /> : null;
 }
 
 /* =========================================================
@@ -312,7 +338,7 @@ export function AdminHeader({ user, activePanel, onMenu }) {
             "
             aria-label="Open navigation"
           >
-            ☰
+            <Menu className="h-5 w-5" aria-hidden="true" />
           </button>
 
           <div className="min-w-0">
@@ -330,7 +356,7 @@ export function AdminHeader({ user, activePanel, onMenu }) {
         <div className="flex items-center gap-3">
           {/* Search */}
           <div className="hidden items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 xl:flex">
-            <span className="text-sm text-slate-400">⌕</span>
+            <Search className="h-4 w-4 text-slate-400" aria-hidden="true" />
 
             <input
               type="text"
@@ -356,7 +382,7 @@ export function AdminHeader({ user, activePanel, onMenu }) {
             "
             aria-label="Notifications"
           >
-            🔔
+            <Bell className="h-4 w-4" aria-hidden="true" />
             <span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
           </button>
 
@@ -413,7 +439,7 @@ function ResidentOverview({ pendingResidents, onReview }) {
       {/* Statistics */}
       <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          icon="♟"
+          icon={UsersRound}
           label="Pending Verification"
           value={pendingResidents.length}
           detail="Residents awaiting review"
@@ -421,7 +447,7 @@ function ResidentOverview({ pendingResidents, onReview }) {
         />
 
         <StatCard
-          icon="▣"
+          icon={ClipboardList}
           label="Resident Services"
           value="Active"
           detail="Online services available"
@@ -429,7 +455,7 @@ function ResidentOverview({ pendingResidents, onReview }) {
         />
 
         <StatCard
-          icon="✓"
+          icon={CircleCheck}
           label="System Status"
           value="Online"
           detail="All systems operational"
@@ -437,7 +463,7 @@ function ResidentOverview({ pendingResidents, onReview }) {
         />
 
         <StatCard
-          icon="!"
+          icon={AlertTriangle}
           label="Review Priority"
           value={pendingResidents.length > 0 ? "High" : "Clear"}
           detail="Registration queue"
@@ -534,7 +560,7 @@ function WelcomeBanner({ pendingCount }) {
    STAT CARD
 ========================================================= */
 
-function StatCard({ icon, label, value, detail, accent }) {
+function StatCard({ icon: Icon, label, value, detail, accent }) {
   const styles = {
     blue: {
       icon: "bg-[#EAF1FF] text-[#2455D6]",
@@ -573,11 +599,11 @@ function StatCard({ icon, label, value, detail, accent }) {
             flex h-10 w-10
             items-center justify-center
             rounded-xl
-            text-sm font-black
+            text-sm
             ${styles[accent].icon}
           `}
         >
-          {icon}
+          <Icon className="h-5 w-5" aria-hidden="true" />
         </div>
 
         <span
@@ -620,7 +646,7 @@ function RegistrationQueue({ residents, onReview }) {
           <div>
             <div className="flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#EAF1FF] text-[#2455D6]">
-                ♟
+                <UsersRound className="h-4 w-4" aria-hidden="true" />
               </div>
 
               <div>
@@ -661,7 +687,7 @@ function RegistrationQueue({ residents, onReview }) {
         {residents.length === 0 ? (
           <div className="px-5 py-12 text-center sm:px-6">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-xl text-emerald-600">
-              ✓
+              <CircleCheck className="h-6 w-6" aria-hidden="true" />
             </div>
 
             <p className="mt-4 text-sm font-bold text-[#172B4D]">
@@ -755,15 +781,7 @@ function ResidentRow({ resident, onReview }) {
         <button
           type="button"
           onClick={() => onReview(resident, "verify")}
-          className="
-            flex-1 rounded-lg
-            bg-[#2455D6] px-3 py-2
-            text-[10px] font-bold
-            text-white
-            shadow-sm
-            transition
-            hover:bg-[#123F70]
-          "
+          className={`${primaryButtonClass} flex-1`}
         >
           Verify
         </button>
@@ -798,28 +816,28 @@ function ActivityPanel({ pendingCount }) {
 
       <div className="mt-6 space-y-5">
         <ActivityItem
-          icon="♟"
+          icon={UsersRound}
           color="blue"
           title="Registration queue synced"
           detail={`${pendingCount} resident(s) waiting for review`}
         />
 
         <ActivityItem
-          icon="✓"
+          icon={CircleCheck}
           color="green"
           title="Resident services online"
           detail="Verified residents can access available services"
         />
 
         <ActivityItem
-          icon="!"
+          icon={AlertTriangle}
           color="red"
           title="Verification policy active"
           detail="Pending residents remain restricted"
         />
 
         <ActivityItem
-          icon="▣"
+          icon={ClipboardList}
           color="purple"
           title="Document service ready"
           detail="Requests can be monitored from the workspace"
@@ -840,7 +858,8 @@ function ActivityPanel({ pendingCount }) {
           hover:bg-[#DCE8FF]
         "
       >
-        View Activity Center →
+        <span>View Activity Center</span>
+        <ArrowRight className="ml-2 inline h-4 w-4" aria-hidden="true" />
       </button>
     </aside>
   );
@@ -850,7 +869,7 @@ function ActivityPanel({ pendingCount }) {
    ACTIVITY ITEM
 ========================================================= */
 
-function ActivityItem({ icon, color, title, detail }) {
+function ActivityItem({ icon: Icon, color, title, detail }) {
   const styles = {
     blue: "bg-[#EAF1FF] text-[#2455D6]",
     green: "bg-emerald-50 text-emerald-600",
@@ -865,11 +884,11 @@ function ActivityItem({ icon, color, title, detail }) {
           flex h-8 w-8 shrink-0
           items-center justify-center
           rounded-lg
-          text-xs font-bold
+          text-xs
           ${styles[color]}
         `}
       >
-        {icon}
+        <Icon className="h-4 w-4" aria-hidden="true" />
       </div>
 
       <div className="min-w-0">
@@ -890,19 +909,19 @@ function QuickActions() {
     {
       title: "Review Residents",
       detail: "Open verification queue",
-      icon: "♟",
+      icon: UsersRound,
       gradient: "from-[#123F70] to-[#2455D6]",
     },
     {
       title: "Document Requests",
       detail: "Monitor service activity",
-      icon: "▣",
+      icon: ClipboardList,
       gradient: "from-[#2455D6] to-[#7138E8]",
     },
     {
       title: "View Reports",
       detail: "Check barangay analytics",
-      icon: "▥",
+      icon: ChartNoAxesColumn,
       gradient: "from-[#7138E8] to-[#EF4444]",
     },
   ];
@@ -945,12 +964,12 @@ function QuickActions() {
 
             <div className="relative">
               <div className="flex items-center justify-between">
-                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15 text-sm">
-                  {action.icon}
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/15">
+                  <action.icon className="h-4 w-4" aria-hidden="true" />
                 </span>
 
-                <span className="text-lg transition group-hover:translate-x-1">
-                  →
+                <span className="transition group-hover:translate-x-1">
+                  <ArrowRight className="h-5 w-5" aria-hidden="true" />
                 </span>
               </div>
 
@@ -973,8 +992,8 @@ function WorkspacePlaceholder({ title }) {
   return (
     <section className="pt-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-8 shadow-[0_8px_25px_rgba(18,49,82,0.05)] sm:p-10">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#EAF1FF] text-lg font-bold text-[#2455D6]">
-          ▣
+        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#EAF1FF] text-[#2455D6]">
+          <FileText className="h-5 w-5" aria-hidden="true" />
         </div>
 
         <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.18em] text-[#2455D6]">
@@ -1000,7 +1019,7 @@ function Notice({ message }) {
   return (
     <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700 shadow-sm">
       <div className="flex items-center gap-2">
-        <span className="font-bold">✓</span>
+        <CircleCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
         {message}
       </div>
     </div>

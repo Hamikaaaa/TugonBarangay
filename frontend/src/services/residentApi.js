@@ -1,7 +1,7 @@
 const API_URL = "http://127.0.0.1:8000/api";
 
-export const primaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#2455D6] via-[#7138E8] to-[#E52B32] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-blue-500/15 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-blue-500/20 active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70";
+import { primaryButtonClass } from "../utils/buttonStyles";
+export { primaryButtonClass };
 
 export const secondaryButtonClass =
   "inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-[#2455D6] hover:bg-slate-50 hover:text-[#2455D6] disabled:cursor-not-allowed disabled:opacity-50";

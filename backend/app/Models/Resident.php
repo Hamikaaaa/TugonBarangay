@@ -43,4 +43,9 @@ class Resident extends Account
     {
         return $this->hasMany(ResidentNotification::class);
     }
+
+    public function chatbotMessages()
+    {
+        return $this->hasMany(ChatbotMessage::class);
+    }
 }

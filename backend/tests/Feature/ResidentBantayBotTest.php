@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\ChatbotEscalation;
+use App\Models\ChatbotFaq;
+use App\Models\ChatbotMessage;
 use App\Models\Admin;
 use App\Models\Resident;
 use App\Models\Staff;
@@ -47,6 +49,63 @@ class ResidentBantayBotTest extends TestCase
         ])->assertOk()
             ->assertJsonPath('matched', true)
             ->assertJsonPath('faq.question', 'What are the requirements for Barangay Residency?');
+    }
+
+    public function test_bot_responds_to_common_greetings_as_greetings(): void
+    {
+        $resident = Resident::factory()->create();
+        Sanctum::actingAs($resident);
+
+        foreach (['Hello!', 'hello there', 'good morning po', 'Good morning and how are you?', 'Magandang umaga po', 'Maayong buntag', 'How are you?'] as $greeting) {
+            $this->postJson('/api/resident/bantaybot/ask', [
+                'question' => $greeting,
+            ])->assertOk()
+                ->assertJsonPath('matched', true)
+                ->assertJsonPath('intent', 'greeting')
+                ->assertJsonPath('faq', null)
+                ->assertJsonPath('answer', 'Hello! Good day, and welcome to BantayBot. How can I help you with barangay services today?');
+        }
+    }
+
+    public function test_bot_messages_are_saved_with_timestamps_and_scoped_to_the_resident(): void
+    {
+        $resident = Resident::factory()->create();
+        $otherResident = Resident::factory()->create();
+        Sanctum::actingAs($resident);
+
+        $response = $this->postJson('/api/resident/bantaybot/ask', [
+            'question' => 'Good morning',
+        ])->assertOk()
+            ->assertJsonPath('intent', 'greeting')
+            ->assertJsonStructure(['id', 'sent_at', 'received_at']);
+
+        $this->assertDatabaseHas('chatbot_messages', [
+            'id' => $response->json('id'),
+            'resident_id' => $resident->id,
+            'question' => 'Good morning',
+            'intent' => 'greeting',
+        ]);
+
+        $this->getJson('/api/resident/bantaybot/messages')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $response->json('id'))
+            ->assertJsonPath('data.0.question', 'Good morning')
+            ->assertJsonPath('data.0.answer.intent', 'greeting')
+            ->assertJsonPath('data.0.sent_at', $response->json('sent_at'))
+            ->assertJsonPath('data.0.received_at', $response->json('received_at'));
+
+        ChatbotMessage::create([
+            'resident_id' => $otherResident->id,
+            'question' => 'Private question',
+            'answer' => 'Private answer',
+            'matched' => false,
+            'answered_at' => now(),
+        ]);
+
+        $this->getJson('/api/resident/bantaybot/messages')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonMissing(['question' => 'Private question']);
     }
 
     public function test_unknown_question_returns_escalation_fallback(): void
@@ -159,6 +218,59 @@ class ResidentBantayBotTest extends TestCase
 
         $this->patchJson("/api/admin/bantaybot/escalations/{$escalation->id}/reply", [
             'staff_reply' => 'The office is open weekdays.',
+        ])->assertForbidden();
+    }
+
+    public function test_admin_can_create_edit_list_and_delete_chatbot_faqs(): void
+    {
+        $admin = Admin::create([
+            'name' => 'FAQ Admin',
+            'email' => 'faq-admin@example.com',
+            'password' => 'Password123!',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $created = $this->postJson('/api/admin/bantaybot/faqs', [
+            'category' => 'Office Information',
+            'question' => 'When does the office open?',
+            'answer' => 'The office opens at 8:00 AM.',
+        ])->assertCreated()
+            ->assertJsonPath('faq.category', 'Office Information')
+            ->assertJsonPath('faq.question', 'When does the office open?');
+        $faqId = $created->json('faq.id');
+
+        $this->getJson('/api/admin/bantaybot/stats')
+            ->assertOk()
+            ->assertJsonPath('questions', 1)
+            ->assertJsonPath('categories', 1)
+            ->assertJsonPath('questions_by_category.0.category', 'Office Information')
+            ->assertJsonPath('questions_by_category.0.count', 1);
+
+        $this->getJson('/api/admin/bantaybot/faqs')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $faqId);
+
+        $this->putJson("/api/admin/bantaybot/faqs/{$faqId}", [
+            'category' => 'Office Hours',
+            'question' => 'What time does the office open?',
+            'answer' => 'The office opens at 8:30 AM.',
+        ])->assertOk()
+            ->assertJsonPath('faq.answer', 'The office opens at 8:30 AM.');
+
+        $this->deleteJson("/api/admin/bantaybot/faqs/{$faqId}")
+            ->assertOk();
+        $this->assertDatabaseMissing('chatbot_faqs', ['id' => $faqId]);
+    }
+
+    public function test_resident_cannot_manage_admin_chatbot_faqs(): void
+    {
+        Sanctum::actingAs(Resident::factory()->create());
+
+        $this->getJson('/api/admin/bantaybot/faqs')->assertForbidden();
+        $this->postJson('/api/admin/bantaybot/faqs', [
+            'category' => 'General',
+            'question' => 'Can I add this?',
+            'answer' => 'No.',
         ])->assertForbidden();
     }
 }

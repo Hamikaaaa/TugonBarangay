@@ -34,6 +34,7 @@ Route::middleware(['auth:sanctum', 'role:resident'])->prefix('resident')->group(
     Route::patch('/notifications/{notification}', [ResidentController::class, 'updateNotification']);
     Route::delete('/notifications/{notification}', [ResidentController::class, 'destroyNotification']);
     Route::get('/faqs', [ResidentController::class, 'faqs']);
+    Route::get('/bantaybot/messages', [ResidentController::class, 'botMessages']);
     Route::get('/bantaybot/escalations', [ResidentController::class, 'botEscalations']);
     Route::post('/bantaybot/ask', [ResidentController::class, 'askBot']);
     Route::post('/bantaybot/escalate', [ResidentController::class, 'escalateBot']);
@@ -42,6 +43,12 @@ Route::middleware(['auth:sanctum', 'role:resident'])->prefix('resident')->group(
 });
 
 Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(function () {
+    Route::get('/staff-accounts', [AdminController::class, 'staffAccounts']);
+    Route::post('/staff-accounts', [AdminController::class, 'createStaffAccount']);
+    Route::patch('/staff-accounts/{staff}/status', [AdminController::class, 'updateStaffAccountStatus']);
+    Route::get('/notifications', [AdminController::class, 'notifications']);
+    Route::get('/reports', [AdminController::class, 'reports']);
+    Route::get('/feedback', [AdminController::class, 'feedback']);
     Route::get('/document-types', [DocumentTypeController::class, 'adminIndex']);
     Route::post('/document-types', [DocumentTypeController::class, 'store']);
     Route::put('/document-types/{documentType}', [DocumentTypeController::class, 'update']);
@@ -52,6 +59,13 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'show']);
     Route::get('/bantaybot/escalations', [ResidentController::class, 'adminBotEscalations']);
     Route::patch('/bantaybot/escalations/{chatbotEscalation}/reply', [ResidentController::class, 'replyToBotEscalation']);
+    Route::get('/bantaybot/faqs', [ResidentController::class, 'adminBotFaqs']);
+    Route::post('/bantaybot/faqs', [ResidentController::class, 'storeBotFaq']);
+    Route::put('/bantaybot/faqs/{chatbotFaq}', [ResidentController::class, 'updateBotFaq']);
+    Route::delete('/bantaybot/faqs/{chatbotFaq}', [ResidentController::class, 'destroyBotFaq']);
+    Route::get('/bantaybot/stats', [ResidentController::class, 'adminBotStats']);
+    Route::get('/residents/registry-stats', [AdminController::class, 'residentRegistryStats']);
+    Route::get('/barangay-registry', [AdminController::class, 'barangayRegistry']);
     Route::get('/pending-residents', [AdminController::class, 'pendingResidents']);
     Route::patch('/residents/{user}/verify', [AdminController::class, 'verifyResident']);
     Route::patch('/residents/{user}/reject', [AdminController::class, 'rejectResident']);
