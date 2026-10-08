@@ -1,13 +1,15 @@
 import { ArrowLeft } from "lucide-react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import ComplaintQueue from "./ComplaintQueue";
 import StaffLayout from "./StaffLayout";
 
 function ComplaintReview() {
   const { complaintId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const status = location.state?.status;
 
   if (user?.designation !== "Complaint Management Officer") {
     return <Navigate to="/unauthorized" replace />;
@@ -20,14 +22,17 @@ function ComplaintReview() {
         { label: "Dashboard", path: "/staff/dashboard" },
         { label: "Pending", path: "/staff/complaints?status=pending" },
         { label: "In Progress", path: "/staff/complaints?status=in_progress" },
+        { label: "Resolved", path: "/staff/complaints?status=resolved" },
+        { label: "Rejected", path: "/staff/complaints?status=rejected" },
+        { label: "Closed", path: "/staff/complaints?status=closed" },
       ]}
-      activePath=""
+      activePath={status ? `/staff/complaints?status=${status}` : ""}
       onNavigate={navigate}
     >
       <div className="mx-auto w-full max-w-[1600px] px-4 pt-5 sm:px-7 lg:px-9">
         <button
           type="button"
-          onClick={() => navigate("/staff/complaints")}
+          onClick={() => navigate("/staff/dashboard")}
           className="inline-flex items-center gap-2 text-sm font-semibold text-[#2455D6] hover:text-[#1948B8]"
         >
           <ArrowLeft size={16} />

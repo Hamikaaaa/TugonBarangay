@@ -11,7 +11,7 @@ import {
   ShieldAlert,
   X,
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { COMPLAINT_CATEGORIES } from "../../constants/complaintCategories";
@@ -41,8 +41,9 @@ const TRANSITIONS = {
   closed: [],
 };
 
-function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = false, complaintId = null, analyticsOnly = false }) {
+function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = false, complaintId = null, analyticsOnly = false, listOnly = false }) {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [complaints, setComplaints] = useState([]);
   const [counts, setCounts] = useState({});
   const [priorityCounts, setPriorityCounts] = useState({});
@@ -237,7 +238,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
 
   return (
     <div className={isAdmin ? "w-full space-y-6 pt-6" : "mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8"}>
-      {isAdmin ? (
+      {isAdmin && !listOnly ? (
         <AdminPageHeader
           eyebrow="Complaint oversight"
           title={categoryFilter ? `${categoryFilter} overview` : "Complaint queue"}
@@ -272,21 +273,23 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
         </>
       )}
 
-      <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Complaint summary">
-        {visibleStatus.map(({ label, value, icon: Icon, color }) => (
-          <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{label}</p>
-                <p className="mt-2 text-2xl font-bold text-[#132A4A]">{value}</p>
+      {!listOnly && (
+        <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Complaint summary">
+          {visibleStatus.map(({ label, value, icon: Icon, color }) => (
+            <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{label}</p>
+                  <p className="mt-2 text-2xl font-bold text-[#132A4A]">{value}</p>
+                </div>
+                <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${colorClasses[color]}`}><Icon size={17} /></span>
               </div>
-              <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${colorClasses[color]}`}><Icon size={17} /></span>
-            </div>
-          </article>
-        ))}
-      </section>
+            </article>
+          ))}
+        </section>
+      )}
 
-      {isAdmin && <section className="mb-7 grid gap-5 xl:grid-cols-[1.35fr_1fr]" aria-label="Complaint analytics">
+      {isAdmin && !listOnly && <section className="mb-7 grid gap-5 xl:grid-cols-[1.35fr_1fr]" aria-label="Complaint analytics">
         <article className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
@@ -389,6 +392,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
         </div>
       )}
 
+      <div>
       {!complaintId && !analyticsOnly && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -452,7 +456,21 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                       {isAdmin ? (
                         <button type="button" onClick={() => selectComplaint(complaint)} aria-expanded={selected?.id === complaint.id} className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]">{selected?.id === complaint.id ? "Close" : "Review"}</button>
                       ) : (
-                        <Link to={`/staff/complaints/${complaint.id}`} className="inline-flex rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]">Review</Link>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isDashboard) {
+                              navigate(`/staff/complaints?status=${encodeURIComponent(complaint.status)}`);
+                            } else {
+                              navigate(`/staff/complaints/${complaint.id}`, {
+                                state: { status: complaint.status },
+                              });
+                            }
+                          }}
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]"
+                        >
+                          Review
+                        </button>
                       )}
                     </td>
                   </tr>
@@ -472,7 +490,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
 
       {complaintId && loading && <p className="p-12 text-center text-sm text-slate-500">Loading complaint details...</p>}
 
-      {!analyticsOnly && selected && (complaintId || isAdmin) && (
+      {!analyticsOnly && selected && (isAdmin || complaintId) && (
         <section className="mt-5 grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[1fr_360px]">
           <div>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -565,6 +583,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
           </div>
         </section>
       )}
+      </div>
     </div>
   );
 }

@@ -44,6 +44,11 @@ const navigation = [
     label: "Complaints",
     path: "/admin/complaints",
     icon: MessageSquareWarning,
+    children: [
+      { label: "Dashboard", path: "/admin/complaints" },
+      { label: "Resident Complaints", path: "/admin/complaints/resident-complaints" },
+      { label: "Category Management", path: "/admin/complaints/categories" },
+    ],
   },
   {
     label: "Chatbot",
@@ -72,10 +77,18 @@ function AdminLayout({ children, title }) {
     (item) =>
       item.path === location.pathname ||
       (item.label === "Chatbot" && location.pathname === "/admin/chatbot") ||
-      item.children?.some((child) => child.path === location.pathname),
+      item.children?.some(
+        (child) =>
+          child.path === location.pathname ||
+          (child.path !== item.path &&
+            location.pathname.startsWith(`${child.path}/`)),
+      ),
   );
   const activeChild = activeItem?.children?.find(
-    (child) => child.path === location.pathname,
+    (child) =>
+      child.path === location.pathname ||
+      (child.path !== activeItem.path &&
+        location.pathname.startsWith(`${child.path}/`)),
   );
   const activePanel = activeChild?.label || activeItem?.label || title;
 
@@ -113,6 +126,14 @@ function AdminLayout({ children, title }) {
 
 function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
   const [openMenu, setOpenMenu] = useState("");
+  const isActiveItem = (item) =>
+    (item.label === "Chatbot" && activePath === "/admin/chatbot") ||
+    item.children.some(
+      (child) =>
+        child.path === activePath ||
+        (child.path !== item.path &&
+          activePath.startsWith(`${child.path}/`)),
+    );
 
   return (
     <>
@@ -181,16 +202,14 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
                       );
                     }}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium ${
-                      (activePath === "/admin/chatbot" ||
-                        item.children.some((child) => child.path === activePath))
+                      isActiveItem(item)
                         ? "bg-white text-[#123F70] shadow-lg"
                         : "text-blue-100"
                     }`}
                   >
                     <span
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
-                        (activePath === "/admin/chatbot" ||
-                          item.children.some((child) => child.path === activePath))
+                        isActiveItem(item)
                           ? "bg-[#EAF1FF] text-[#2455D6]"
                           : "bg-white/10 text-blue-100"
                       }`}
@@ -215,7 +234,9 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
                         type="button"
                         onClick={() => onSelect(child.path)}
                         className={`flex w-full items-center rounded-lg px-3 py-2.5 text-left text-xs font-semibold ${
-                          activePath === child.path
+                          activePath === child.path ||
+                          (child.path !== item.path &&
+                            activePath.startsWith(`${child.path}/`))
                             ? "bg-white/15 text-white"
                             : "text-blue-100/75"
                         }`}

@@ -159,6 +159,22 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/admin/complaints/resident-complaints"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Complaints />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/complaints/categories"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Complaints />
+              </ProtectedRoute>
+            }
+          />
 
           <Route
             path="/admin/chatbot"
