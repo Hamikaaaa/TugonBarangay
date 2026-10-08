@@ -31,6 +31,13 @@
     -webkit-print-color-adjust: exact;
   }
 
+  .document-preview-modal {
+    position: static !important;
+    display: block !important;
+    padding: 0 !important;
+    background: transparent !important;
+  }
+
   .document-preview-modal > div {
     max-height: none !important;
     overflow: visible !important;
@@ -38,7 +45,9 @@
     box-shadow: none !important;
   }
 
-  .document-preview-modal > div > div:first-child,
+  .document-preview-controls,
+  .document-preview-notice,
+  .document-preview-error,
   .document-preview-modal button {
     display: none !important;
   }

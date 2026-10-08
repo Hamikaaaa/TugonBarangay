@@ -16,8 +16,9 @@ const TEMPLATE_TYPES = {
   "Barangay Clearance": "barangay",
   "Barangay Residency": "residency",
   "Certificate of Residency": "residency",
-  "Business Permit": "generic",
-  "Barangay Indigency": "generic",
+  "Business Permit": "business",
+  "Barangay Indigency": "indigency",
+  "Certificate of Indigency": "indigency",
   "Business Clearance": "business",
   "Certificate of Good Moral Character": "character",
   "First-Time Jobseeker Certification": "jobseeker",
@@ -67,7 +68,7 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
   return (
     <div
       id="document-preview-modal"
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#071B3D]/70 p-3 backdrop-blur-sm sm:p-6"
+      className="document-preview-modal fixed inset-0 z-[100] flex items-center justify-center bg-[#071B3D]/70 p-3 backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label={`${label} preview`}
@@ -76,7 +77,7 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
       }}
     >
       <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div className="document-preview-controls flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#2455D6]">Document preview</p>
             <h2 className="mt-1 text-lg font-bold text-[#172B4D]">{label}</h2>
@@ -123,12 +124,12 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
         </div>
 
         {editing && (
-          <div className="border-b border-[#F1D9A8] bg-[#FFF7E7] px-5 py-4">
+          <div className="document-preview-notice border-b border-[#F1D9A8] bg-[#FFF7E7] px-5 py-4">
             <p className="text-sm font-bold text-[#805900]">Edit mode</p>
             <p className="mt-1 text-xs text-[#805900]">Save edits to this request before approving the document for release.</p>
           </div>
         )}
-        {error && <p role="alert" className="border-b border-[#F2D4D0] bg-[#FFF0EE] px-5 py-3 text-xs font-semibold text-[#C74444]">{error}</p>}
+        {error && <p role="alert" className="document-preview-error border-b border-[#F2D4D0] bg-[#FFF0EE] px-5 py-3 text-xs font-semibold text-[#C74444]">{error}</p>}
 
         <div className="document-preview-scroll overflow-auto bg-slate-100 p-4 sm:p-8">
           <DocumentPaper
@@ -170,54 +171,31 @@ function renderDocumentTemplate(template, fields, request, residentName, label, 
 
 function DocumentPaper({ request, templateType, label, residentName, formattedDate, fields, editing, onFieldChange }) {
   const paper = (
-    <article className="document-paper mx-auto flex min-h-[11in] w-full max-w-[8.5in] flex-col bg-white p-[0.55in] text-[#172B4D] shadow-sm">
-      <header className="border-b border-[#123F70] pb-4">
-        <div className="flex items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <img src="/images/logo-blue-version.png" alt="TugonBarangay" className="h-14 w-14 object-contain" />
-            <div>
-              <p className="text-[8px] font-bold uppercase tracking-[0.24em] text-[#2455D6]">Tugon Barangay</p>
-              <h1 className="mt-1 text-[19px] font-bold leading-tight text-[#123F70]">{label}</h1>
-              <p className="mt-1 text-[8px] font-semibold uppercase tracking-[0.18em] text-slate-400">Official document</p>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="text-[8px] font-bold uppercase tracking-wider text-slate-400">Document No.</p>
-            <p className="mt-1 text-[11px] font-bold">{String(request.id).padStart(6, "0")}</p>
-          </div>
-        </div>
-      </header>
+    <article className="document-paper relative mx-auto flex min-h-[11in] w-full max-w-[8.5in] flex-col px-[0.55in] pb-[2.6in] pt-[1.9in] text-[#172B4D] shadow-sm">
+      <img
+        src="/images/barangay-document-template.jpg"
+        alt=""
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 z-0 h-full w-full object-fill"
+      />
 
-      <div className="flex-1 py-5">
+      <div className="relative z-10 flex-1">
         {request.type?.template ? (
           <p className="whitespace-pre-wrap text-[11px] leading-6 text-slate-700">
             {renderDocumentTemplate(request.type.template, fields, request, residentName, label, formattedDate)}
           </p>
         ) : (
           <>
-            {templateType === "barangay" && <BarangayTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
+            {templateType === "barangay" && <BarangayTemplate label={label} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
             {templateType === "residency" && <ResidencyTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
             {templateType === "business" && <BusinessTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
+            {templateType === "indigency" && <IndigencyTemplate residentName={residentName} formattedDate={formattedDate} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
             {templateType === "character" && <CharacterTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
             {templateType === "jobseeker" && <JobseekerTemplate request={request} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
             {templateType === "generic" && <GenericTemplate label={label} residentName={residentName} fields={fields} editing={editing} onFieldChange={onFieldChange} />}
           </>
         )}
       </div>
-
-      <footer className="grid grid-cols-[1fr_auto] gap-8 border-t border-slate-200 pt-4">
-        <div>
-          <div className="mb-1 flex items-end gap-2">
-            <div className="h-px w-20 bg-slate-300" />
-            <span className="text-[8px] font-semibold text-slate-400">Authorized signature</span>
-          </div>
-          <p className="mt-1 text-[9px] font-semibold">Authorized Barangay Officer</p>
-        </div>
-        <div className="text-right">
-          <p className="text-[8px] font-bold uppercase tracking-wider text-slate-400">Date issued</p>
-          <p className="mt-1 text-[9px] font-semibold">{formattedDate}</p>
-        </div>
-      </footer>
     </article>
   );
 
@@ -279,10 +257,13 @@ function calculateAge(dateOfBirth) {
   return age >= 0 ? String(age) : "";
 }
 
-function BarangayTemplate({ residentName, fields, editing, onFieldChange }) {
+function BarangayTemplate({ label, residentName, fields, editing, onFieldChange }) {
   return (
     <>
-      <TemplateHeading title="Barangay Clearance" subtitle="Certificate of official barangay verification" />
+      <TemplateHeading
+        title={label === "Barangay Certificate" ? "Barangay Certificate" : "Barangay Clearance"}
+        subtitle={label === "Barangay Certificate" ? "Official barangay certification" : "Certificate of official barangay verification"}
+      />
       <div className="mb-5 rounded-sm bg-[#F5F8FF] p-4 text-center">
         <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">This certificate is issued to</p>
         <p className="mt-1 text-[18px] font-bold text-[#123F70]">{residentName}</p>
@@ -308,6 +289,26 @@ function BarangayTemplate({ residentName, fields, editing, onFieldChange }) {
         <DetailLine label="Citizenship" value={fields.citizenship} fieldName="citizenship" editing={editing} onFieldChange={onFieldChange} />
       </Section>
       <p className="mt-1 text-[9px] leading-4 text-slate-500">The certificate is valid for the purpose stated above and is subject to barangay policy. It is not a substitute for any other official document.</p>
+    </>
+  );
+}
+
+function IndigencyTemplate({ residentName, formattedDate, fields, editing, onFieldChange }) {
+  return (
+    <>
+      <TemplateHeading title="Certificate of Indigency" subtitle="Certification of indigent status" />
+      <p className="mb-5 text-[12px] leading-7 text-slate-700">
+        TO WHOM IT MAY CONCERN: This is to certify that <strong>{residentName}</strong>, of legal age, is a bona fide resident of Barangay Tayud, Municipality of Consolacion, Province of Cebu, and is listed in the barangay records as belonging to an indigent family.
+      </p>
+      <Section title="Resident information">
+        <DetailLine label="Address" value={fields.address} fieldName="address" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Purok" value={fields.purok} fieldName="purok" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Date of birth" value={fields.date_of_birth} fieldName="date_of_birth" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Age" value={fields.age} fieldName="age" editing={false} onFieldChange={onFieldChange} />
+        <DetailLine label="Purpose" value={fields.purpose} fieldName="purpose" editing={editing} onFieldChange={onFieldChange} />
+      </Section>
+      <p className="mt-5 text-[12px] leading-7 text-slate-700">This certification is issued upon the request of the named person for the purpose stated above and is valid only for that purpose.</p>
+      <p className="mt-4 text-[12px] text-slate-700">Issued this {formattedDate} at Barangay Tayud, Consolacion, Cebu.</p>
     </>
   );
 }
@@ -362,14 +363,13 @@ function BusinessTemplate({ residentName, fields, editing, onFieldChange }) {
       </div>
       <Section title="Business information">
         <DetailLine label="Business name" value={fields.business_name} fieldName="business_name" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Business type" value={fields.business_type} fieldName="business_type" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Nature of business" value={fields.nature_of_business} fieldName="nature_of_business" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Ownership" value={fields.business_ownership} fieldName="business_ownership" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Location" value={`${fields.business_street_number || ""} ${fields.business_purok || ""}`.trim()} fieldName="business_purok" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Investment" value={fields.estimated_investment} fieldName="estimated_investment" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Employees" value={fields.number_of_employees} fieldName="number_of_employees" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Business start date" value={fields.business_start_date} fieldName="business_start_date" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Contact" value={fields.business_contact_number || fields.business_email_address} fieldName="business_contact_number" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Business address" value={fields.business_address || `${fields.business_street_number || ""} ${fields.business_purok || ""}`.trim()} fieldName="business_address" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Applicant address" value={fields.address} fieldName="address" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Applicant" value={residentName} fieldName="full_name" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Sex" value={fields.sex} fieldName="sex" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Occupation" value={fields.occupation} fieldName="occupation" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Income (PHP)" value={fields.income} fieldName="income" editing={editing} onFieldChange={onFieldChange} />
+        <DetailLine label="Contact number" value={fields.contact_number || fields.business_contact_number || fields.business_email_address} fieldName="contact_number" editing={editing} onFieldChange={onFieldChange} />
       </Section>
     </>
   );

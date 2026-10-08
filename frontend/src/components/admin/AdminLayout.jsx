@@ -6,23 +6,29 @@ const navigation = [
   { label: "Dashboard", path: "/admin/dashboard", icon: "⌂" },
   { label: "Residents", path: "/admin/residents", icon: "♟" },
   {
-    label: "Document Request History",
-    path: "/admin/document-requests",
+    label: "Document Request",
     icon: "▤",
-  },
-  {
-    label: "Document Types",
-    path: "/admin/document-types",
-    icon: "⚙",
+    children: [
+      {
+        label: "Request Monitoring",
+        path: "/admin/document-requests",
+        icon: "↗",
+      },
+      {
+        label: "Document Types",
+        path: "/admin/document-types",
+        icon: "⚙",
+      },
+      {
+        label: "Reports & Statistics",
+        path: "/admin/reports",
+        icon: "▥",
+      },
+    ],
   },
   { label: "Complaints", path: "/admin/complaints", icon: "!" },
   { label: "Chatbot", path: "/admin/chatbot", icon: "✦" },
   { label: "Feedback", path: "/admin/feedback", icon: "★" },
-  {
-    label: "Reports and Analytics",
-    path: "/admin/reports",
-    icon: "▥",
-  },
 ];
 
 function AdminLayout({ children, title }) {
@@ -30,7 +36,18 @@ function AdminLayout({ children, title }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const activeItem = navigation.find((item) => item.path === location.pathname);
+  const [documentRequestOpen, setDocumentRequestOpen] = useState(() =>
+    location.pathname.startsWith("/admin/document-requests") ||
+    location.pathname.startsWith("/admin/document-types") ||
+    location.pathname === "/admin/reports",
+  );
+  const activeItem = navigation
+    .flatMap((item) => item.children || [item])
+    .find((item) => item.path === location.pathname);
+  const documentRequestItem = navigation.find((item) => item.children);
+  const documentRequestActive = documentRequestItem.children.some(
+    (child) => child.path === location.pathname,
+  );
   const activePanel = activeItem?.label || title;
 
   const handleSelect = (path) => {
@@ -43,6 +60,11 @@ function AdminLayout({ children, title }) {
       <AdminSidebar
         activePath={location.pathname}
         onSelect={handleSelect}
+        documentRequestOpen={documentRequestOpen}
+        documentRequestActive={documentRequestActive}
+        onToggleDocumentRequest={() =>
+          setDocumentRequestOpen((isOpen) => !isOpen)
+        }
         onLogout={logout}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -63,7 +85,16 @@ function AdminLayout({ children, title }) {
   );
 }
 
-function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
+function AdminSidebar({
+  activePath,
+  onSelect,
+  documentRequestOpen,
+  documentRequestActive,
+  onToggleDocumentRequest,
+  onLogout,
+  open,
+  onClose,
+}) {
   return (
     <>
       {open && (
@@ -114,34 +145,88 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
           </p>
 
           <nav className="space-y-1">
-            {navigation.map((item) => (
-              <button
-                key={item.path}
-                type="button"
-                onClick={() => onSelect(item.path)}
-                className={`group flex w-full items-center gap-3 rounded-xl py-3 text-left text-sm font-medium transition-all duration-200 ${
-                  item.subItem ? "pl-6 pr-3" : "px-3"
-                } ${
-                  activePath === item.path
-                    ? "bg-white text-[#123F70] shadow-lg"
-                    : "text-blue-100 hover:bg-white/10"
-                }`}
-              >
-                <span
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+            {navigation.map((item) =>
+              item.children ? (
+                <div key={item.label}>
+                  <button
+                    type="button"
+                    onClick={onToggleDocumentRequest}
+                    aria-expanded={documentRequestOpen}
+                    className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-all duration-200 ${
+                      documentRequestActive
+                        ? "bg-white/10 text-white"
+                        : "text-blue-100 hover:bg-white/10"
+                    }`}
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/10 text-xs font-bold text-blue-100">
+                      {item.icon}
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                    <span className="ml-auto text-xs" aria-hidden="true">
+                      {documentRequestOpen ? "⌄" : "›"}
+                    </span>
+                  </button>
+
+                  {documentRequestOpen && (
+                    <div className="mt-1 space-y-1">
+                      {item.children.map((child) => (
+                        <button
+                          key={child.path}
+                          type="button"
+                          onClick={() => onSelect(child.path)}
+                          aria-current={activePath === child.path ? "page" : undefined}
+                          className={`group flex w-full items-center gap-3 rounded-xl py-2.5 pl-6 pr-3 text-left text-xs font-medium transition-all duration-200 ${
+                            activePath === child.path
+                              ? "bg-white text-[#123F70] shadow-lg"
+                              : "text-blue-100 hover:bg-white/10"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                              activePath === child.path
+                                ? "bg-[#EAF1FF] text-[#2455D6]"
+                                : "bg-white/10 text-blue-100"
+                            }`}
+                          >
+                            {child.icon}
+                          </span>
+                          <span className="truncate">{child.label}</span>
+                          {activePath === child.path && (
+                            <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  key={item.path}
+                  type="button"
+                  onClick={() => onSelect(item.path)}
+                  aria-current={activePath === item.path ? "page" : undefined}
+                  className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium transition-all duration-200 ${
                     activePath === item.path
-                      ? "bg-[#EAF1FF] text-[#2455D6]"
-                      : "bg-white/10 text-blue-100"
+                      ? "bg-white text-[#123F70] shadow-lg"
+                      : "text-blue-100 hover:bg-white/10"
                   }`}
                 >
-                  {item.icon}
-                </span>
-                <span className="truncate">{item.label}</span>
-                {activePath === item.path && (
-                  <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
-                )}
-              </button>
-            ))}
+                  <span
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xs font-bold ${
+                      activePath === item.path
+                        ? "bg-[#EAF1FF] text-[#2455D6]"
+                        : "bg-white/10 text-blue-100"
+                    }`}
+                  >
+                    {item.icon}
+                  </span>
+                  <span className="truncate">{item.label}</span>
+                  {activePath === item.path && (
+                    <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
+                  )}
+                </button>
+              ),
+            )}
           </nav>
         </div>
 
