@@ -25,6 +25,7 @@ class ResidentComplaintTest extends TestCase
             'subject' => 'Blocked drainage near Purok 2',
             'incident_date' => '2026-09-20',
             'location' => 'Purok 2, near the community hall',
+            'involved_persons' => 'Juan Dela Cruz',
             'description' => 'The drainage has been blocked after the recent rain.',
             'relevant_information' => 'Water is collecting on the road.',
             'evidence' => UploadedFile::fake()->create('drainage.jpg', 10, 'image/jpeg'),
@@ -32,6 +33,8 @@ class ResidentComplaintTest extends TestCase
 
         $response->assertCreated()
             ->assertJsonPath('complaint.category', 'Road and Public')
+            ->assertJsonPath('complaint.location', 'Purok 2, near the community hall')
+            ->assertJsonPath('complaint.involved_persons', 'Juan Dela Cruz')
             ->assertJsonPath('complaint.status', 'pending')
             ->assertJsonPath('complaint.priority', 'normal');
 
@@ -203,6 +206,7 @@ class ResidentComplaintTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.status', 'in_progress')
             ->assertJsonPath('data.0.priority', 'urgent')
+            ->assertJsonPath('data.0.involved_persons', null)
             ->assertJsonPath('data.0.staff_remarks', 'An officer has been assigned to review your report.');
     }
 }

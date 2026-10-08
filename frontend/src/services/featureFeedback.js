@@ -22,5 +22,5 @@ export function shouldPromptForFeatureFeedback(userId, feature) {
     console.warn("Could not save feature-use count for feedback.", error);
   }
 
-  return useCount === 1 || (useCount - 1) % 7 === 0;
+  return useCount === 1 || (useCount - 1) % 5 === 0;
 }

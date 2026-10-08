@@ -1,4 +1,3 @@
-import { ArrowLeft } from "lucide-react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import ComplaintQueue from "./ComplaintQueue";
@@ -29,16 +28,6 @@ function ComplaintReview() {
       activePath={status ? `/staff/complaints?status=${status}` : ""}
       onNavigate={navigate}
     >
-      <div className="mx-auto w-full max-w-[1600px] px-4 pt-5 sm:px-7 lg:px-9">
-        <button
-          type="button"
-          onClick={() => navigate("/staff/dashboard")}
-          className="inline-flex items-center gap-2 text-sm font-semibold text-[#2455D6] hover:text-[#1948B8]"
-        >
-          <ArrowLeft size={16} />
-          Back to complaints
-        </button>
-      </div>
       <ComplaintQueue key={complaintId} complaintId={complaintId} />
     </StaffLayout>
   );

@@ -17,6 +17,7 @@ class Complaint extends Model
         'description',
         'incident_date',
         'location',
+        'involved_persons',
         'relevant_information',
         'evidence_path',
         'status',

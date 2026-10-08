@@ -99,11 +99,20 @@ function BantayBot({ token, userId }) {
         setEscalationError("");
         setEscalations(result.data || []);
         setEscalationLastPage(result.last_page || 1);
-        setSelectedEscalationId((current) =>
-          result.data?.some((item) => item.id === current)
-            ? current
-            : result.data?.[0]?.id || null,
+        const newReply = result.data?.find(
+          (item) =>
+            item.status === "replied" &&
+            item.staff_reply &&
+            !hasSeenEscalationReply(userId, item.id),
         );
+        if (newReply) {
+          markEscalationReplySeen(userId, newReply.id);
+          setSelectedEscalationId(newReply.id);
+        } else {
+          setSelectedEscalationId((current) =>
+            result.data?.some((item) => item.id === current) ? current : null,
+          );
+        }
       })
       .catch((error) => {
         if (active) setEscalationError(error.message);
@@ -115,7 +124,7 @@ function BantayBot({ token, userId }) {
     return () => {
       active = false;
     };
-  }, [escalationPage, reloadEscalations, token]);
+  }, [escalationPage, reloadEscalations, token, userId]);
 
   const categories = useMemo(
     () => [...new Set(faqs.map((faq) => faq.category))],
@@ -201,7 +210,7 @@ function BantayBot({ token, userId }) {
       });
       setEscalation({ type: "success", ...data });
       setEscalationPage(1);
-      setSelectedEscalationId(data.escalation?.id || null);
+      setSelectedEscalationId(null);
       setEscalationLoading(true);
       setReloadEscalations((current) => current + 1);
     } catch (error) {
@@ -768,6 +777,36 @@ function BantayBot({ token, userId }) {
       )}
     </div>
   );
+}
+
+function hasSeenEscalationReply(userId, escalationId) {
+  try {
+    const savedIds = localStorage.getItem(`resident-escalation-replies-seen:${userId}`);
+    if (!savedIds) return false;
+
+    const ids = JSON.parse(savedIds);
+    if (!Array.isArray(ids) || !ids.every(Number.isInteger)) {
+      throw new Error("Saved escalation reply state is invalid.");
+    }
+    return ids.includes(escalationId);
+  } catch (error) {
+    console.warn("Could not read saved escalation reply state.", error);
+    return false;
+  }
+}
+
+function markEscalationReplySeen(userId, escalationId) {
+  try {
+    const key = `resident-escalation-replies-seen:${userId}`;
+    const savedIds = localStorage.getItem(key);
+    const ids = savedIds ? JSON.parse(savedIds) : [];
+    if (!Array.isArray(ids) || !ids.every(Number.isInteger)) {
+      throw new Error("Saved escalation reply state is invalid.");
+    }
+    localStorage.setItem(key, JSON.stringify([...new Set([...ids, escalationId])]));
+  } catch (error) {
+    console.warn("Could not save escalation reply state.", error);
+  }
 }
 
 export default BantayBot;

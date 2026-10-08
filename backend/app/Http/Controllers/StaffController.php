@@ -10,9 +10,10 @@ use App\Models\Resident;
 use App\Models\ResidentNotification;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
-use Illuminate\Support\Facades\Schema;
 
 class StaffController extends Controller
 {
@@ -517,13 +518,32 @@ class StaffController extends Controller
             ], 422);
         }
 
-        $complaint->status = $validated['status'];
-        $complaint->staff_remarks = $validated['staff_remarks'] ?? null;
-        $complaint->resolution_details = $validated['resolution_details'] ?? null;
-        $complaint->resolved_at = in_array($validated['status'], ['resolved', 'closed'], true)
-            ? ($complaint->resolved_at ?? now())
-            : null;
-        $complaint->save();
+        DB::transaction(function () use ($complaint, $validated): void {
+            $complaint->status = $validated['status'];
+            $complaint->staff_remarks = $validated['staff_remarks'] ?? null;
+            $complaint->resolution_details = $validated['resolution_details'] ?? null;
+            $complaint->resolved_at = in_array($validated['status'], ['resolved', 'closed'], true)
+                ? ($complaint->resolved_at ?? now())
+                : null;
+            $complaint->save();
+
+            $statusLabel = str_replace('_', ' ', ucfirst($validated['status']));
+            $caseReference = 'CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT);
+            $message = "The status of your complaint {$caseReference} is now {$statusLabel}.";
+            if (filled($validated['staff_remarks'] ?? null)) {
+                $message .= "\n\nStaff remarks: ".$validated['staff_remarks'];
+            }
+            if (filled($validated['resolution_details'] ?? null)) {
+                $message .= "\n\nCase resolution: ".$validated['resolution_details'];
+            }
+
+            ResidentNotification::create([
+                'resident_id' => $complaint->resident_id,
+                'type' => 'complaint_status_updated',
+                'title' => "Update on complaint {$caseReference}",
+                'message' => $message,
+            ]);
+        });
 
         return response()->json([
             'message' => 'Complaint updated successfully.',

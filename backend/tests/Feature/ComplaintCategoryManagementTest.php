@@ -44,6 +44,86 @@ class ComplaintCategoryManagementTest extends TestCase
         ]);
     }
 
+    public function test_admin_can_view_enabled_and_disabled_complaint_categories(): void
+    {
+        $admin = Admin::create([
+            'name' => 'Category Admin',
+            'email' => 'category-list-admin@example.com',
+            'password' => 'password123',
+        ]);
+        ComplaintCategory::create([
+            'name' => 'Enabled category',
+            'enabled' => true,
+        ]);
+        ComplaintCategory::create([
+            'name' => 'Disabled category',
+            'enabled' => false,
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->getJson('/api/admin/complaint-categories')
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.name', 'Disabled category')
+            ->assertJsonPath('data.0.enabled', false)
+            ->assertJsonPath('data.1.name', 'Enabled category')
+            ->assertJsonPath('data.1.enabled', true);
+    }
+
+    public function test_admin_can_edit_and_delete_an_unused_complaint_category(): void
+    {
+        $admin = Admin::create([
+            'name' => 'Category Admin',
+            'email' => 'category-edit-admin@example.com',
+            'password' => 'password123',
+        ]);
+        Sanctum::actingAs($admin);
+        $category = ComplaintCategory::create([
+            'name' => 'Old category',
+            'description' => 'Old description',
+            'enabled' => false,
+        ]);
+
+        $this->patchJson('/api/admin/complaint-categories/'.$category->id, [
+            'name' => 'Updated category',
+            'description' => 'Updated description',
+            'enabled' => true,
+        ])->assertOk()
+            ->assertJsonPath('data.name', 'Updated category')
+            ->assertJsonPath('data.description', 'Updated description')
+            ->assertJsonPath('data.enabled', true);
+
+        $this->deleteJson('/api/admin/complaint-categories/'.$category->id)
+            ->assertOk()
+            ->assertJsonPath('message', 'Complaint category deleted.');
+
+        $this->assertDatabaseMissing('complaint_categories', ['id' => $category->id]);
+    }
+
+    public function test_admin_cannot_delete_a_category_used_by_existing_complaints(): void
+    {
+        $admin = Admin::create([
+            'name' => 'Category Admin',
+            'email' => 'category-delete-admin@example.com',
+            'password' => 'password123',
+        ]);
+        $resident = Resident::factory()->create();
+        $category = ComplaintCategory::create(['name' => 'Used category']);
+        \App\Models\Complaint::create([
+            'resident_id' => $resident->id,
+            'category' => $category->name,
+            'subject' => 'Existing report',
+            'description' => 'An existing complaint record.',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->deleteJson('/api/admin/complaint-categories/'.$category->id)
+            ->assertStatus(409)
+            ->assertJsonPath('message', 'This category is used by existing complaints and cannot be deleted. Disable it to prevent new submissions instead.');
+
+        $this->assertDatabaseHas('complaint_categories', ['id' => $category->id]);
+    }
+
     public function test_staff_cannot_manage_categories_and_residents_only_receive_enabled_categories(): void
     {
         $staff = Staff::factory()->create([
