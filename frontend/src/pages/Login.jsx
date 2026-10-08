@@ -63,11 +63,7 @@ function Login() {
       if (data.user.role === "resident") {
         navigate("/resident/dashboard");
       } else if (data.user.role === "staff") {
-        navigate(
-          data.user.designation === "Complaint Management Officer"
-            ? "/staff/complaints"
-            : "/staff/dashboard",
-        );
+        navigate("/staff/dashboard");
       } else if (data.user.role === "admin") {
         navigate("/admin/dashboard");
       } else {

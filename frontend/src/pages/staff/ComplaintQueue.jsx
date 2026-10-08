@@ -1,7 +1,20 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, FileText, Search, ShieldAlert, X } from "lucide-react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  FileText,
+  Search,
+  ShieldAlert,
+  X,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
+import { COMPLAINT_CATEGORIES } from "../../constants/complaintCategories";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 
 const API_URL = "http://127.0.0.1:8000/api";
@@ -12,6 +25,14 @@ const STATUS_LABELS = {
   rejected: "Rejected",
   closed: "Closed",
 };
+const PROGRESS_STAGES = ["pending", "in_progress", "resolved", "closed"];
+const STATUS_COLORS = {
+  pending: "#D89A35",
+  in_progress: "#3976C5",
+  resolved: "#258A72",
+  rejected: "#C44F5B",
+  closed: "#7A8290",
+};
 const TRANSITIONS = {
   pending: ["in_progress", "resolved", "rejected"],
   in_progress: ["resolved", "rejected"],
@@ -20,35 +41,92 @@ const TRANSITIONS = {
   closed: [],
 };
 
-function ComplaintQueue({ isAdmin = false }) {
+function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = false, complaintId = null, analyticsOnly = false, listOnly = false }) {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [complaints, setComplaints] = useState([]);
   const [counts, setCounts] = useState({});
+  const [priorityCounts, setPriorityCounts] = useState({});
+  const [categoryCounts, setCategoryCounts] = useState([]);
   const [selected, setSelected] = useState(null);
   const [staffRemarks, setStaffRemarks] = useState("");
   const [resolutionDetails, setResolutionDetails] = useState("");
+  const [classificationPriority, setClassificationPriority] = useState("normal");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState(initialStatus);
+  const [priorityFilter, setPriorityFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [availableCategories, setAvailableCategories] = useState(COMPLAINT_CATEGORIES);
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [savingClassification, setSavingClassification] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
   const endpoint = isAdmin ? "/admin/complaints" : "/staff/complaints";
+  const statusLocked = Object.hasOwn(STATUS_LABELS, initialStatus);
+  const filterGridColumns = isAdmin
+    ? "xl:grid-cols-[minmax(0,1fr)_minmax(145px,170px)_minmax(145px,190px)_minmax(145px,170px)]"
+    : statusLocked
+      ? "xl:grid-cols-[minmax(0,1fr)_minmax(145px,190px)]"
+      : "xl:grid-cols-[minmax(0,1fr)_minmax(145px,170px)_minmax(145px,190px)]";
+
+  useEffect(() => {
+    if (!token) return undefined;
+
+    const controller = new AbortController();
+    const categoriesEndpoint = isAdmin ? "/admin/complaint-categories" : "/staff/complaint-categories";
+    fetch(`${API_URL}${categoriesEndpoint}`, {
+      headers: authHeaders(token),
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load complaint categories.");
+        return response.json();
+      })
+      .then((payload) => {
+        const categories = (payload.data || [])
+          .map((category) => typeof category === "string" ? category : category.name)
+          .filter(Boolean);
+        setAvailableCategories(categories.length ? categories : COMPLAINT_CATEGORIES);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setAvailableCategories(COMPLAINT_CATEGORIES);
+      });
+
+    return () => controller.abort();
+  }, [isAdmin, token]);
+
   const loadComplaints = useCallback(async () => {
     if (!token) return;
     try {
       const query = new URLSearchParams({ page: String(page), per_page: "25" });
       if (search.trim()) query.set("search", search.trim());
       if (statusFilter !== "all") query.set("status", statusFilter);
-      const response = await fetch(`${API_URL}${endpoint}?${query}`, { headers: authHeaders(token) });
+      if (priorityFilter !== "all") query.set("priority", priorityFilter);
+      if (categoryFilter) query.set("category", categoryFilter);
+      const url = complaintId
+        ? `${API_URL}${endpoint}/${complaintId}`
+        : `${API_URL}${endpoint}?${query}`;
+      const response = await fetch(url, { headers: authHeaders(token) });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to load complaints.");
       setError("");
+      if (complaintId) {
+        const complaint = payload.data;
+        setComplaints([complaint]);
+        setSelected(complaint);
+        setStaffRemarks(complaint.staff_remarks || "");
+        setResolutionDetails(complaint.resolution_details || "");
+        setClassificationPriority(complaint.priority || "normal");
+        return;
+      }
       setComplaints(payload.data || []);
       setCounts(payload.counts || {});
+      setPriorityCounts(payload.priority_counts || {});
+      setCategoryCounts(payload.category_counts || []);
       setPagination({
         current_page: payload.current_page || 1,
         last_page: payload.last_page || 1,
@@ -64,7 +142,7 @@ function ComplaintQueue({ isAdmin = false }) {
     } finally {
       setLoading(false);
     }
-  }, [endpoint, page, search, statusFilter, token]);
+  }, [categoryFilter, complaintId, endpoint, page, priorityFilter, search, statusFilter, token]);
 
   useEffect(() => {
     // Load the selected server page and update the queue when its filters change.
@@ -73,9 +151,17 @@ function ComplaintQueue({ isAdmin = false }) {
   }, [loadComplaints]);
 
   const selectComplaint = (complaint) => {
+    if (isAdmin && selected?.id === complaint.id) {
+      setSelected(null);
+      setStaffRemarks("");
+      setResolutionDetails("");
+      return;
+    }
+
     setSelected(complaint);
     setStaffRemarks(complaint.staff_remarks || "");
     setResolutionDetails(complaint.resolution_details || "");
+    setClassificationPriority(complaint.priority || "normal");
   };
 
   const updateComplaint = async (status) => {
@@ -104,58 +190,194 @@ function ComplaintQueue({ isAdmin = false }) {
     }
   };
 
+  const saveClassification = async () => {
+    if (!selected || !token || isAdmin || savingClassification) return;
+    setSavingClassification(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/staff/complaints/${selected.id}/classification`, {
+        method: "PATCH",
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ priority: classificationPriority }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to update complaint priority.");
+      setSelected(payload.data);
+      setNotice(payload.message || "Complaint priority updated.");
+      await loadComplaints();
+    } catch (classificationError) {
+      setError(classificationError.message);
+    } finally {
+      setSavingClassification(false);
+    }
+  };
+
   const totalComplaints = Object.values(counts).reduce((sum, count) => sum + Number(count), 0);
-  const openComplaints = Object.entries(counts)
-    .filter(([status]) => !["resolved", "rejected", "closed"].includes(status))
-    .reduce((sum, [, count]) => sum + Number(count), 0);
   const visibleStatus = useMemo(() => {
     const stats = [
-      { label: "All complaints", value: totalComplaints, icon: FileText, color: "blue" },
+      { label: "Total complaints", value: totalComplaints, icon: FileText, color: "blue" },
       { label: "Needs review", value: counts.pending || 0, icon: Clock3, color: "amber" },
       { label: "In progress", value: counts.in_progress || 0, icon: ShieldAlert, color: "blue" },
-      { label: "Open cases", value: openComplaints, icon: AlertCircle, color: "red" },
+      { label: "Urgent priority", value: priorityCounts.urgent || 0, icon: AlertCircle, color: "red" },
       { label: "Resolved", value: counts.resolved || 0, icon: CheckCircle2, color: "green" },
     ];
     return stats;
-  }, [counts, openComplaints, totalComplaints]);
+  }, [counts, priorityCounts, totalComplaints]);
+
+  const maxCategoryCount = Math.max(1, ...categoryCounts.map(({ count }) => Number(count)));
+  const priorityTotal = Object.values(priorityCounts).reduce((sum, count) => sum + Number(count), 0);
+  const categoryBarColors = ["bg-[#258A72]", "bg-[#D87C43]", "bg-[#3976C5]", "bg-[#C44F5B]", "bg-[#8A8F3A]"];
+  let statusPieProgress = 0;
+  const statusPieStops = Object.entries(STATUS_LABELS).flatMap(([status]) => {
+    const count = Number(counts[status] || 0);
+    if (!count || !totalComplaints) return [];
+    const start = statusPieProgress;
+    statusPieProgress += (count / totalComplaints) * 100;
+    return [`${STATUS_COLORS[status]} ${start}% ${statusPieProgress}%`];
+  });
 
   return (
     <div className={isAdmin ? "w-full space-y-6 pt-6" : "mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8"}>
-      {isAdmin ? (
+      {isAdmin && !listOnly ? (
         <AdminPageHeader
           eyebrow="Complaint oversight"
-          title="Complaint queue"
+          title={categoryFilter ? `${categoryFilter} overview` : "Complaint queue"}
           description="Review resident complaints, document actions, and track resolutions."
         />
       ) : (
-        <section className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#2455D6]">
-              <AlertCircle size={15} /> Complaint oversight
-            </p>
-            <h2 className="text-2xl font-bold tracking-tight text-[#132A4A] sm:text-3xl">Complaint queue</h2>
-            <p className="mt-2 text-sm text-slate-500">Review resident complaints, document actions, and track resolutions.</p>
-          </div>
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-            <p className="text-xs font-bold text-slate-800">Assigned workspace</p>
-            <p className="mt-1 text-[11px] text-emerald-600">Complaint management</p>
-          </div>
+        <>
+          {isDashboard && (
+            <section className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-[0.16em] text-[#2455D6]">
+                  <AlertCircle size={15} /> Complaint oversight
+                </p>
+                <h2 className="text-2xl font-bold tracking-tight text-[#132A4A] sm:text-3xl">
+                  {categoryFilter ? `${categoryFilter} overview` : "Complaint dashboard"}
+                </h2>
+                <p className="mt-2 text-sm text-slate-500">
+                  Review patterns, classify incoming reports, and follow case outcomes.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+                <p className="text-xs font-bold text-slate-800">
+                  Assigned workspace
+                </p>
+                <p className="mt-1 text-[11px] text-emerald-600">
+                  Complaint management
+                </p>
+              </div>
+            </section>
+          )}
+        </>
+      )}
+
+      {!listOnly && (
+        <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Complaint summary">
+          {visibleStatus.map(({ label, value, icon: Icon, color }) => (
+            <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{label}</p>
+                  <p className="mt-2 text-2xl font-bold text-[#132A4A]">{value}</p>
+                </div>
+                <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${colorClasses[color]}`}><Icon size={17} /></span>
+              </div>
+            </article>
+          ))}
         </section>
       )}
 
-      <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Complaint summary">
-        {visibleStatus.map(({ label, value, icon: Icon, color }) => (
-          <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">{label}</p>
-                <p className="mt-2 text-2xl font-bold text-[#132A4A]">{value}</p>
-              </div>
-              <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${colorClasses[color]}`}><Icon size={17} /></span>
+      {isAdmin && !listOnly && <section className="mb-7 grid gap-5 xl:grid-cols-[1.35fr_1fr]" aria-label="Complaint analytics">
+        <article className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-[#132A4A]">Complaints by category</h3>
+              <p className="mt-1 text-xs text-slate-500">Category distribution for the current view</p>
             </div>
-          </article>
-        ))}
-      </section>
+            <span className="text-xs font-semibold text-slate-500">{totalComplaints} total</span>
+          </div>
+          {categoryCounts.length === 0 ? (
+            <p className="py-7 text-center text-xs text-slate-500">No category data for this selection.</p>
+          ) : (
+            <div className="space-y-4">
+              {categoryCounts.map(({ category, count }, index) => (
+                <div key={category}>
+                  <div className="mb-1.5 flex justify-between gap-3 text-xs">
+                    <span className="truncate font-semibold text-slate-700">{category}</span>
+                    <span className="shrink-0 font-bold text-slate-600">{count}</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div
+                      className={`h-full rounded-full ${categoryBarColors[index % categoryBarColors.length]}`}
+                      style={{ width: `${(Number(count) / maxCategoryCount) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="rounded-xl border border-slate-200 bg-white p-5">
+          <div className="mb-5">
+            <h3 className="text-sm font-bold text-[#132A4A]">Priority and status summary</h3>
+            <p className="mt-1 text-xs text-slate-500">Assessment and workflow state</p>
+          </div>
+          <div className="mb-6 grid items-center gap-5 sm:grid-cols-[150px_1fr]">
+            <div
+              role="img"
+              aria-label={`Complaint status pie chart: ${Object.entries(STATUS_LABELS).map(([status, label]) => `${label} ${counts[status] || 0}`).join(", ")}`}
+              className="relative mx-auto aspect-square w-36 rounded-full"
+              style={{ background: statusPieStops.length ? `conic-gradient(from -90deg, ${statusPieStops.join(", ")})` : "#E2E8F0" }}
+            >
+              <div className="absolute inset-[28%] flex flex-col items-center justify-center rounded-full bg-white text-center">
+                <span className="text-lg font-bold text-[#132A4A]">{totalComplaints}</span>
+                <span className="text-[9px] font-semibold text-slate-500">complaints</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-[11px]">
+              {Object.entries(STATUS_LABELS).map(([status, label]) => (
+                <div key={status} className="flex min-w-0 items-center gap-1.5">
+                  <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: STATUS_COLORS[status] }} />
+                  <span className="truncate text-slate-600">{label}</span>
+                  <span className="ml-auto font-bold text-slate-700">{counts[status] || 0}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mb-6 flex h-3 overflow-hidden rounded-full bg-slate-100" aria-label={`${priorityCounts.urgent || 0} urgent and ${priorityCounts.normal || 0} normal priority complaints`}>
+            <div className="bg-[#C74444] transition-all" style={{ width: `${priorityTotal ? (Number(priorityCounts.urgent || 0) / priorityTotal) * 100 : 0}%` }} />
+            <div className="bg-[#D89A35] transition-all" style={{ width: `${priorityTotal ? (Number(priorityCounts.normal || 0) / priorityTotal) * 100 : 0}%` }} />
+          </div>
+          <div className="mb-6 grid grid-cols-2 gap-3 text-xs">
+            <div className="border-l-2 border-[#C74444] pl-3">
+              <p className="font-bold text-[#132A4A]">{priorityCounts.urgent || 0} urgent</p>
+              <p className="mt-1 text-slate-500">Priority review</p>
+            </div>
+            <div className="border-l-2 border-[#D89A35] pl-3">
+              <p className="font-bold text-[#132A4A]">{priorityCounts.normal || 0} normal</p>
+              <p className="mt-1 text-slate-500">Standard review</p>
+            </div>
+          </div>
+          <div className="space-y-3 border-t border-slate-100 pt-4">
+            {Object.entries(STATUS_LABELS).map(([status, label]) => {
+              const count = Number(counts[status] || 0);
+              const share = totalComplaints ? (count / totalComplaints) * 100 : 0;
+              return (
+                <div key={status} className="grid grid-cols-[90px_1fr_28px] items-center gap-3 text-xs">
+                  <span className="text-slate-600">{label}</span>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-[#3976C5]" style={{ width: `${share}%` }} />
+                  </div>
+                  <span className="text-right font-bold text-slate-700">{count}</span>
+                </div>
+              );
+            })}
+          </div>
+        </article>
+      </section>}
 
       {notice && (
         <div className="mb-5 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
@@ -170,23 +392,38 @@ function ComplaintQueue({ isAdmin = false }) {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div>
+      {!complaintId && !analyticsOnly && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-base font-bold text-[#132A4A]">Resident complaints</h3>
-            <p className="mt-1 text-xs text-slate-500">Search, filter, review evidence, and update case status.</p>
+            <p className="mt-1 text-xs text-slate-500">{statusLocked ? `Showing ${STATUS_LABELS[statusFilter]} complaints only. ` : ""}{categoryFilter ? `Showing ${categoryFilter} complaints. ` : ""}Search, filter, review evidence, and update case status.</p>
           </div>
           <span className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">{pagination.total} complaints</span>
         </div>
-        <div className="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-[1fr_auto]">
+        <div className={`grid gap-3 border-b border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2 ${filterGridColumns}`}>
           <label className="relative block">
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input value={search} onChange={(event) => { setLoading(true); setSearch(event.target.value); setPage(1); }} placeholder="Search case, resident, or category..." className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-medium text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" />
           </label>
-          <select value={statusFilter} onChange={(event) => { setLoading(true); setStatusFilter(event.target.value); setPage(1); }} aria-label="Filter by complaint status" className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]">
-            <option value="all">All statuses</option>
-            {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          {!statusLocked && (
+            <select value={statusFilter} onChange={(event) => { setLoading(true); setStatusFilter(event.target.value); setPage(1); }} aria-label="Filter by complaint status" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]">
+              <option value="all">All statuses</option>
+              {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          )}
+          <CategoryFilterDropdown
+            value={categoryFilter}
+            categories={availableCategories}
+            onChange={(value) => { setLoading(true); setCategoryFilter(value); setPage(1); }}
+          />
+          {isAdmin && (
+            <select value={priorityFilter} onChange={(event) => { setLoading(true); setPriorityFilter(event.target.value); setPage(1); }} aria-label="Filter by complaint priority" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]">
+              <option value="all">All priorities</option>
+              <option value="normal">Normal priority</option>
+              <option value="urgent">Urgent priority</option>
+            </select>
+          )}
         </div>
         <div className="overflow-x-auto">
           {loading ? (
@@ -215,7 +452,27 @@ function ComplaintQueue({ isAdmin = false }) {
                     <td className="px-5 py-4 text-xs text-slate-600">{complaint.category}</td>
                     <td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${complaint.priority === "urgent" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>{complaint.priority === "urgent" ? "Urgent" : "Normal"}</span></td>
                     <td className="px-5 py-4"><StatusBadge status={complaint.status} /></td>
-                    <td className="px-5 py-4 text-right"><button type="button" onClick={() => selectComplaint(complaint)} className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]">Review</button></td>
+                    <td className="px-5 py-4 text-right">
+                      {isAdmin ? (
+                        <button type="button" onClick={() => selectComplaint(complaint)} aria-expanded={selected?.id === complaint.id} className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]">{selected?.id === complaint.id ? "Close" : "Review"}</button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (isDashboard) {
+                              navigate(`/staff/complaints?status=${encodeURIComponent(complaint.status)}`);
+                            } else {
+                              navigate(`/staff/complaints/${complaint.id}`, {
+                                state: { status: complaint.status },
+                              });
+                            }
+                          }}
+                          className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]"
+                        >
+                          Review
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -229,9 +486,11 @@ function ComplaintQueue({ isAdmin = false }) {
             <button type="button" onClick={() => { setLoading(true); setPage((current) => Math.min(pagination.last_page, current + 1)); }} disabled={page >= pagination.last_page || loading} aria-label="Next page" className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 disabled:opacity-40"><ChevronRight size={16} /></button>
           </div>
         </div>
-      </section>
+      </section>}
 
-      {selected && (
+      {complaintId && loading && <p className="p-12 text-center text-sm text-slate-500">Loading complaint details...</p>}
+
+      {!analyticsOnly && selected && (isAdmin || complaintId) && (
         <section className="mt-5 grid gap-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:grid-cols-[1fr_360px]">
           <div>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -253,6 +512,55 @@ function ComplaintQueue({ isAdmin = false }) {
             </dl>
           </div>
           <div className="border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
+            {isAdmin ? (
+              <section aria-label="Complaint progress">
+                <h4 className="text-sm font-bold text-[#132A4A]">Complaint progress</h4>
+                {selected.status === "rejected" ? (
+                  <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">Rejected</p>
+                ) : (
+                  <ol className="mt-4 space-y-3">
+                    {PROGRESS_STAGES.map((status, index) => {
+                      const currentIndex = PROGRESS_STAGES.indexOf(selected.status);
+                      const complete = currentIndex >= index;
+                      const current = selected.status === status;
+                      return (
+                        <li key={status} className="flex items-center gap-3 text-sm">
+                          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${complete ? "bg-[#258A72]" : "bg-slate-200"}`} />
+                          <span className={complete ? "font-semibold text-[#172B4D]" : "text-slate-400"}>{STATUS_LABELS[status]}</span>
+                          {current && <span className="ml-auto text-[10px] font-bold uppercase text-[#2455D6]">Current</span>}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
+                <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
+                  {selected.staff_remarks && (
+                    <p className="text-xs leading-5 text-slate-600"><strong className="text-slate-700">Staff update:</strong> {selected.staff_remarks}</p>
+                  )}
+                  {selected.resolution_details && (
+                    <p className="text-xs leading-5 text-slate-600"><strong className="text-slate-700">Resolution:</strong> {selected.resolution_details}</p>
+                  )}
+                  {!selected.staff_remarks && !selected.resolution_details && (
+                    <p className="text-xs text-slate-500">No staff progress notes recorded yet.</p>
+                  )}
+                </div>
+              </section>
+            ) : (
+              <section className="mb-6 border-b border-slate-100 pb-5">
+                <h4 className="text-sm font-bold text-[#132A4A]">Priority assessment</h4>
+                <label className="mt-3 block text-xs font-semibold text-slate-600">
+                  Assessed priority
+                  <select value={classificationPriority} onChange={(event) => setClassificationPriority(event.target.value)} className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-[#2455D6]">
+                    <option value="normal">Normal</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </label>
+                <button type="button" onClick={saveClassification} disabled={savingClassification} className="mt-3 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white hover:bg-[#1948B8] disabled:opacity-50">
+                  {savingClassification ? "Saving assessment..." : "Save assessment"}
+                </button>
+              </section>
+            )}
+            {!isAdmin && <>
             <h4 className="text-sm font-bold text-[#132A4A]">Case update</h4>
             <label className="mt-4 block text-xs font-semibold text-slate-600">
               Internal staff remarks
@@ -271,8 +579,76 @@ function ComplaintQueue({ isAdmin = false }) {
             </div>
             {selected.staff_remarks && <p className="mt-4 border-t border-slate-100 pt-3 text-xs leading-5 text-slate-500"><strong className="text-slate-700">Previous remarks:</strong> {selected.staff_remarks}</p>}
             {selected.resolution_details && <p className="mt-2 text-xs leading-5 text-slate-500"><strong className="text-slate-700">Recorded outcome:</strong> {selected.resolution_details}</p>}
+            </>}
           </div>
         </section>
+      )}
+      </div>
+    </div>
+  );
+}
+
+function CategoryFilterDropdown({ value, categories, onChange }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return undefined;
+
+    const closeOnOutsideClick = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [open]);
+
+  const options = ["", ...categories];
+  const selectedLabel = value || "All categories";
+
+  return (
+    <div ref={rootRef} className="relative w-full" onKeyDown={(event) => {
+      if (event.key === "Escape") setOpen(false);
+    }}>
+      <button
+        type="button"
+        aria-label="Filter by complaint category"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={() => setOpen((current) => !current)}
+        className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-xs font-semibold text-slate-600 outline-none hover:border-[#2455D6]/50 focus:border-[#2455D6]"
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <ChevronDown size={14} className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div
+          id={menuId}
+          role="listbox"
+          aria-label="Complaint categories"
+          className="absolute left-0 top-full z-40 mt-1 max-h-[216px] w-full overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
+        >
+          {options.map((category) => {
+            const selected = value === category;
+            const label = category || "All categories";
+            return (
+              <button
+                key={category || "all"}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => {
+                  onChange(category);
+                  setOpen(false);
+                }}
+                className={`block min-h-9 w-full px-3 py-2 text-left text-xs ${selected ? "bg-blue-50 font-bold text-[#2455D6]" : "text-slate-700 hover:bg-slate-50"}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );

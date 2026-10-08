@@ -11,6 +11,7 @@ use App\Models\ResidentNotification;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 use Illuminate\Support\Facades\Schema;
 
 class StaffController extends Controller
@@ -386,14 +387,28 @@ class StaffController extends Controller
         $requirements = $documentRequest->details['requirements'] ?? [];
         $file = $requirements[$requirement] ?? null;
         abort_unless(is_array($file) && !empty($file['path']), 404);
-        abort_unless(Storage::disk('local')->exists($file['path']), 404);
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists($file['path']), 404);
 
-        return Storage::disk('local')->response(
-            $file['path'],
-            $file['original_name'] ?? basename($file['path']),
-            ['Cache-Control' => 'private, no-store'],
-            'inline',
-        );
+        $filename = $file['original_name'] ?? basename($file['path']);
+        $headers = [
+            'Cache-Control' => 'private, no-store',
+            'Content-Disposition' => (new ResponseHeaderBag)->makeDisposition(
+                ResponseHeaderBag::DISPOSITION_INLINE,
+                $filename,
+                preg_replace('/[^A-Za-z0-9_.-]/', '_', $filename),
+            ),
+        ];
+
+        $headers['Content-Type'] = mime_content_type($disk->path($file['path'])) ?: 'application/octet-stream';
+
+        return response()->stream(function () use ($disk, $file): void {
+            $stream = $disk->readStream($file['path']);
+            if (is_resource($stream)) {
+                fpassthru($stream);
+                fclose($stream);
+            }
+        }, 200, $headers);
     }
 
     public function complaints(Request $request)
@@ -402,6 +417,14 @@ class StaffController extends Controller
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
+        }
+
+        if ($request->filled('priority')) {
+            $query->where('priority', $request->input('priority'));
+        }
+
+        if ($request->filled('category')) {
+            $query->where('category', $request->input('category'));
         }
 
         if ($request->filled('search')) {
@@ -417,13 +440,54 @@ class StaffController extends Controller
             });
         }
 
-        $complaints = $query->latest()->paginate(25);
-        $counts = Complaint::query()
+        $complaints = (clone $query)
+            ->orderByRaw("CASE
+                WHEN priority = 'urgent' AND status NOT IN ('resolved', 'rejected', 'closed') THEN 0
+                WHEN status NOT IN ('resolved', 'rejected', 'closed') THEN 1
+                ELSE 2
+            END")
+            ->latest()
+            ->paginate(25);
+        $counts = (clone $query)
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
+        $priorityCounts = (clone $query)
+            ->selectRaw('priority, COUNT(*) as count')
+            ->groupBy('priority')
+            ->pluck('count', 'priority');
+        $categoryCounts = (clone $query)
+            ->selectRaw('category, COUNT(*) as count')
+            ->groupBy('category')
+            ->orderByDesc('count')
+            ->get();
 
-        return response()->json(array_merge($complaints->toArray(), ['counts' => $counts]));
+        return response()->json(array_merge($complaints->toArray(), [
+            'counts' => $counts,
+            'priority_counts' => $priorityCounts,
+            'category_counts' => $categoryCounts,
+        ]));
+    }
+
+    public function showComplaint(Complaint $complaint)
+    {
+        return response()->json([
+            'data' => $complaint->load('user'),
+        ]);
+    }
+
+    public function updateComplaintClassification(Request $request, Complaint $complaint)
+    {
+        $validated = $request->validate([
+            'priority' => ['required', 'string', 'in:normal,urgent'],
+        ]);
+
+        $complaint->update(['priority' => $validated['priority']]);
+
+        return response()->json([
+            'message' => 'Complaint priority updated.',
+            'data' => $complaint->fresh()->load('user'),
+        ]);
     }
 
     public function updateComplaintStatus(Request $request, Complaint $complaint)
@@ -470,9 +534,21 @@ class StaffController extends Controller
     public function downloadComplaintEvidence(Complaint $complaint)
     {
         $path = $complaint->evidence_path;
-        abort_unless($path && Storage::disk('local')->exists($path), 404);
+        $disk = Storage::disk('local');
+        abort_unless($path && $disk->exists($path), 404);
+        $stream = $disk->readStream($path);
+        abort_unless(is_resource($stream), 404);
+        $extension = pathinfo($path, PATHINFO_EXTENSION);
+        $filename = 'complaint-evidence-'.$complaint->id.($extension ? ".{$extension}" : '');
+        $mimeType = mime_content_type($disk->path($path)) ?: 'application/octet-stream';
 
-        return Storage::disk('local')->download($path);
+        return response()->streamDownload(function () use ($stream): void {
+            fpassthru($stream);
+            fclose($stream);
+        }, $filename, [
+            'Cache-Control' => 'private, no-store',
+            'Content-Type' => $mimeType,
+        ]);
     }
 
     public function destroyDocumentRequest(DocumentRequest $documentRequest)

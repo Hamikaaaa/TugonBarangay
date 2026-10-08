@@ -31,15 +31,25 @@ class ComplaintController extends Controller
     public function categories()
     {
         return response()->json(
-            ComplaintCategory::latest()->get()->map(function ($category) {
+            ['data' => ComplaintCategory::query()->orderBy('name')->get()->map(function ($category) {
                 return [
                     'id' => $category->id,
                     'name' => $category->name,
                     'description' => $category->description,
                     'enabled' => (bool) $category->enabled,
                 ];
-            })
+            })]
         );
+    }
+
+    public function enabledCategories()
+    {
+        return response()->json([
+            'data' => ComplaintCategory::query()
+                ->where('enabled', true)
+                ->orderBy('name')
+                ->pluck('name'),
+        ]);
     }
 
     public function statuses()
@@ -58,8 +68,8 @@ class ComplaintController extends Controller
     public function storeCategory(Request $request)
     {
         $data = $request->validate([
-            'name' => ['required', 'string'],
-            'description' => ['nullable', 'string'],
+            'name' => ['required', 'string', 'max:255', 'unique:complaint_categories,name'],
+            'description' => ['nullable', 'string', 'max:1000'],
             'enabled' => ['nullable', 'boolean'],
         ]);
 
@@ -72,13 +82,18 @@ class ComplaintController extends Controller
         return response()->json([
             'message' => 'Complaint category created.',
             'data' => $category,
-        ]);
+        ], 201);
     }
 
     public function updateCategory(Request $request, $id)
     {
         $category = ComplaintCategory::findOrFail($id);
-        $category->update($request->only(['name', 'description', 'enabled']));
+        $validated = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:255', 'unique:complaint_categories,name,'.$category->id],
+            'description' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'enabled' => ['sometimes', 'boolean'],
+        ]);
+        $category->update($validated);
 
         return response()->json([
             'message' => 'Complaint category updated.',
