@@ -19,6 +19,18 @@ use Illuminate\Validation\Rule;
 
 class ResidentController extends Controller
 {
+    private const MANUAL_URGENT_KEYWORDS = [
+        'hostage',
+        'kidnapping',
+        'kidnapped',
+        'attempted murder',
+        'suicide attempt',
+        'child abuse',
+        'explosive device',
+        'held against their will',
+
+    ];
+
     private const DOCUMENT_FEES = [
         'Barangay Certification' => 80,
         'Barangay Residency' => 130,
@@ -508,41 +520,61 @@ class ResidentController extends Controller
 
     private function assessComplaintPriority(array $complaint): string
     {
-        $report = strtolower(implode(' ', [
+        $report = mb_strtolower(implode(' ', [
             $complaint['category'] ?? '',
             $complaint['subject'] ?? '',
             $complaint['description'] ?? '',
             $complaint['relevant_information'] ?? '',
         ]));
+        $report = preg_replace('/\s+/u', ' ', $report) ?: $report;
 
-        foreach (
-            [
-                'happening now',
-                'still happening',
-                'currently happening',
-                'ongoing disturbance',
-                'serious disturbance',
-                'ongoing conflict',
-                'escalating neighbor conflict',
-                'escalating',
-                'immediate danger',
-                'immediate attention',
-                'physical assault',
-                'ongoing fight',
-                'person injured',
-                'being threatened',
-                'threatened me',
-                'weapon',
-                'violent',
-                'violence',
-            ] as $urgentSignal
-        ) {
-            if (str_contains($report, $urgentSignal)) {
-                return 'urgent';
+        foreach (self::MANUAL_URGENT_KEYWORDS as $keyword) {
+            $keyword = mb_strtolower(trim($keyword));
+            $pattern = '/(?<![\pL\pN_])'.preg_quote($keyword, '/').'(?![\pL\pN_])/u';
+            preg_match_all($pattern, $report, $matches, PREG_OFFSET_CAPTURE);
+
+            foreach ($matches[0] as [$indicator, $offset]) {
+                if (!$this->priorityIndicatorIsNegated($report, $offset)) {
+                    return 'urgent';
+                }
+            }
+        }
+
+        $urgentPatterns = [
+            '/\b(?:violence|violent|fight(?:s|ing)?|fought|brawl(?:s|ed|ing)?|assault(?:s|ed|ing)?|attack(?:s|ed|ing)?|punch(?:es|ed|ing)?|hit(?:s|ting)?|struck|beat(?:s|en|ing)?|kick(?:s|ed|ing)?|slap(?:s|ped|ping)?|stab(?:s|bed|bing)?|chok(?:e|es|ed|ing)|strangl(?:e|es|ed|ing)|push(?:es|ed|ing)|shov(?:e|s|ed|ing)|bit(?:e|es|ten|ing)?|maul(?:s|ed|ing)?|lunged|aggressive|physical\s+(?:altercation|fight|assault|attack))\b/u',
+            '/\b(?:injur(?:y|ies|ed)|wound(?:s|ed)?|bleed(?:s|ing)?|blood|unconscious|hospitali[sz](?:e|ed|ation)|fractur(?:e|ed)|broken\s+bones?|(?:someone|somebody|one|person|resident|neighbor|child|adult|i|we|they|he|she)\s+(?:is|was|has been|got|being)\s+hurt|(?:was|is|got|been|being)\s+hurt)\b/u',
+            '/\b(?:threat(?:s|en(?:ed|ing|s)?)?|threaten(?:ed|ing|s)?\s+(?:to\s+)?(?:hurt|harm|kill|attack|shoot|stab)|said|warned|texted)\b.{0,45}\b(?:hurt|harm|kill|attack|shoot|stab)\b/u',
+            '/\b(?:weapon|gun|firearm|pistol|rifle|knife|knives|blade|machete)\b/u',
+            '/\b(?:immediate(?:ly)?\s+(?:danger|dangerous|risk|threat)|currently\s+(?:in\s+danger|unsafe|at\s+risk)|someone\s+(?:is|may be)\s+in\s+danger|life[- ]threatening|dangerous|unsafe|not\s+safe|no\s+longer\s+safe|at\s+risk\s+of\s+(?:harm|injury|attack))\b/u',
+            '/\b(?:(?:serious|severe|ongoing|escalating|out of control|still happening|currently happening|happening now)\s+(?:noise|disturbance|disruption|conflict|argument|fight|fighting)|(?:noise|disturbance|conflict|argument|fight|fighting)\s+(?:is\s+)?(?:ongoing|escalating|getting worse|out of control)|ongoing\s+conflict)\b/u',
+            '/\b(?:forced\s+entry|break[- ]?in|broke\s+(?:into|in)|breaking\s+in|burglary|armed\s+robbery|robbery|arson|human trafficking|drug trafficking|property\s+damage|serious\s+damage|severe\s+damage|(?:property|home|house|building|vehicle)\s+(?:was\s+)?(?:damaged|smashed|destroyed|burned|set on fire)|(?:smashed|destroyed|broke|burned|set fire to)\b.{0,35}\b(?:window|door|car|vehicle|home|house|property|building))\b/u',
+            '/\b(?:gas\s+leak|chemical\s+(?:spill|leak)|toxic\s+(?:spill|smoke|fumes)|exposed\s+(?:live\s+)?wires?|live\s+wires?|downed\s+(?:power\s+)?lines?|building\s+collapse|landslide|sinkhole|major\s+flood(?:ing)?|road\s+(?:has\s+)?collapsed|bridge\s+(?:has\s+)?collapsed|dangerous\s+(?:road|traffic|public)\s+condition)\b/u',
+        ];
+
+        foreach ($urgentPatterns as $pattern) {
+            preg_match_all($pattern, $report, $matches, PREG_OFFSET_CAPTURE);
+
+            foreach ($matches[0] as [$indicator, $offset]) {
+                if (!$this->priorityIndicatorIsNegated($report, $offset)) {
+                    return 'urgent';
+                }
             }
         }
 
         return 'normal';
+    }
+
+    private function priorityIndicatorIsNegated(string $report, int $offset): bool
+    {
+        $contextStart = max(0, $offset - 100);
+        $context = substr($report, $contextStart, $offset - $contextStart);
+        $clauses = preg_split('/[.!?;]|\bbut\b|\bhowever\b/i', $context);
+        $clause = trim(end($clauses) ?: '');
+
+        return preg_match(
+            '/\b(?:no|not|never|without|neither|none|isn\'t|aren\'t|wasn\'t|weren\'t|didn\'t|doesn\'t|hasn\'t|haven\'t|can\'t|cannot)\b(?:[\s,]+[\w\'-]+){0,4}\s*$/i',
+            $clause,
+        ) === 1;
     }
 
     public function downloadComplaintEvidence(Request $request, Complaint $complaint)
@@ -553,10 +585,21 @@ class ResidentController extends Controller
             404,
         );
 
-        $extension = pathinfo($complaint->evidence_path, PATHINFO_EXTENSION);
+        $disk = Storage::disk('local');
+        $path = $complaint->evidence_path;
+        $stream = $disk->readStream($path);
+        abort_unless(is_resource($stream), 404);
+        $extension = pathinfo($path, PATHINFO_EXTENSION);
         $filename = 'complaint-evidence-' . $complaint->id . ($extension ? ".{$extension}" : '');
+        $mimeType = mime_content_type($disk->path($path)) ?: 'application/octet-stream';
 
-        return Storage::disk('local')->download($complaint->evidence_path, $filename);
+        return response()->streamDownload(function () use ($stream): void {
+            fpassthru($stream);
+            fclose($stream);
+        }, $filename, [
+            'Cache-Control' => 'private, no-store',
+            'Content-Type' => $mimeType,
+        ]);
     }
 
     public function notifications(Request $request)

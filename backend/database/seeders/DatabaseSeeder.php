@@ -4,6 +4,8 @@ namespace Database\Seeders;
 
 use App\Models\Admin;
 use App\Models\Staff;
+use App\Models\Resident;
+use Database\Seeders\ComplaintCategorySeeder;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -36,6 +38,18 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
+        Resident::updateOrCreate(
+    ['email' => 'resident@tugonbarangay.test'],
+    [
+        'name' => 'resident',
+        'password' => 'password123',
+        'verification_status' => 'verified',
+    ]
+);
+
+
+
+    $this->call(ComplaintCategorySeeder::class);
         $this->call(ChatbotFaqSeeder::class);
     }
 }

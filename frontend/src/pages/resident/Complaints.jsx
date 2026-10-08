@@ -19,20 +19,7 @@ import {
   residentApi,
 } from "../../services/residentApi";
 import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
-
-const CATEGORIES = [
-  "Noise and Disturbance",
-  "Neighbor Dispute",
-  "Property Disputes",
-  "Public Nuisance",
-  "Environmental Concern",
-  "Animal Related Concern",
-  "Peace and Order",
-  "Road and Public",
-  "Facility Concern",
-  "Illegal or Unauthorized Activity",
-  "Other Barangay Concern",
-];
+import { COMPLAINT_CATEGORIES } from "../../constants/complaintCategories";
 
 const EMPTY_FORM = {
   category: "",
@@ -242,6 +229,7 @@ function ComplaintRow({ complaint, token }) {
 
 function Complaints({ token, complaints = [], onRefresh, verified }) {
   const [form, setForm] = useState(EMPTY_FORM);
+  const [complaintCategories, setComplaintCategories] = useState(COMPLAINT_CATEGORIES);
   const [evidence, setEvidence] = useState(null);
   const [message, setMessage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -257,6 +245,22 @@ function Complaints({ token, complaints = [], onRefresh, verified }) {
   const [historyError, setHistoryError] = useState("");
   const [reloadHistory, setReloadHistory] = useState(0);
   const fileInput = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+
+    residentApi("/resident/complaint-categories", token)
+      .then((result) => {
+        if (active) setComplaintCategories(result.data || []);
+      })
+      .catch(() => {
+        if (active) setComplaintCategories(COMPLAINT_CATEGORIES);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   useEffect(() => {
     let active = true;
@@ -448,7 +452,7 @@ function Complaints({ token, complaints = [], onRefresh, verified }) {
                 className={inputClass}
               >
                 <option value="">Select a category</option>
-                {CATEGORIES.map((category) => (
+                {complaintCategories.map((category) => (
                   <option key={category}>{category}</option>
                 ))}
               </select>

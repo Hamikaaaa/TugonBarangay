@@ -1,12 +1,13 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import ComplaintManagement from "./ComplaintManagement";
 import StaffDashboardProfessional from "./StaffDashboardProfessional";
 
 function StaffHome() {
   const { user } = useAuth();
 
   if (user?.designation === "Complaint Management Officer") {
-    return <Navigate to="/staff/complaints" replace />;
+    return <ComplaintManagement />;
   }
 
   if (user?.designation !== "Document Request Officer") {

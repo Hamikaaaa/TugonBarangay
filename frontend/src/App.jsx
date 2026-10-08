@@ -8,11 +8,13 @@ import { AuthProvider } from "./context/AuthContext";
 import StaffHome from "./pages/staff/StaffHome";
 import { StaffDocumentTypePage } from "./pages/staff/StaffDashboardProfessional";
 import ComplaintManagement from "./pages/staff/ComplaintManagement";
+import ComplaintReview from "./pages/staff/ComplaintReview";
 import AdminDashboard from "./pages/AdminDashboard";
 import Residents from "./pages/admin/Residents";
 import DocumentTypes from "./pages/admin/DocumentTypes";
 import DocumentRequestHistory from "./pages/admin/DocumentRequestHistory";
 import Complaints from "./pages/admin/Complaints";
+import AddComplaintCategory from "./pages/admin/AddComplaintCategory.jsx";
 import Chatbot from "./pages/admin/Chatbot";
 import Feedback from "./pages/admin/Feedback";
 import Reports from "./pages/admin/Reports";
@@ -61,6 +63,15 @@ function App() {
           />
 
           <Route
+            path="/staff/complaints/:complaintId"
+            element={
+              <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Complaint Management Officer"]}>
+                <ComplaintReview />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
             path="/staff/complaints"
             element={
               <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Complaint Management Officer"]}>
@@ -101,6 +112,15 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <DocumentTypes />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/admin/complaints/categories/new"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AddComplaintCategory />
               </ProtectedRoute>
             }
           />

@@ -19,6 +19,7 @@ Route::post('/logout', [AuthController::class, 'logout'])
 
 Route::middleware(['auth:sanctum', 'role:resident'])->prefix('resident')->group(function () {
     Route::get('/dashboard', [ResidentController::class, 'dashboard']);
+    Route::get('/complaint-categories', [\App\Http\Controllers\ComplaintController::class, 'enabledCategories']);
     Route::get('/document-types', [DocumentTypeController::class, 'residentIndex']);
     Route::get('/requests', [ResidentController::class, 'requests']);
     Route::post('/requests', [ResidentController::class, 'storeRequest'])
@@ -55,6 +56,9 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/pending-residents', [AdminController::class, 'pendingResidents']);
     Route::patch('/residents/{user}/verify', [AdminController::class, 'verifyResident']);
     Route::patch('/residents/{user}/reject', [AdminController::class, 'rejectResident']);
+    Route::get('/complaint-categories', [\App\Http\Controllers\ComplaintController::class, 'categories']);
+    Route::post('/complaint-categories', [\App\Http\Controllers\ComplaintController::class, 'storeCategory']);
+    Route::patch('/complaint-categories/{id}', [\App\Http\Controllers\ComplaintController::class, 'updateCategory']);
     Route::get('/complaints', [\App\Http\Controllers\StaffController::class, 'complaints']);
     Route::patch('/complaints/{complaint}/status', [\App\Http\Controllers\StaffController::class, 'updateComplaintStatus']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);
@@ -72,7 +76,10 @@ Route::middleware(['auth:sanctum', 'role:staff', 'designation:Document Request O
 });
 
 Route::middleware(['auth:sanctum', 'role:staff', 'designation:Complaint Management Officer'])->prefix('staff')->group(function () {
+    Route::get('/complaint-categories', [\App\Http\Controllers\ComplaintController::class, 'enabledCategories']);
     Route::get('/complaints', [\App\Http\Controllers\StaffController::class, 'complaints']);
+    Route::get('/complaints/{complaint}', [\App\Http\Controllers\StaffController::class, 'showComplaint']);
+    Route::patch('/complaints/{complaint}/classification', [\App\Http\Controllers\StaffController::class, 'updateComplaintClassification']);
     Route::patch('/complaints/{complaint}/status', [\App\Http\Controllers\StaffController::class, 'updateComplaintStatus']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);
 });

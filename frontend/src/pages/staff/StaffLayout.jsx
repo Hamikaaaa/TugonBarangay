@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { CalendarDays, LayoutDashboard, Menu, MessageSquareWarning, FileText, X } from "lucide-react";
+import { Archive, CalendarDays, CheckCircle2, ChevronDown, Clock3, FileText, LayoutDashboard, LoaderCircle, Menu, MessageSquareWarning, X, XCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
-function StaffLayout({ title, navigationItems, activePath, onNavigate, children }) {
+function StaffLayout({ title, navigationItems, activePath, onNavigate, selectedNavigationChild, onNavigationChildSelect, children }) {
   const { user, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [expandedNavigation, setExpandedNavigation] = useState(null);
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
 
   useEffect(() => {
@@ -42,24 +43,71 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, children 
           <div className="space-y-1">
             {navigationItems.map((item) => {
               const active = activePath === item.path;
-              const Icon = item.value ? FileText : item.label === "Complaints" ? MessageSquareWarning : LayoutDashboard;
+              const hasChildren = Boolean(item.children?.length);
+              const expanded = expandedNavigation === item.path;
+              const Icon = item.value
+                ? FileText
+                : item.label === "Pending"
+                  ? Clock3
+                  : item.label === "In Progress"
+                    ? LoaderCircle
+                    : item.label === "Resolved"
+                      ? CheckCircle2
+                      : item.label === "Rejected"
+                        ? XCircle
+                        : item.label === "Closed"
+                          ? Archive
+                    : item.label === "Complaints"
+                      ? MessageSquareWarning
+                      : LayoutDashboard;
               return (
-                <button
-                  key={item.path}
-                  type="button"
-                  onClick={() => {
-                    onNavigate(item.path);
-                    setSidebarOpen(false);
-                  }}
-                  aria-current={active ? "page" : undefined}
-                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${active ? "bg-white text-[#123F70] shadow-lg" : "text-white/85 hover:bg-white/10"}`}
-                >
-                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-[#EAF1FF] text-[#2455D6]" : "bg-white/10 text-white/85"}`}>
-                    <Icon size={15} />
-                  </span>
-                  <span className="truncate">{item.label}</span>
-                  {active && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#FF6B6B]" />}
-                </button>
+                <div key={item.path}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (hasChildren) {
+                        setExpandedNavigation(expanded ? null : item.path);
+                        return;
+                      }
+                      onNavigate(item.path);
+                      setSidebarOpen(false);
+                    }}
+                    aria-current={active ? "page" : undefined}
+                    aria-expanded={hasChildren ? expanded : undefined}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold transition ${active ? "bg-white text-[#123F70] shadow-lg" : "text-white/85 hover:bg-white/10"}`}
+                  >
+                    <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-[#EAF1FF] text-[#2455D6]" : "bg-white/10 text-white/85"}`}>
+                      <Icon size={15} />
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                    {hasChildren ? (
+                      <ChevronDown size={15} className={`ml-auto transition-transform ${expanded ? "rotate-180" : ""}`} />
+                    ) : active ? (
+                      <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#FF6B6B]" />
+                    ) : null}
+                  </button>
+                  {hasChildren && expanded && (
+                    <div className="ml-7 border-l border-white/20 py-1 pl-5" role="group" aria-label="Complaint categories">
+                      {item.children.map((category) => {
+                        const selected = selectedNavigationChild === category;
+                        return (
+                          <button
+                            key={category}
+                            type="button"
+                            onClick={() => {
+                              onNavigationChildSelect?.(category);
+                              setSidebarOpen(false);
+                            }}
+                            aria-pressed={selected}
+                            className={`block w-full py-2 text-left text-xs font-medium leading-4 transition ${selected ? "text-white" : "text-white/75 hover:text-white"}`}
+                          >
+                            {category}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

@@ -37,7 +37,7 @@ class ResidentComplaintTest extends TestCase
 
         $complaint = Complaint::firstOrFail();
         $this->assertNotNull($complaint->evidence_path);
-        Storage::disk('local')->assertExists($complaint->evidence_path);
+        $this->assertTrue(Storage::disk('local')->exists($complaint->evidence_path));
         $this->get("/api/resident/complaints/{$complaint->id}/evidence")
             ->assertOk();
     }
@@ -88,6 +88,101 @@ class ResidentComplaintTest extends TestCase
         ])->assertCreated()
             ->assertJsonPath('complaint.priority', 'urgent')
             ->assertJsonPath('complaint.status', 'pending');
+    }
+
+    public function test_priority_is_based_on_reported_severity_across_categories(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        Sanctum::actingAs($resident);
+
+        $reports = [
+            [
+                'category' => 'Noise and Disturbance',
+                'subject' => 'Loud music after hours',
+                'description' => 'The music is loud, but there are no threats or violence.',
+                'priority' => 'normal',
+            ],
+            [
+                'category' => 'Neighbor Dispute',
+                'subject' => 'Verbal argument',
+                'description' => 'We argued verbally; no one was hurt and there was no physical contact or threat.',
+                'priority' => 'normal',
+            ],
+            [
+                'category' => 'Noise and Disturbance',
+                'subject' => 'People are fighting next door',
+                'description' => 'One neighbor punched another person during the fight.',
+                'priority' => 'urgent',
+            ],
+            [
+                'category' => 'Property Disputes',
+                'subject' => 'Boundary disagreement',
+                'description' => 'We disagree about the fence location; there is no damage or violence.',
+                'priority' => 'normal',
+            ],
+            [
+                'category' => 'Property Disputes',
+                'subject' => 'Damage to my home',
+                'description' => 'Someone broke into my house and smashed the front door.',
+                'priority' => 'urgent',
+            ],
+            [
+                'category' => 'Animal Related Concern',
+                'subject' => 'Stray dog near the road',
+                'description' => 'The dog is calm, has not attacked anyone, and no one was injured.',
+                'priority' => 'normal',
+            ],
+            [
+                'category' => 'Animal Related Concern',
+                'subject' => 'Dog attacked a child',
+                'description' => 'The dog lunged at my child and bit her.',
+                'priority' => 'urgent',
+            ],
+            [
+                'category' => 'Other Barangay Concern',
+                'subject' => 'Possible immediate danger',
+                'description' => 'A neighbor said he would hurt me and showed a knife.',
+                'priority' => 'urgent',
+            ],
+            [
+                'category' => 'Environmental Concern',
+                'subject' => 'Gas smell in the hallway',
+                'description' => 'There is a gas leak while residents are inside the building.',
+                'priority' => 'urgent',
+            ],
+        ];
+
+        foreach ($reports as $report) {
+            $this->postJson('/api/resident/complaints', [
+                'category' => $report['category'],
+                'subject' => $report['subject'],
+                'description' => $report['description'],
+            ])->assertCreated()
+                ->assertJsonPath('complaint.category', $report['category'])
+                ->assertJsonPath('complaint.priority', $report['priority']);
+        }
+    }
+
+    public function test_manually_configured_urgent_keywords_flag_submitted_complaints(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        Sanctum::actingAs($resident);
+
+        $this->postJson('/api/resident/complaints', [
+            'category' => 'Noise and Disturbance',
+            'subject' => 'Noise complaint',
+            'description' => 'A resident is being held against their will.',
+        ])->assertCreated()
+            ->assertJsonPath('complaint.category', 'Noise and Disturbance')
+            ->assertJsonPath('complaint.priority', 'urgent');
+
+        $this->postJson('/api/resident/complaints', [
+            'category' => 'Noise and Disturbance',
+            'subject' => 'Verbal disagreement',
+            'description' => 'There is no hostage situation or kidnapping; this was only a verbal disagreement.',
+        ])->assertCreated()
+            ->assertJsonPath('complaint.category', 'Noise and Disturbance')
+            ->assertJsonPath('complaint.priority', 'normal');
     }
 
     public function test_resident_complaint_history_includes_priority_and_staff_updates(): void
