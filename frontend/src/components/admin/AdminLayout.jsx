@@ -36,7 +36,7 @@ const navigation = [
     path: "/admin/document-requests",
     icon: ClipboardList,
     children: [
-      { label: "Request History", path: "/admin/document-requests" },
+      { label: "Document Requests", path: "/admin/document-requests" },
       { label: "Document Types", path: "/admin/document-types" },
     ],
   },

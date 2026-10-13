@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Model;
 
 class DocumentType extends Model
 {
+    protected $hidden = [
+        'uploaded_template_path',
+    ];
+
     protected $fillable = [
         'name',
         'enabled',
@@ -19,6 +23,9 @@ class DocumentType extends Model
         'fields',
         'requirements',
         'template',
+        'uploaded_template_path',
+        'uploaded_template_name',
+        'template_enabled',
     ];
 
     protected function casts(): array
@@ -30,6 +37,7 @@ class DocumentType extends Model
             'applicant_fields' => 'array',
             'fields' => 'array',
             'requirements' => 'array',
+            'template_enabled' => 'boolean',
         ];
     }
 }

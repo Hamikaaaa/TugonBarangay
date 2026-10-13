@@ -123,6 +123,11 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'id' => $this->request->id,
             'status' => 'processing',
         ]);
+        $this->assertDatabaseHas('notifications', [
+            'resident_id' => $this->resident->id,
+            'type' => 'document_request_staff_remarks',
+            'title' => 'Barangay staff has left a note',
+        ]);
         $this->assertNotNull($this->request->fresh()->document_generated_at);
 
         $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [

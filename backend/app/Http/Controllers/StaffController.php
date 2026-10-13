@@ -204,6 +204,9 @@ class StaffController extends Controller
         }
 
         $documentRequest->save();
+        if (filled($validated['staff_remarks'] ?? null)) {
+            $this->notifyResidentOfStaffRemarks($documentRequest, $validated['staff_remarks']);
+        }
         DocumentRequestEvent::record(
             $documentRequest,
             $request->user(),
@@ -215,6 +218,21 @@ class StaffController extends Controller
         return response()->json([
             'message' => 'Document preview generated successfully.',
             'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']),
+        ]);
+    }
+
+    private function notifyResidentOfStaffRemarks(DocumentRequest $documentRequest, ?string $staffRemarks): void
+    {
+        if (blank($staffRemarks)) {
+            return;
+        }
+
+        $documentLabel = $documentRequest->document_type_label ?? $documentRequest->document_type;
+        ResidentNotification::create([
+            'resident_id' => $documentRequest->resident_id,
+            'type' => 'document_request_staff_remarks',
+            'title' => 'Barangay staff has left a note',
+            'message' => "For your {$documentLabel} request, barangay staff left this note:\n\n{$staffRemarks}",
         ]);
     }
 

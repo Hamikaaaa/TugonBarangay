@@ -24,7 +24,7 @@ const TEMPLATE_TYPES = {
   "First-Time Job Seeker Certification": "jobseeker",
 };
 
-function DocumentPreviewModal({ request, onClose, onSave }) {
+function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
   const [editing, setEditing] = useState(false);
   const [fields, setFields] = useState(request?.document_content || request?.details?.form_fields || {});
   const [saving, setSaving] = useState(false);
@@ -82,18 +82,20 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
             <h2 className="mt-1 text-lg font-bold text-[#172B4D]">{label}</h2>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setError("");
-                setFields(request.document_content || request.details?.form_fields || {});
-                setEditing((current) => !current);
-              }}
-              disabled={saving || request.status !== "processing"}
-              className="inline-flex items-center justify-center rounded-xl border border-[#E6ECF5] px-4 py-2.5 text-sm font-bold text-[#55708F] transition hover:bg-[#F6F8FC] hover:text-[#172B4D] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
-            >
-              {editing ? "Cancel edit" : "Edit"}
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setFields(request.document_content || request.details?.form_fields || {});
+                  setEditing((current) => !current);
+                }}
+                disabled={saving || request.status !== "processing"}
+                className="inline-flex items-center justify-center rounded-xl border border-[#E6ECF5] px-4 py-2.5 text-sm font-bold text-[#55708F] transition hover:bg-[#F6F8FC] hover:text-[#172B4D] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
+              >
+                {editing ? "Cancel edit" : "Edit"}
+              </button>
+            )}
             {editing && (
               <button
                 type="button"
@@ -142,9 +144,6 @@ function DocumentPreviewModal({ request, onClose, onSave }) {
             onFieldChange={(fieldName, value) => setFields((current) => ({
               ...current,
               [fieldName]: value,
-              ...(fieldName === "date_of_birth"
-                ? { age: calculateAge(value) }
-                : {}),
             }))}
           />
         </div>
@@ -189,7 +188,7 @@ function DocumentPaper({ request, templateType, label, residentName, formattedDa
       </header>
 
       <div className="flex-1 py-5">
-        {request.type?.template ? (
+        {request.type?.template && request.type?.template_enabled !== false ? (
           <p className="whitespace-pre-wrap text-[11px] leading-6 text-slate-700">
             {renderDocumentTemplate(request.type.template, fields, request, residentName, label, formattedDate)}
           </p>
@@ -263,22 +262,6 @@ function DetailLine({ label, value, fieldName, editing, onFieldChange }) {
   );
 }
 
-function calculateAge(dateOfBirth) {
-  if (!dateOfBirth) return "";
-  const birthDate = new Date(`${dateOfBirth.slice(0, 10)}T00:00:00`);
-  if (Number.isNaN(birthDate.getTime())) return "";
-  const today = new Date();
-  let age = today.getFullYear() - birthDate.getFullYear();
-  if (
-    today.getMonth() < birthDate.getMonth() ||
-    (today.getMonth() === birthDate.getMonth() &&
-      today.getDate() < birthDate.getDate())
-  ) {
-    age -= 1;
-  }
-  return age >= 0 ? String(age) : "";
-}
-
 function BarangayTemplate({ residentName, fields, editing, onFieldChange }) {
   return (
     <>
@@ -301,11 +284,8 @@ function BarangayTemplate({ residentName, fields, editing, onFieldChange }) {
       <Section title="Resident information">
         <DetailLine label="Address" value={fields.address} fieldName="address" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Purok" value={fields.purok} fieldName="purok" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Age" value={fields.age} fieldName="age" editing={false} onFieldChange={onFieldChange} />
         <DetailLine label="Date of birth" value={fields.date_of_birth} fieldName="date_of_birth" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Sex" value={fields.sex} fieldName="sex" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Civil status" value={fields.civil_status} fieldName="civil_status" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Citizenship" value={fields.citizenship} fieldName="citizenship" editing={editing} onFieldChange={onFieldChange} />
       </Section>
       <p className="mt-1 text-[9px] leading-4 text-slate-500">The certificate is valid for the purpose stated above and is subject to barangay policy. It is not a substitute for any other official document.</p>
     </>
@@ -331,10 +311,8 @@ function ResidencyTemplate({ residentName, fields, editing, onFieldChange }) {
       <Section title="Residency details">
         <DetailLine label="Address" value={fields.address} fieldName="address" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Purok" value={fields.purok} fieldName="purok" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Age" value={fields.age} fieldName="age" editing={false} onFieldChange={onFieldChange} />
         <DetailLine label="Date of birth" value={fields.date_of_birth} fieldName="date_of_birth" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Sex" value={fields.sex} fieldName="sex" editing={editing} onFieldChange={onFieldChange} />
-        <DetailLine label="Civil status" value={fields.civil_status} fieldName="civil_status" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Length of residency (years)" value={fields.years_of_residency} fieldName="years_of_residency" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Additional months of residency" value={fields.months_of_residency} fieldName="months_of_residency" editing={editing} onFieldChange={onFieldChange} />
         <DetailLine label="Purpose" value={fields.purpose} fieldName="purpose" editing={editing} onFieldChange={onFieldChange} />

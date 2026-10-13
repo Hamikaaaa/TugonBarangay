@@ -25,10 +25,7 @@ return new class extends Migration
             ['key' => 'full_name', 'label' => 'Full Name', 'type' => 'text', 'required' => true, 'section' => 'applicant'],
             ['key' => 'address', 'label' => 'House/Building No., Street, and Subdivision', 'type' => 'text', 'required' => false, 'section' => 'applicant'],
             ['key' => 'date_of_birth', 'label' => 'Date of Birth', 'type' => 'date', 'required' => true, 'section' => 'applicant'],
-            ['key' => 'age', 'label' => 'Age', 'type' => 'number', 'required' => true, 'readOnly' => true, 'section' => 'applicant'],
             ['key' => 'sex', 'label' => 'Sex', 'type' => 'select', 'required' => true, 'options' => ['Female', 'Male', 'Other'], 'section' => 'applicant'],
-            ['key' => 'citizenship', 'label' => 'Citizenship', 'type' => 'text', 'required' => true, 'section' => 'applicant'],
-            ['key' => 'civil_status', 'label' => 'Civil Status', 'type' => 'select', 'required' => true, 'options' => ['Single', 'Married', 'Widowed', 'Separated', 'Other'], 'section' => 'applicant'],
             ['key' => 'purok', 'label' => 'Purok', 'type' => 'text', 'required' => true, 'section' => 'applicant'],
         ];
         $purposeOptions = ['Employment', 'School enrollment or scholarship', 'Business or business permit', 'Travel', 'Bank or loan application', 'Other'];

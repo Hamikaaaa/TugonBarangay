@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Search, X } from "lucide-react";
+import { Eye, Search, X } from "lucide-react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
 import { useAuth } from "../../context/AuthContext";
+import DocumentPreviewModal from "../staff/DocumentPreviewModal";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const STATUSES = [
@@ -300,54 +301,86 @@ function DocumentRequestHistory() {
 }
 
 function RequestHistoryModal({ request, onClose }) {
+  const [documentOpen, setDocumentOpen] = useState(false);
   const fields = request.details?.form_fields || {};
+  const hasGeneratedDocument = request.document_content && Object.keys(request.document_content).length > 0;
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={`Request ${request.id} history`} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-start justify-between border-b border-slate-200 p-5">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-[#2455D6]">Read-only request history</p>
-            <h3 className="mt-1 text-xl font-bold text-[#172B4D]">#{request.id} · {request.document_type_label || request.document_type}</h3>
-            <p className="mt-1 text-sm text-slate-500">{request.resident?.name} · {request.status}</p>
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={`Request ${request.id} history`} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+        <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="flex items-start justify-between border-b border-slate-200 p-5">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-[#2455D6]">Read-only request history</p>
+              <h3 className="mt-1 text-xl font-bold text-[#172B4D]">#{request.id} · {request.document_type_label || request.document_type}</h3>
+              <p className="mt-1 text-sm text-slate-500">{request.resident?.name} · {labelStatus(request.status)}</p>
+            </div>
+            <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close request history"><X size={20} /></button>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close request history"><X size={20} /></button>
-        </div>
-        <div className="overflow-y-auto p-5">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Info label="Assigned handler" value={request.assigned_staff?.name || "Not assigned yet"} />
-            <Info label="Fee" value={`₱${Number(request.fee || 0).toFixed(2)}`} />
-            <Info label="Submitted" value={formatDateTime(request.created_at)} />
-            <Info label="Status last changed" value={formatDateTime(request.status_changed_at || request.updated_at)} />
-            {request.rejection_reason && <Info label="Rejection reason" value={request.rejection_reason} />}
-            {request.staff_remarks && <Info label="Staff remarks" value={request.staff_remarks} />}
-          </div>
+          <div className="overflow-y-auto p-5">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Info label="Assigned handler" value={request.assigned_staff?.name || "Not assigned yet"} />
+              <Info label="Fee" value={`₱${Number(request.fee || 0).toFixed(2)}`} />
+              <Info label="Submitted" value={formatDateTime(request.created_at)} />
+              <Info label="Status last changed" value={formatDateTime(request.status_changed_at || request.updated_at)} />
+              {request.rejection_reason && <Info label="Rejection reason" value={request.rejection_reason} />}
+              {request.staff_remarks && <Info label="Staff remarks" value={request.staff_remarks} />}
+            </div>
 
-          <h4 className="mt-7 font-bold text-[#172B4D]">Submitted information</h4>
-          {Object.keys(fields).length ? (
-            <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-              {Object.entries(fields).map(([key, value]) => (
-                <Info key={key} label={key.replaceAll("_", " ")} value={value} />
-              ))}
-            </dl>
-          ) : <p className="mt-2 text-sm text-slate-500">No form details recorded.</p>}
-
-          <h4 className="mt-7 font-bold text-[#172B4D]">Processing history</h4>
-          <ol className="mt-3 space-y-3 border-l-2 border-blue-100 pl-4">
-            {(request.events || []).map((event) => (
-              <li key={event.id} className="relative rounded-xl bg-slate-50 p-3">
-                <span className="absolute left-[-1.35rem] top-4 h-2.5 w-2.5 rounded-full bg-[#2455D6]" />
-                <p className="text-sm font-bold text-slate-800">{labelAction(event.action)}</p>
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#D9E6FF] bg-[#F6F8FC] p-4">
+              <div>
+                <h4 className="font-bold text-[#172B4D]">Generated document</h4>
                 <p className="mt-1 text-xs text-slate-500">
-                  {event.actor_name} ({event.actor_role}) · {formatDateTime(event.created_at)}
+                  {hasGeneratedDocument
+                    ? `Soft copy generated ${formatDateTime(request.document_generated_at)}.`
+                    : "A generated soft copy is not available for this request."}
                 </p>
-                <p className="mt-1 text-xs text-slate-600">{eventDescription(event)}</p>
-              </li>
-            ))}
-            {!request.events?.length && <li className="text-sm text-slate-500">No processing events recorded.</li>}
-          </ol>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDocumentOpen(true)}
+                disabled={!hasGeneratedDocument}
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <Eye size={14} aria-hidden="true" />
+                View Document
+              </button>
+            </div>
+
+            <h4 className="mt-7 font-bold text-[#172B4D]">Submitted information</h4>
+            {Object.keys(fields).length ? (
+              <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                {Object.entries(fields).map(([key, value]) => (
+                  <Info key={key} label={key.replaceAll("_", " ")} value={value} />
+                ))}
+              </dl>
+            ) : <p className="mt-2 text-sm text-slate-500">No form details recorded.</p>}
+
+            <h4 className="mt-7 font-bold text-[#172B4D]">Processing history</h4>
+            <ol className="mt-3 space-y-3 border-l-2 border-blue-100 pl-4">
+              {(request.events || []).map((event) => (
+                <li key={event.id} className="relative rounded-xl bg-slate-50 p-3">
+                  <span className="absolute left-[-1.35rem] top-4 h-2.5 w-2.5 rounded-full bg-[#2455D6]" />
+                  <p className="text-sm font-bold text-slate-800">{labelAction(event.action)}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {event.actor_name} ({event.actor_role}) · {formatDateTime(event.created_at)}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-600">{eventDescription(event)}</p>
+                </li>
+              ))}
+              {!request.events?.length && <li className="text-sm text-slate-500">No processing events recorded.</li>}
+            </ol>
+          </div>
         </div>
       </div>
-    </div>
+      {documentOpen && hasGeneratedDocument && (
+        <DocumentPreviewModal
+          request={request}
+          readOnly
+          onClose={() => setDocumentOpen(false)}
+        />
+      )}
+    </>
   );
 }
 

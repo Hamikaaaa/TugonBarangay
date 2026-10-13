@@ -14,10 +14,13 @@ const blankType = () => ({
   fee: "0",
   one_time: false,
   active: true,
+  template_enabled: true,
   template: "",
   applicant_fields: [],
   fields: [],
   requirements: [],
+  templateFile: null,
+  remove_template: false,
 });
 
 function DocumentTypes() {
@@ -29,6 +32,7 @@ function DocumentTypes() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [deletingTypeId, setDeletingTypeId] = useState(null);
+  const [downloadingTemplateId, setDownloadingTemplateId] = useState(null);
 
   const loadTypes = useCallback(async () => {
     setLoading(true);
@@ -66,8 +70,15 @@ function DocumentTypes() {
       fee: Number(draft.fee || 0),
       applicant_fields: draft.applicant_fields.map(normalizeField),
       fields: draft.fields.map(normalizeField),
-      requirements: draft.requirements,
+      requirements: draft.requirements.map((requirement) => ({
+        ...requirement,
+        enabled: requirement.enabled !== false,
+        requiredWhen: normalizeCondition(requirement.requiredWhen),
+        showWhen: normalizeCondition(requirement.showWhen),
+      })),
     };
+    delete payload.templateFile;
+    delete payload.remove_template;
     try {
       const response = await fetch(
         draft.id
@@ -81,7 +92,22 @@ function DocumentTypes() {
       );
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to save document type.");
-      setNotice(result.message);
+      if (draft.templateFile || draft.remove_template) {
+        const templateData = new FormData();
+        if (draft.templateFile) templateData.append("template_file", draft.templateFile);
+        if (draft.remove_template) templateData.append("remove_template", "1");
+        const templateResponse = await fetch(`${API_URL}/admin/document-types/${result.data.id}/template`, {
+          method: "POST",
+          headers: authHeaders(token),
+          body: templateData,
+        });
+        const templateResult = await templateResponse.json();
+        if (!templateResponse.ok) {
+          setDraft({ ...draft, id: result.data.id });
+          throw new Error(templateResult.message || "The document type was saved, but its uploaded template could not be updated.");
+        }
+      }
+      setNotice(result.message || "Document type saved.");
       setDraft(null);
       await loadTypes();
     } catch (saveError) {
@@ -114,6 +140,33 @@ function DocumentTypes() {
     }
   };
 
+  const downloadTemplate = async (type) => {
+    if (downloadingTemplateId !== null) return;
+    setDownloadingTemplateId(type.id);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/admin/document-types/${type.id}/template`, {
+        headers: authHeaders(token),
+      });
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.message || "Unable to download the uploaded template.");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = type.uploaded_template_name || "document-template";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (downloadError) {
+      setError(downloadError.message);
+    } finally {
+      setDownloadingTemplateId(null);
+    }
+  };
+
   const changeField = (section, index, updates) => {
     setDraft((current) => ({
       ...current,
@@ -129,10 +182,11 @@ function DocumentTypes() {
       [section]: [
         ...current[section],
         {
-          key: `new_field_${current[section].length + 1}`,
+          key: `${section === "applicant_fields" ? "applicant" : "detail"}_field_${current[section].length + 1}`,
           label: "",
           type: "text",
           required: true,
+          enabled: true,
           section: section === "applicant_fields" ? "applicant" : "details",
           options: [],
         },
@@ -196,6 +250,10 @@ function DocumentTypes() {
                 Available to residents
               </label>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                <input type="checkbox" checked={draft.template_enabled !== false} onChange={(event) => setDraft({ ...draft, template_enabled: event.target.checked })} />
+                Enable document templates
+              </label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <input type="checkbox" checked={draft.one_time} onChange={(event) => setDraft({ ...draft, one_time: event.target.checked })} />
                 Limit to one active/issued request per resident
               </label>
@@ -207,7 +265,7 @@ function DocumentTypes() {
             <label className="block border-t border-slate-100 pt-4">
               <span className="text-sm font-bold text-[#172B4D]">Document template</span>
               <span className="mt-1 block text-xs text-slate-500">
-                Write the certificate body. Use placeholders such as {"{{full_name}}"}, {"{{address}}"}, {"{{purpose}}"}, {"{{document_number}}"}, and {"{{date_issued}}"}.
+                Write the certificate body. Use placeholders such as {"{{full_name}}"}, {"{{address}}"}, {"{{purpose}}"}, {"{{document_number}}"}, and {"{{date_issued}}"}, plus any configured form-field key.
                 Leave blank to use the built-in template.
               </span>
               <textarea
@@ -221,9 +279,46 @@ function DocumentTypes() {
             </label>
 
             <div className="border-t border-slate-100 pt-4">
+              <h4 className="text-sm font-bold text-[#172B4D]">Uploaded template file</h4>
+              <p className="mt-1 text-xs text-slate-500">Upload a PDF or Word template file up to 10 MB. This file is managed alongside the automatically generated text template above.</p>
+              {draft.uploaded_template_name && !draft.remove_template && (
+                <p className="mt-3 text-xs font-semibold text-slate-600">Current file: {draft.uploaded_template_name}</p>
+              )}
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <input
+                  type="file"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(event) => setDraft({
+                    ...draft,
+                    templateFile: event.target.files?.[0] || null,
+                    remove_template: false,
+                  })}
+                  className="block max-w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#2455D6]/10 file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#2455D6]"
+                />
+                {draft.uploaded_template_name && (
+                  <label className="flex items-center gap-2 text-xs font-semibold text-red-600">
+                    <input
+                      type="checkbox"
+                      checked={draft.remove_template}
+                      onChange={(event) => setDraft({
+                        ...draft,
+                        remove_template: event.target.checked,
+                        templateFile: event.target.checked ? null : draft.templateFile,
+                      })}
+                    />
+                    Remove uploaded template
+                  </label>
+                )}
+              </div>
+              {!draft.id && (draft.templateFile || draft.remove_template) && (
+                <p className="mt-2 text-xs text-amber-700">The file will upload after this document type is saved.</p>
+              )}
+            </div>
+
+            <div className="border-t border-slate-100 pt-4">
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="text-sm font-bold text-[#172B4D]">Required uploads</h4>
-                <button type="button" onClick={() => setDraft((current) => ({ ...current, requirements: [...current.requirements, { key: `upload_${current.requirements.length + 1}`, label: "", required: true }] }))} className="text-xs font-bold text-[#2455D6]">Add upload</button>
+                <button type="button" onClick={() => setDraft((current) => ({ ...current, requirements: [...current.requirements, { key: `upload_${current.requirements.length + 1}`, label: "", required: true, enabled: true }] }))} className="text-xs font-bold text-[#2455D6]">Add upload</button>
               </div>
               <div className="space-y-2">
                 {draft.requirements.map((requirement, index) => (
@@ -231,7 +326,18 @@ function DocumentTypes() {
                     <input required aria-label="Upload key" value={requirement.key} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, key: event.target.value } : item) }))} className={controlClass} />
                     <input required aria-label="Upload name" placeholder="e.g. Government-issued ID" value={requirement.label} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) }))} className={controlClass} />
                     <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={requirement.required} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, required: event.target.checked } : item) }))} />Required</label>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={requirement.enabled !== false} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: event.target.checked } : item) }))} />Enabled</label>
                     <button type="button" onClick={() => removeEntry("requirements", index)} className="text-xs font-bold text-red-600">Remove</button>
+                    <ConditionEditor
+                      label="Required when"
+                      condition={requirement.requiredWhen}
+                      onChange={(requiredWhen) => setDraft((current) => ({
+                        ...current,
+                        requirements: current.requirements.map((item, itemIndex) =>
+                          itemIndex === index ? { ...item, requiredWhen } : item,
+                        ),
+                      }))}
+                    />
                   </div>
                 ))}
                 {draft.requirements.length === 0 && <p className="text-xs text-slate-400">No upload requirements configured.</p>}
@@ -252,12 +358,32 @@ function DocumentTypes() {
                       {type.fee_mode === "assessed" ? "Fee assessed by staff" : `₱${Number(type.fee).toFixed(2)}`}
                       {" · "}{type.applicant_fields.length + type.fields.length} form fields
                       {" · "}{type.requirements.length} upload requirements
+                      {type.uploaded_template_name ? ` · ${type.uploaded_template_name}` : ""}
                       {type.one_time ? " · One-time" : ""}
                       {type.active ? "" : " · Disabled"}
+                      {type.template_enabled === false ? " · Templates disabled" : ""}
                     </p>
                   </div>
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => setDraft({ ...type, fee: String(type.fee) })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]">Edit settings</button>
+                  <div className="flex flex-wrap gap-2">
+                    {type.uploaded_template_name && (
+                      <button
+                        type="button"
+                        onClick={() => downloadTemplate(type)}
+                        disabled={downloadingTemplateId !== null}
+                        className="rounded-lg border border-[#D9E6FF] px-3 py-2 text-xs font-bold text-[#2455D6] hover:bg-[#EEF4FF] disabled:opacity-50"
+                      >
+                        {downloadingTemplateId === type.id ? "Downloading..." : "Download template"}
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setDraft({
+                      ...type,
+                      fee: String(type.fee),
+                      templateFile: null,
+                      remove_template: false,
+                      applicant_fields: (type.applicant_fields || []).map((field) => ({ enabled: true, ...field })),
+                      fields: (type.fields || []).map((field) => ({ enabled: true, ...field })),
+                      requirements: (type.requirements || []).map((requirement) => ({ enabled: true, ...requirement })),
+                    })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]">Edit settings</button>
                     <button type="button" onClick={() => deleteType(type)} disabled={deletingTypeId === type.id} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50">
                       {deletingTypeId === type.id ? "Deleting..." : "Delete"}
                     </button>
@@ -287,8 +413,18 @@ function SchemaEditor({ title, section, fields, changeField, addField, removeEnt
             <select value={field.type} onChange={(event) => changeField(section, index, { type: event.target.value })} className={controlClass}>
               {fieldTypes.map((type) => <option key={type} value={type}>{type}</option>)}
             </select>
+            {field.type === "number" && (
+              <div className="grid grid-cols-3 gap-2 sm:col-span-2 lg:col-span-4">
+                <input type="number" aria-label="Minimum value" placeholder="Minimum" value={field.min ?? ""} onChange={(event) => changeField(section, index, { min: event.target.value === "" ? undefined : Number(event.target.value) })} className={controlClass} />
+                <input type="number" aria-label="Maximum value" placeholder="Maximum" value={field.max ?? ""} onChange={(event) => changeField(section, index, { max: event.target.value === "" ? undefined : Number(event.target.value) })} className={controlClass} />
+                <input type="number" aria-label="Step value" min="0.01" step="any" placeholder="Step" value={field.step ?? ""} onChange={(event) => changeField(section, index, { step: event.target.value === "" ? undefined : Number(event.target.value) })} className={controlClass} />
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2">
-              <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={field.required} onChange={(event) => changeField(section, index, { required: event.target.checked })} />Required</label>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={field.required} onChange={(event) => changeField(section, index, { required: event.target.checked })} />Required</label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={field.enabled !== false} onChange={(event) => changeField(section, index, { enabled: event.target.checked })} />Enabled</label>
+              </div>
               <button type="button" onClick={() => removeEntry(section, index)} className="text-xs font-bold text-red-600">Remove</button>
             </div>
             {field.type === "select" && (
@@ -300,6 +436,16 @@ function SchemaEditor({ title, section, fields, changeField, addField, removeEnt
                 className={`${controlClass} sm:col-span-2 lg:col-span-4`}
               />
             )}
+            <ConditionEditor
+              label="Show when"
+              condition={field.showWhen}
+              onChange={(showWhen) => changeField(section, index, { showWhen })}
+            />
+            <ConditionEditor
+              label="Required when"
+              condition={field.requiredWhen}
+              onChange={(requiredWhen) => changeField(section, index, { requiredWhen })}
+            />
           </div>
         ))}
         {fields.length === 0 && <p className="text-xs text-slate-400">No fields in this section.</p>}
@@ -308,8 +454,50 @@ function SchemaEditor({ title, section, fields, changeField, addField, removeEnt
   );
 }
 
+function ConditionEditor({ label, condition, onChange }) {
+  return (
+    <div className="grid gap-2 sm:col-span-2 lg:col-span-4 sm:grid-cols-2">
+      <input
+        aria-label={`${label} field key`}
+        placeholder={`${label}: controlling field key (optional)`}
+        value={condition?.key || ""}
+        onChange={(event) => {
+          const key = event.target.value.trim();
+          onChange(key ? { key, value: condition?.value ?? "" } : undefined);
+        }}
+        className={controlClass}
+      />
+      <input
+        aria-label={`${label} value`}
+        placeholder={`${label}: matching value(s), comma-separated`}
+        value={Array.isArray(condition?.value) ? condition.value.join(", ") : condition?.value || ""}
+        disabled={!condition?.key}
+        onChange={(event) => {
+          const rawValue = event.target.value;
+          const values = rawValue.split(",").map((value) => value.trim()).filter(Boolean);
+          onChange(condition?.key
+            ? { key: condition.key, value: values.length > 1 ? values : values[0] || "" }
+            : undefined);
+        }}
+        className={controlClass}
+      />
+    </div>
+  );
+}
+
 function normalizeField(field) {
-  return { ...field, options: field.type === "select" ? field.options || [] : undefined };
+  return {
+    ...field,
+    options: field.type === "select" ? field.options || [] : undefined,
+    requiredWhen: normalizeCondition(field.requiredWhen),
+    showWhen: normalizeCondition(field.showWhen),
+  };
+}
+
+function normalizeCondition(condition) {
+  if (!condition?.key || condition.value === undefined || condition.value === "") return undefined;
+  if (Array.isArray(condition.value) && condition.value.length === 0) return undefined;
+  return condition;
 }
 
 function authHeaders(token) {
