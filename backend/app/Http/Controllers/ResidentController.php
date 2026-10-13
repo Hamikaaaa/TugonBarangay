@@ -82,12 +82,9 @@ class ResidentController extends Controller
     private const DOCUMENT_APPLICANT_FIELDS = [
         'Barangay Certification' => [
             'full_name',
-            'date_of_birth',
-            'age',
-            'sex',
-            'civil_status',
-            'citizenship',
             'address',
+            'date_of_birth',
+            'sex',
             'purok',
         ],
         'Barangay Residency' => [
@@ -95,17 +92,14 @@ class ResidentController extends Controller
             'address',
             'purok',
             'date_of_birth',
-            'age',
             'sex',
-            'civil_status',
         ],
         'Barangay Indigency' => [
             'full_name',
+            'address',
             'date_of_birth',
             'sex',
-            'civil_status',
             'purok',
-            'contact_number',
         ],
         'Business Permit' => ['full_name', 'contact_number', 'email_address'],
     ];
@@ -187,9 +181,18 @@ class ResidentController extends Controller
         ];
 
         if ($configuredType) {
-            $applicantFields = $configuredType->applicant_fields ?? [];
-            $documentFields = $configuredType->fields ?? [];
-            $requirements = $configuredType->requirements ?? [];
+            $applicantFields = array_values(array_filter(
+                $configuredType->applicant_fields ?? [],
+                fn (array $field) => ($field['enabled'] ?? true),
+            ));
+            $documentFields = array_values(array_filter(
+                $configuredType->fields ?? [],
+                fn (array $field) => ($field['enabled'] ?? true),
+            ));
+            $requirements = array_values(array_filter(
+                $configuredType->requirements ?? [],
+                fn (array $requirement) => ($requirement['enabled'] ?? true),
+            ));
             $rules += $this->configuredDocumentRules(
                 $applicantFields,
                 $documentFields,
@@ -323,13 +326,22 @@ class ResidentController extends Controller
         $documentType = $documentRequest->document_type;
         $configuredType = DocumentType::where('value', $documentType)->first();
         $applicantFields = $configuredType
-            ? array_column($configuredType->applicant_fields ?? [], 'key')
+            ? array_column(array_values(array_filter(
+                $configuredType->applicant_fields ?? [],
+                fn (array $field) => ($field['enabled'] ?? true),
+            )), 'key')
             : self::DOCUMENT_APPLICANT_FIELDS[$documentType];
         $documentFields = $configuredType
-            ? array_column($configuredType->fields ?? [], 'key')
+            ? array_column(array_values(array_filter(
+                $configuredType->fields ?? [],
+                fn (array $field) => ($field['enabled'] ?? true),
+            )), 'key')
             : self::DOCUMENT_FORM_FIELDS[$documentType];
         $requirements = $configuredType
-            ? ($configuredType->requirements ?? [])
+            ? array_values(array_filter(
+                $configuredType->requirements ?? [],
+                fn (array $requirement) => ($requirement['enabled'] ?? true),
+            ))
             : self::DOCUMENT_REQUIREMENTS[$documentType];
         $existingRequirements = $documentRequest->details['requirements'] ?? [];
         $allFieldKeys = array_merge($applicantFields, array_keys($documentFields));
@@ -341,13 +353,19 @@ class ResidentController extends Controller
 
         if ($configuredType) {
             $allFieldKeys = array_merge(
-                array_column($configuredType->applicant_fields ?? [], 'key'),
-                array_column($configuredType->fields ?? [], 'key'),
+                $applicantFields,
+                $documentFields,
             );
             $rules['form_fields'] = ['required', 'array:' . implode(',', $allFieldKeys)];
             $rules = array_merge($rules, $this->configuredDocumentRules(
-                $configuredType->applicant_fields ?? [],
-                $configuredType->fields ?? [],
+                array_values(array_filter(
+                    $configuredType->applicant_fields ?? [],
+                    fn (array $field) => ($field['enabled'] ?? true),
+                )),
+                array_values(array_filter(
+                    $configuredType->fields ?? [],
+                    fn (array $field) => ($field['enabled'] ?? true),
+                )),
                 $requirements,
                 true,
                 $existingRequirements,
@@ -924,18 +942,36 @@ class ResidentController extends Controller
         array $existingRequirements = [],
         array $formValues = [],
     ): array {
-        $fields = array_merge($applicantFields, $documentFields);
+        $fields = array_merge(
+            array_values(array_filter($applicantFields, fn (array $field) => ($field['enabled'] ?? true))),
+            array_values(array_filter($documentFields, fn (array $field) => ($field['enabled'] ?? true))),
+        );
+        $requirements = array_values(array_filter(
+            $requirements,
+            fn (array $requirement) => ($requirement['enabled'] ?? true),
+        ));
         $keys = array_column($fields, 'key');
         $rules = [
-            'form_fields' => ['required', 'array:' . implode(',', $keys)],
-            'requirements' => ['sometimes', 'array:' . implode(',', array_column($requirements, 'key'))],
+            'form_fields' => ['present', 'array'],
+            'requirements' => ['sometimes', 'array'],
         ];
+        if ($keys) {
+            $rules['form_fields'][] = 'array:' . implode(',', $keys);
+        }
+        $requirementKeys = array_column($requirements, 'key');
+        if ($requirementKeys) {
+            $rules['requirements'][] = 'array:' . implode(',', $requirementKeys);
+        }
 
         foreach ($fields as $field) {
             $key = $field['key'];
             $requiredWhen = $field['requiredWhen'] ?? null;
             $showWhen = $field['showWhen'] ?? null;
             $isVisible = !$showWhen || $this->conditionMatches($showWhen, $formValues);
+            if (!$isVisible) {
+                $rules["form_fields.{$key}"] = ['prohibited'];
+                continue;
+            }
             $isRequired = $requiredWhen
                 ? $this->conditionMatches($requiredWhen, $formValues)
                 : ($field['required'] ?? true);
@@ -986,8 +1022,14 @@ class ResidentController extends Controller
 
         foreach ($requirements as $requirement) {
             $key = $requirement['key'];
+            $isVisible = !isset($requirement['showWhen'])
+                || $this->conditionMatches($requirement['showWhen'], $formValues);
             $isConditionallyRequired = isset($requirement['requiredWhen'])
                 && $this->conditionMatches($requirement['requiredWhen'], $formValues);
+            if (!$isVisible) {
+                $rules["requirements.{$key}"] = ['prohibited'];
+                continue;
+            }
             $rules["requirements.{$key}"] = [
                 (($requirement['required'] ?? false) || $isConditionallyRequired)
                     && (!$correction || empty($existingRequirements[$key]['path']))
@@ -1016,7 +1058,7 @@ class ResidentController extends Controller
     {
         return collect($documentType->applicant_fields ?? [])
             ->merge($documentType->fields ?? [])
-            ->contains('key', $key);
+            ->contains(fn (array $field) => $field['key'] === $key && ($field['enabled'] ?? true));
     }
 
     private function botSearchTerms(string $text): array

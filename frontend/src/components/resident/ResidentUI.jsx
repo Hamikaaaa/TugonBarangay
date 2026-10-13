@@ -1,4 +1,4 @@
-import { ChevronDown, FileText } from "lucide-react";
+import { FileText } from "lucide-react";
 import { useState } from "react";
 import { primaryButtonClass } from "../../services/residentApi";
 
@@ -23,7 +23,7 @@ function StatCard({ label, value, hint, color }) {
 }
 
 function RequestRow({ request }) {
-  const [expanded, setExpanded] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const documentLabels = {
     "Barangay Certification": "Barangay Clearance",
     "Barangay Certificate": "Barangay Certificate",
@@ -43,7 +43,6 @@ function RequestRow({ request }) {
     Boolean(request.details?.notes) ||
     uploadedFiles.length > 0 ||
     Boolean(request.staff_remarks);
-  const detailsId = `request-${request.id}-details`;
   const statusClasses = {
     pending: "bg-[#FFF7E7] text-[#B87900]",
     "under review": "bg-violet-50 text-violet-700",
@@ -55,128 +54,165 @@ function RequestRow({ request }) {
     rejected: "bg-[#FFF0EE] text-[#C74444]",
   };
 
-  return (
-    <div className="py-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F3F6FB] text-[#2455D6]">
-            <FileText
-              className="h-5 w-5"
-              strokeWidth={1.8}
-              aria-hidden="true"
-            />
-          </div>
-          <div>
-            <p className="text-sm font-bold text-slate-800">{title}</p>
-            <p className="mt-1 text-xs text-slate-400">
-              {request.id} · Submitted {date}
-            </p>
-          </div>
-        </div>
-        <span
-          className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold capitalize ${statusClasses[status] || "bg-[#EEF4FF] text-[#2455D6]"}`}
-        >
-          {status}
-        </span>
-      </div>
-
-      <button
-        type="button"
-        aria-expanded={expanded}
-        aria-controls={detailsId}
-        onClick={() => setExpanded((current) => !current)}
-        className="mt-3 inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-[#2455D6] transition hover:bg-[#2455D6]/5"
-      >
-        <ChevronDown
-          className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`}
-          aria-hidden="true"
-        />
-        {expanded ? "Hide details" : "View details"}
-      </button>
-
-      {expanded && (
-        <div
-          id={detailsId}
-          className="mt-3 rounded-xl border border-[#E6ECF5] bg-[#F6F1FD]/40 p-4"
-        >
-          {hasDetails ? (
-            <div className="space-y-4">
-              <p className="text-sm font-semibold text-[#172B4D]">
-                Fee: {request.details?.fee_mode === "assessed" && !request.details?.fee_assessed
-                  ? "To be assessed by barangay staff"
-                  : Number(request.fee || 0) === 0
-                    ? "No fee"
-                    : `₱${Number(request.fee || 0).toFixed(2)} payable upon release`}
-              </p>
-              {Object.keys(formFields).length > 0 && (
-                <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
-                  {Object.entries(formFields).map(([key, value]) => (
-                    <div key={key} className="min-w-0">
-                      <dt className="text-[11px] font-semibold uppercase text-[#55708F]">
-                        {key.replaceAll("_", " ")}
-                      </dt>
-                      <dd className="mt-1 break-words text-sm font-medium text-[#172B4D]">
-                        {value || "Not provided"}
-                      </dd>
-                    </div>
-                  ))}
-                </dl>
-              )}
-
-              {request.details?.notes && (
-                <div>
-                  <p className="text-[11px] font-semibold uppercase text-[#55708F]">
-                    Additional notes
-                  </p>
-                  <p className="mt-1 break-words text-sm text-[#172B4D]">
-                    {request.details.notes}
-                  </p>
-                </div>
-              )}
-
-              {request.staff_remarks && (
-                <div className="rounded-lg border border-[#F1D9A8] bg-[#FFF7E7] p-3">
-                  <p className="text-[11px] font-semibold uppercase text-[#805900]">
-                    Staff remarks
-                  </p>
-                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-[#624700]">
-                    {request.staff_remarks}
-                  </p>
-                </div>
-              )}
-
-              {uploadedFiles.length > 0 && (
-                <div>
-                  <p className="text-[11px] font-semibold uppercase text-[#55708F]">
-                    Uploaded documents
-                  </p>
-                  <ul className="mt-2 space-y-2">
-                    {uploadedFiles.map((file) => (
-                      <li
-                        key={file.path || file.original_name}
-                        className="flex min-w-0 items-center gap-2 text-sm text-[#172B4D]"
-                      >
-                        <FileText
-                          className="h-4 w-4 shrink-0 text-[#2455D6]"
-                          aria-hidden="true"
-                        />
-                        <span className="min-w-0 break-words">
-                          {file.label}: {file.original_name}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+  const detailsContent = hasDetails ? (
+    <div className="space-y-4">
+      <p className="text-sm font-semibold text-[#172B4D]">
+        Fee: {request.details?.fee_mode === "assessed" && !request.details?.fee_assessed
+          ? "To be assessed by barangay staff"
+          : Number(request.fee || 0) === 0
+            ? "No fee"
+            : `₱${Number(request.fee || 0).toFixed(2)} payable upon release`}
+      </p>
+      {Object.keys(formFields).length > 0 && (
+        <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
+          {Object.entries(formFields).map(([key, value]) => (
+            <div key={key} className="min-w-0">
+              <dt className="text-[11px] font-semibold uppercase text-[#55708F]">
+                {key.replaceAll("_", " ")}
+              </dt>
+              <dd className="mt-1 break-words text-sm font-medium text-[#172B4D]">
+                {value || "Not provided"}
+              </dd>
             </div>
-          ) : (
-            <p className="text-sm text-slate-500">
-              No additional details were saved for this request.
-            </p>
-          )}
+          ))}
+        </dl>
+      )}
+
+      {request.details?.notes && (
+        <div>
+          <p className="text-[11px] font-semibold uppercase text-[#55708F]">
+            Additional notes
+          </p>
+          <p className="mt-1 break-words text-sm text-[#172B4D]">
+            {request.details.notes}
+          </p>
+        </div>
+      )}
+
+      {request.staff_remarks && (
+        <div className="rounded-lg border border-[#F1D9A8] bg-[#FFF7E7] p-3">
+          <p className="text-[11px] font-semibold uppercase text-[#805900]">
+            Staff remarks
+          </p>
+          <p className="mt-1 whitespace-pre-wrap break-words text-sm text-[#624700]">
+            {request.staff_remarks}
+          </p>
+        </div>
+      )}
+
+      {uploadedFiles.length > 0 && (
+        <div>
+          <p className="text-[11px] font-semibold uppercase text-[#55708F]">
+            Uploaded documents
+          </p>
+          <ul className="mt-2 space-y-2">
+            {uploadedFiles.map((file) => (
+              <li
+                key={file.path || file.original_name}
+                className="flex min-w-0 items-center gap-2 text-sm text-[#172B4D]"
+              >
+                <FileText
+                  className="h-4 w-4 shrink-0 text-[#2455D6]"
+                  aria-hidden="true"
+                />
+                <span className="min-w-0 break-words">
+                  {file.label}: {file.original_name}
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
+  ) : (
+    <p className="text-sm text-slate-500">
+      No additional details were saved for this request.
+    </p>
+  );
+
+  return (
+    <>
+      <div className="py-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F3F6FB] text-[#2455D6]">
+              <FileText
+                className="h-5 w-5"
+                strokeWidth={1.8}
+                aria-hidden="true"
+              />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-slate-800">{title}</p>
+              <p className="mt-1 text-xs text-slate-400">
+                {request.id} · Submitted {date}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setModalOpen(true)}
+              className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[#D9E4FF] bg-[#EEF4FF] px-3 text-xs font-semibold text-[#2455D6] transition hover:bg-[#E4EEFF]"
+            >
+              View details
+            </button>
+            <span
+              className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold capitalize ${statusClasses[status] || "bg-[#EEF4FF] text-[#2455D6]"}`}
+            >
+              {status}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#071B3D]/70 p-3 backdrop-blur-sm"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setModalOpen(false);
+          }}
+        >
+          <div className="max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-[24px] border border-slate-200 bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4 sm:px-6">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#2455D6]">
+                  Request details
+                </p>
+                <h3 className="mt-1 text-lg font-bold text-[#172B4D]">{title}</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-xl text-slate-500 transition hover:bg-slate-50 hover:text-[#2455D6]"
+                aria-label="Close request details"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="max-h-[calc(90vh-88px)] overflow-y-auto p-5 sm:p-6">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs text-slate-400">Request ID</p>
+                  <p className="mt-1 text-sm font-bold text-[#172B4D]">{request.id}</p>
+                </div>
+                <span
+                  className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold capitalize ${statusClasses[status] || "bg-[#EEF4FF] text-[#2455D6]"}`}
+                >
+                  {status}
+                </span>
+              </div>
+
+              <div className="rounded-xl border border-[#E6ECF5] bg-[#F6F1FD]/40 p-4">
+                {detailsContent}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

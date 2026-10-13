@@ -18,14 +18,7 @@ const APPLICANT_FIELDS = {
   },
   purok: { label: "Purok", type: "text" },
   date_of_birth: { label: "Date of Birth", type: "date" },
-  age: { label: "Age", type: "number", readOnly: true },
   sex: { label: "Sex", type: "select", options: ["Female", "Male", "Other"] },
-  citizenship: { label: "Citizenship", type: "text" },
-  civil_status: {
-    label: "Civil Status",
-    type: "select",
-    options: ["Single", "Married", "Widowed", "Separated", "Other"],
-  },
   contact_number: { label: "Contact Number", type: "tel" },
   email_address: { label: "Email Address", type: "email" },
 };
@@ -44,11 +37,8 @@ function getApplicantDefaults(user = {}) {
     full_name: fullName || user.name || "",
     address: user.address || "",
     date_of_birth: user.date_of_birth || "",
-    age: calculateAge(user.date_of_birth),
     sex: user.sex || "",
-    civil_status: user.civil_status || "",
     purok: user.purok || "",
-    citizenship: "",
     contact_number: user.mobile_number || "",
     email_address: user.email || "",
     municipality_city: user.municipality_city || "Consolacion",
@@ -92,10 +82,7 @@ const DOCUMENT_TYPES = [
       "address",
       "purok",
       "date_of_birth",
-      "age",
       "sex",
-      "civil_status",
-      "citizenship",
     ],
     fields: [
       {
@@ -127,9 +114,7 @@ const DOCUMENT_TYPES = [
       "address",
       "purok",
       "date_of_birth",
-      "age",
       "sex",
-      "civil_status",
     ],
     fields: [
       {
@@ -172,11 +157,10 @@ const DOCUMENT_TYPES = [
     label: "Barangay Indigency",
     applicantFields: [
       "full_name",
+      "address",
       "date_of_birth",
       "sex",
-      "civil_status",
       "purok",
-      "contact_number",
     ],
     fields: [
       {
@@ -306,6 +290,21 @@ function conditionMatches(condition, values) {
     : values[condition.key] === expected;
 }
 
+function mapConfiguredDocumentType(type) {
+  const applicantFieldConfigs = (type.applicant_fields || []).filter(
+    (field) => field.enabled !== false,
+  );
+  return {
+    ...type,
+    applicantFieldConfigs,
+    applicantFields: applicantFieldConfigs.map((field) => field.key),
+    fields: (type.fields || []).filter((field) => field.enabled !== false),
+    requirements: (type.requirements || []).filter(
+      (requirement) => requirement.enabled !== false,
+    ),
+  };
+}
+
 function Documents({ requests, token, onRefresh, user }) {
   const [catalogTypes, setCatalogTypes] = useState(null);
   const [documentType, setDocumentType] = useState("");
@@ -384,20 +383,16 @@ function Documents({ requests, token, onRefresh, user }) {
   }, [historyPage, reloadHistory, token]);
   const availableDocuments = useMemo(() => {
     if (catalogTypes === null) return DOCUMENT_TYPES;
-    const mappedCatalog = catalogTypes.map((type) => ({
-      ...type,
-      applicantFields: (type.applicant_fields || []).map((field) => field.key),
-      applicantFieldConfigs: type.applicant_fields || [],
-    }));
-    const configuredValues = new Set(mappedCatalog.map((type) => type.value));
-    const builtInFallbacks = DOCUMENT_TYPES.filter(
-      (type) => !configuredValues.has(type.value || type.label),
-    );
-    return [...mappedCatalog, ...builtInFallbacks];
+    return catalogTypes.map(mapConfiguredDocumentType);
   }, [catalogTypes]);
   const selectedDocument = availableDocuments.find(
     (document) => (document.value || document.label) === documentType,
-  );
+  ) || (editingRequest?.type ? mapConfiguredDocumentType(editingRequest.type) : null);
+  const documentOptions = selectedDocument && !availableDocuments.some(
+    (document) => (document.value || document.label) === documentType,
+  )
+    ? [...availableDocuments, selectedDocument]
+    : availableDocuments;
   const oneTimeAlreadyRequested =
     selectedDocument?.one_time &&
     selectedDocument.available === false &&
@@ -405,15 +400,20 @@ function Documents({ requests, token, onRefresh, user }) {
   const requiredFileCount =
     selectedDocument?.requirements.filter(
       (requirement) =>
-        requirement.required ||
-        conditionMatches(requirement.requiredWhen, formFields),
+        (!requirement.showWhen || conditionMatches(requirement.showWhen, formFields)) &&
+        (requirement.required ||
+          conditionMatches(requirement.requiredWhen, formFields)),
     ).length || 0;
+  const visibleRequirements = selectedDocument?.requirements.filter(
+    (requirement) =>
+      !requirement.showWhen || conditionMatches(requirement.showWhen, formFields),
+  ) || [];
 
   const startCorrection = (request) => {
     const existingFields = request.details?.form_fields || {};
     const requestDocument = availableDocuments.find(
       (document) => (document.value || document.label) === request.document_type,
-    );
+    ) || (request.type ? mapConfiguredDocumentType(request.type) : null);
     const purposeOptions =
       requestDocument?.fields.find((field) => field.key === "purpose")?.options || [];
     const supportsCustomPurpose = requestDocument?.fields.some(
@@ -433,9 +433,6 @@ function Documents({ requests, token, onRefresh, user }) {
       ...(hasCustomPurpose
         ? { purpose: "Other", purpose_other: existingFields.purpose }
         : {}),
-      age: calculateAge(
-        request.details?.form_fields?.date_of_birth || user?.date_of_birth,
-      ),
     });
     setNotes(request.details?.notes || "");
     setRequirementFiles({});
@@ -462,7 +459,12 @@ function Documents({ requests, token, onRefresh, user }) {
       formData.append("document_type", documentType);
       formData.append("notes", notes.trim());
       const requestFieldDefinitions = [
-        ...selectedDocument.applicantFields.map((key) => ({ key })),
+        ...selectedDocument.applicantFields
+          .map((key) => ({
+            key,
+            field: selectedDocument.applicantFieldConfigs?.find((item) => item.key === key),
+          }))
+          .filter(({ field }) => !field?.showWhen || conditionMatches(field.showWhen, formFields)),
         ...selectedDocument.fields.filter(
           (field) =>
             field.submit !== false &&
@@ -471,13 +473,11 @@ function Documents({ requests, token, onRefresh, user }) {
       ];
       requestFieldDefinitions.forEach(({ key }) => {
         const value =
-          key === "age" && formFields.date_of_birth
-            ? calculateAge(formFields.date_of_birth)
-            : key === "purpose" &&
-                formFields.purpose === "Other" &&
-                selectedDocument.fields.some((field) => field.key === "purpose_other")
-              ? formFields.purpose_other
-              : formFields[key];
+          key === "purpose" &&
+          formFields.purpose === "Other" &&
+          selectedDocument.fields.some((field) => field.key === "purpose_other")
+            ? formFields.purpose_other
+            : formFields[key];
         if (value !== undefined && value !== "") {
           formData.append(`form_fields[${key}]`, value.trim());
         }
@@ -621,9 +621,8 @@ function Documents({ requests, token, onRefresh, user }) {
               </span>
               <select
                 required
-                disabled={catalogTypes === null}
                 value={documentType}
-                disabled={Boolean(editingRequest)}
+                disabled={catalogTypes === null || Boolean(editingRequest)}
                 onChange={(event) => {
                   setDocumentType(event.target.value);
                   setFormFields(getApplicantDefaults(user));
@@ -634,11 +633,11 @@ function Documents({ requests, token, onRefresh, user }) {
                 <option value="">
                   {catalogTypes === null ? "Loading document types..." : "Select a document"}
                 </option>
-                {availableDocuments.map((document) => (
+                {documentOptions.map((document) => (
                   <option
                     key={document.value || document.label}
                     value={document.value || document.label}
-                    disabled={document.one_time && document.available === false}
+                    disabled={!editingRequest && document.one_time && document.available === false}
                   >
                     {document.label}
                     {document.one_time && document.available === false ? " (Already requested)" : ""}
@@ -681,7 +680,12 @@ function Documents({ requests, token, onRefresh, user }) {
                   </p>
                 )}
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  {selectedDocument.applicantFields.map((key) => {
+                  {selectedDocument.applicantFields
+                    .filter((key) => {
+                      const config = selectedDocument.applicantFieldConfigs?.find((item) => item.key === key);
+                      return !config?.showWhen || conditionMatches(config.showWhen, formFields);
+                    })
+                    .map((key) => {
                     const field = selectedDocument.applicantFieldConfigs?.find(
                       (item) => item.key === key,
                     ) || APPLICANT_FIELDS[key] || {
@@ -700,7 +704,9 @@ function Documents({ requests, token, onRefresh, user }) {
                         </span>
                         {field.type === "select" ? (
                           <select
-                            required={field.required !== false && !field.requiredWhen}
+                            required={field.requiredWhen
+                              ? conditionMatches(field.requiredWhen, formFields)
+                              : field.required !== false}
                             value={formFields[key] || ""}
                             onChange={(event) =>
                               setFormFields((current) => ({
@@ -713,13 +719,15 @@ function Documents({ requests, token, onRefresh, user }) {
                             <option value="">
                               Select {field.label.toLowerCase()}
                             </option>
-                            {field.options.map((option) => (
+                            {(field.options || []).map((option) => (
                               <option key={option}>{option}</option>
                             ))}
                           </select>
                         ) : (
                           <input
-                            required={!field.readOnly && field.required !== false && !field.requiredWhen}
+                            required={!field.readOnly && (field.requiredWhen
+                              ? conditionMatches(field.requiredWhen, formFields)
+                              : field.required !== false)}
                             type={field.type}
                             value={formFields[key] || ""}
                             readOnly={field.readOnly}
@@ -752,10 +760,8 @@ function Documents({ requests, token, onRefresh, user }) {
                   {selectedDocument.fields
                     .filter(
                       (field) =>
-                        (!field.showWhen ||
-                          conditionMatches(field.showWhen, formFields)) &&
-                        (!field.requiredWhen ||
-                          conditionMatches(field.requiredWhen, formFields)),
+                        !field.showWhen ||
+                        conditionMatches(field.showWhen, formFields),
                     )
                     .map((field) => {
                         const required = field.requiredWhen
@@ -785,7 +791,7 @@ function Documents({ requests, token, onRefresh, user }) {
                           {field.type === "select" ? (
                             <select {...controlProps}>
                               <option value="">Select an option</option>
-                              {field.options.map((option) => (
+                              {(field.options || []).map((option) => (
                                 <option key={option}>{option}</option>
                               ))}
                             </select>
@@ -820,13 +826,13 @@ function Documents({ requests, token, onRefresh, user }) {
                   </div>
                   <span className="text-xs font-semibold text-[#55708F]">
                     {requiredFileCount} required,{" "}
-                    {selectedDocument.requirements.length - requiredFileCount}{" "}
+                    {visibleRequirements.length - requiredFileCount}{" "}
                     optional
                   </span>
                 </div>
 
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  {selectedDocument.requirements.map((requirement) => {
+                  {visibleRequirements.map((requirement) => {
                     const required =
                       requirement.required ||
                       conditionMatches(requirement.requiredWhen, formFields);

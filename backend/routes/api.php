@@ -53,6 +53,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/document-types', [DocumentTypeController::class, 'adminIndex']);
     Route::post('/document-types', [DocumentTypeController::class, 'store']);
     Route::put('/document-types/{documentType}', [DocumentTypeController::class, 'update']);
+    Route::post('/document-types/{documentType}/template', [DocumentTypeController::class, 'uploadTemplate']);
+    Route::get('/document-types/{documentType}/template', [DocumentTypeController::class, 'downloadTemplate']);
     Route::delete('/document-types/{documentType}', [DocumentTypeController::class, 'destroy']);
     Route::get('/document-requests/overview', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'overview']);
     Route::get('/document-request-events', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'events']);
@@ -81,6 +83,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
 
 Route::middleware(['auth:sanctum', 'role:staff', 'designation:Document Request Officer'])->prefix('staff')->group(function () {
     Route::get('/document-types', [DocumentTypeController::class, 'staffIndex']);
+    Route::get('/document-types/{documentType}/template', [DocumentTypeController::class, 'downloadTemplate']);
     Route::get('/document-request-dashboard', [\App\Http\Controllers\StaffController::class, 'documentRequestDashboard']);
     Route::get('/document-requests', [\App\Http\Controllers\StaffController::class, 'documentRequests']);
     Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\StaffController::class, 'showDocumentRequest']);

@@ -18,7 +18,7 @@ function DocumentRequestTabs() {
         className={tabClass(!isDocumentTypes)}
       >
         <ClipboardList className="h-4 w-4" aria-hidden="true" />
-        Request History
+        Document Requests
       </button>
       <button
         type="button"

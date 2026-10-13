@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Archive,
   BadgeCheck,
@@ -105,6 +105,7 @@ const WORKFLOW_GUIDANCE = {
 function StaffDashboardProfessional({ documentType = "" }) {
   const { token } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [documentTypes, setDocumentTypes] = useState(
     () => readCachedDocumentTypes() || DEFAULT_DOCUMENT_TYPES,
   );
@@ -263,11 +264,34 @@ function StaffDashboardProfessional({ documentType = "" }) {
   };
 
   const viewRequest = (request) => {
+    const targetDocumentType = request.document_type || request.document_type_label;
+    const matchesActiveType = documentType && targetDocumentType === documentType;
+
+    if (!matchesActiveType) {
+      navigate(`/staff/document-types/${encodeURIComponent(targetDocumentType)}`, {
+        state: { selectedRequestId: request.id },
+      });
+      return;
+    }
+
     selectRequest(request);
     window.requestAnimationFrame(() => {
       document.getElementById("staff-request-details")?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   };
+
+  useEffect(() => {
+    const selectedRequestId = location.state?.selectedRequestId;
+    if (!selectedRequestId || !Array.isArray(requests)) return;
+
+    const nextSelectedRequest = requests.find((request) => request.id === Number(selectedRequestId));
+    if (nextSelectedRequest) {
+      selectRequest(nextSelectedRequest);
+      window.requestAnimationFrame(() => {
+        document.getElementById("staff-request-details")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    }
+  }, [location.state?.selectedRequestId, requests]);
 
   const quickFilter = (nextStatus) => {
     setStatusFilter(nextStatus);

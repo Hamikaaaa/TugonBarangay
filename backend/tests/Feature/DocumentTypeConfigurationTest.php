@@ -86,6 +86,71 @@ class DocumentTypeConfigurationTest extends TestCase
             ->assertJsonPath('data.0.type.template', 'This certifies {{full_name}} for {{purpose}}.');
     }
 
+    public function test_admin_can_upload_download_and_remove_a_document_template_file(): void
+    {
+        Storage::fake('local');
+        $admin = Admin::create([
+            'name' => 'Admin User',
+            'email' => 'admin-template@example.com',
+            'password' => 'password',
+        ]);
+        Sanctum::actingAs($admin);
+        $type = DocumentType::where('value', 'Barangay Certification')->firstOrFail();
+
+        $this->post('/api/admin/document-types/'.$type->id.'/template', [
+            'template_file' => UploadedFile::fake()->create('clearance-template.pdf', 20, 'application/pdf'),
+        ])->assertOk()
+            ->assertJsonPath('data.uploaded_template_name', 'clearance-template.pdf');
+
+        $storedPath = $type->fresh()->uploaded_template_path;
+        Storage::disk('local')->assertExists($storedPath);
+        $this->get('/api/admin/document-types/'.$type->id.'/template')->assertOk();
+
+        $this->post('/api/admin/document-types/'.$type->id.'/template', [
+            'remove_template' => true,
+        ])->assertOk()
+            ->assertJsonPath('data.uploaded_template_name', null);
+        Storage::disk('local')->assertMissing($storedPath);
+    }
+
+    public function test_disabled_configured_fields_and_requirements_are_not_shown_or_required_for_residents(): void
+    {
+        $admin = Admin::create([
+            'name' => 'Admin User',
+            'email' => 'admin-disable-fields@example.com',
+            'password' => 'password',
+        ]);
+        Sanctum::actingAs($admin);
+        $type = DocumentType::create([
+            'name' => 'Temporary Certificate',
+            'enabled' => true,
+            'value' => 'temporary-certificate',
+            'label' => 'Temporary Certificate',
+            'fee_mode' => 'fixed',
+            'fee' => 25,
+            'one_time' => false,
+            'active' => true,
+            'applicant_fields' => [
+                ['key' => 'full_name', 'label' => 'Full Name', 'type' => 'text', 'required' => true, 'enabled' => true],
+                ['key' => 'unused_info', 'label' => 'Unused information', 'type' => 'text', 'required' => true, 'enabled' => false],
+            ],
+            'fields' => [],
+            'requirements' => [
+                ['key' => 'unused_upload', 'label' => 'Unused upload', 'required' => true, 'enabled' => false],
+            ],
+        ]);
+
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        Sanctum::actingAs($resident);
+        $this->getJson('/api/resident/document-types')->assertOk();
+
+        $this->postJson('/api/resident/requests', [
+            'document_type' => $type->value,
+            'form_fields' => ['full_name' => 'Jane Doe'],
+        ])->assertCreated()
+            ->assertJsonPath('request.fee', '25.00');
+    }
+
     public function test_admin_can_delete_unused_document_type_but_not_one_with_request_history(): void
     {
         $admin = Admin::create([
