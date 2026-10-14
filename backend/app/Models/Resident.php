@@ -22,6 +22,8 @@ class Resident extends Account
         'profile_photo',
         'verification_status',
         'rejection_reason',
+        'last_login_at',
+        'is_active',
     ];
 
     public function documentRequests()

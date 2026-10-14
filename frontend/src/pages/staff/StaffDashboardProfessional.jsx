@@ -237,15 +237,23 @@ function StaffDashboardProfessional({ documentType = "" }) {
     loadDashboardSummary();
   }, [loadDashboardSummary]);
 
-  const counts = useMemo(() => ({
-    pending: dashboardSummary?.counts?.pending ?? 0,
-    under_review: dashboardSummary?.counts?.under_review ?? 0,
-    processing: dashboardSummary?.counts?.processing ?? 0,
-    for_correction: dashboardSummary?.counts?.for_correction ?? 0,
-    ready_for_release: dashboardSummary?.counts?.ready_for_release ?? 0,
-    completed: dashboardSummary?.counts?.completed ?? 0,
-    rejected: dashboardSummary?.counts?.rejected ?? 0,
-  }), [dashboardSummary]);
+  const counts = useMemo(() => {
+    const scopedCounts = activeDocumentType
+      ? dashboardSummary?.summary_by_type?.find(
+          (type) => type.value === activeDocumentType,
+        )
+      : dashboardSummary?.counts;
+
+    return {
+      pending: scopedCounts?.pending ?? 0,
+      under_review: scopedCounts?.under_review ?? 0,
+      processing: scopedCounts?.processing ?? 0,
+      for_correction: scopedCounts?.for_correction ?? 0,
+      ready_for_release: scopedCounts?.ready_for_release ?? 0,
+      completed: scopedCounts?.completed ?? 0,
+      rejected: scopedCounts?.rejected ?? 0,
+    };
+  }, [activeDocumentType, dashboardSummary]);
 
   const filteredRequests = useMemo(
     () => requests.filter((request) => !activeDocumentType || request.document_type === activeDocumentType),
@@ -465,72 +473,13 @@ function StaffDashboardProfessional({ documentType = "" }) {
             />
           </div>
 
-          {!documentType && (
-            <>
-              <section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Daily request workload">
-                <SummaryCard label="Pending Requests" value={counts.pending} icon={Clock3} color="amber" note="Awaiting initial review" onClick={() => quickFilter("pending")} />
-                <SummaryCard label="Under Review" value={counts.under_review} icon={Search} color="blue" note="Requirements being checked" onClick={() => quickFilter("under_review")} />
-                <SummaryCard label="Processing" value={counts.processing} icon={Settings2} color="blue" note="Document being prepared" onClick={() => quickFilter("processing")} />
-                <SummaryCard label="For Correction" value={counts.for_correction} icon={CircleAlert} color="red" note="Waiting for resident update" onClick={() => quickFilter("for_correction")} />
-                <SummaryCard label="Ready for Release" value={counts.ready_for_release} icon={FileCheck2} color="emerald" note="Awaiting resident pickup" onClick={() => quickFilter("ready_for_release")} />
-              </section>
-
-              <section className="mb-7 grid gap-5 xl:grid-cols-2">
-                <div className="overflow-hidden rounded-2xl border border-[#E6ECF5] bg-white shadow-[0_8px_28px_rgba(18,63,112,0.05)]">
-                  <div className="border-b border-[#E6ECF5] px-5 py-4">
-                    <h2 className="font-bold text-[#172B4D]">Requests needing attention</h2>
-                    <p className="mt-1 text-xs text-slate-500">Requests that need staff action, prioritized by status.</p>
-                  </div>
-                  <CompactRequestTable requests={dashboardSummary?.attention || []} onView={viewRequest} emptyMessage="No requests need immediate staff action." />
-                </div>
-
-                <div className="overflow-hidden rounded-2xl border border-[#E6ECF5] bg-white shadow-[0_8px_28px_rgba(18,63,112,0.05)]">
-                  <div className="border-b border-[#E6ECF5] px-5 py-4">
-                    <h2 className="font-bold text-[#172B4D]">Other recent requests</h2>
-                    <p className="mt-1 text-xs text-slate-500">Latest activity not already listed for attention.</p>
-                  </div>
-                  <CompactRequestTable requests={dashboardSummary?.recent || []} onView={viewRequest} emptyMessage="No recent requests." />
-                </div>
-              </section>
-
-              <section className="mb-7 overflow-hidden rounded-2xl border border-[#E6ECF5] bg-white shadow-[0_8px_28px_rgba(18,63,112,0.05)]">
-                <div className="border-b border-[#E6ECF5] px-5 py-4">
-                  <h2 className="font-bold text-[#172B4D]">Document request summary</h2>
-                  <p className="mt-1 text-xs text-slate-500">Request counts by configured document type and status.</p>
-                </div>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1000px] text-left text-xs">
-                    <thead className="bg-[#F6F8FC] font-bold uppercase tracking-wide text-[#55708F]">
-                      <tr>
-                        <th className="px-4 py-3">Document type</th>
-                        <th className="px-3 py-3">Pending</th>
-                        <th className="px-3 py-3">Under review</th>
-                        <th className="px-3 py-3">Processing</th>
-                        <th className="px-3 py-3">For correction</th>
-                        <th className="px-3 py-3">Ready</th>
-                        <th className="px-3 py-3">Released</th>
-                        <th className="px-3 py-3">Rejected</th>
-                        <th className="px-3 py-3">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {(dashboardSummary?.summary_by_type || []).map((type) => (
-                        <tr key={type.value} className="hover:bg-[#2455D6]/[0.03]">
-                          <td className="px-4 py-3 font-semibold text-slate-700">{type.label}</td>
-                          {["pending", "under_review", "processing", "for_correction", "ready_for_release", "completed", "rejected", "total"].map((key) => (
-                            <td key={key} className="px-3 py-3 text-slate-600">{type[key]}</td>
-                          ))}
-                        </tr>
-                      ))}
-                      {!dashboardSummary?.summary_by_type?.length && (
-                        <tr><td colSpan="9" className="px-4 py-8 text-center text-slate-500">No document types or requests to summarize.</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            </>
-          )}
+          <section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label={`${activeDocumentLabel || "All document"} request workload`}>
+            <SummaryCard label="Pending Requests" value={counts.pending} icon={Clock3} color="amber" note="Awaiting initial review" onClick={() => quickFilter("pending")} />
+            <SummaryCard label="Under Review" value={counts.under_review} icon={Search} color="blue" note="Requirements being checked" onClick={() => quickFilter("under_review")} />
+            <SummaryCard label="Processing" value={counts.processing} icon={Settings2} color="blue" note="Document being prepared" onClick={() => quickFilter("processing")} />
+            <SummaryCard label="For Correction" value={counts.for_correction} icon={CircleAlert} color="red" note="Waiting for resident update" onClick={() => quickFilter("for_correction")} />
+            <SummaryCard label="Ready for Release" value={counts.ready_for_release} icon={FileCheck2} color="emerald" note="Awaiting resident pickup" onClick={() => quickFilter("ready_for_release")} />
+          </section>
 
           {notice && <Notice type="success" message={notice} onClose={() => setNotice("")} />}
           {error && <Notice type="error" message={error} onClose={() => setError("")} />}
@@ -848,48 +797,6 @@ function SummaryCard({ label, value, icon: Icon, color, note, onClick }) {
   );
 }
 
-function CompactRequestTable({ requests, onView, emptyMessage }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[740px] text-left text-xs">
-        <thead className="bg-[#F6F8FC] text-[10px] font-bold uppercase tracking-wide text-[#55708F]">
-          <tr>
-            <th className="px-4 py-3">Request ID</th>
-            <th className="px-4 py-3">Resident</th>
-            <th className="px-4 py-3">Document type</th>
-            <th className="px-4 py-3">Status</th>
-            <th className="px-4 py-3">Date</th>
-            <th className="px-4 py-3">Action</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {requests.map((request) => (
-            <tr key={request.id} className="hover:bg-[#2455D6]/[0.03]">
-              <td className="px-4 py-3 font-bold text-slate-700">#{request.id}</td>
-              <td className="px-4 py-3 font-medium text-slate-700">{request.resident?.name || "Resident"}</td>
-              <td className="px-4 py-3 text-slate-600">{request.document_type_label || request.document_type}</td>
-              <td className="px-4 py-3">
-                <span className={`rounded-full px-2 py-1 font-bold ${STATUS_META[request.status]?.className || "bg-slate-100 text-slate-600"}`}>
-                  {STATUS_META[request.status]?.label || request.status}
-                </span>
-              </td>
-              <td className="whitespace-nowrap px-4 py-3 text-slate-500">
-                {formatDate(request.status_changed_at || request.updated_at || request.created_at)}
-              </td>
-              <td className="px-4 py-3">
-                <button type="button" onClick={() => onView(request)} className="rounded-lg border border-[#D9E6FF] bg-white px-3 py-1.5 font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20">
-                  View
-                </button>
-              </td>
-            </tr>
-          ))}
-          {!requests.length && <tr><td colSpan="6" className="px-4 py-8 text-center text-slate-500">{emptyMessage}</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
 function Notice({ type, message, onClose }) {
   const styles = type === "success" ? "border-[#CDEBD8] bg-[#ECF9F1] text-[#21864A]" : "border-[#F2D4D0] bg-[#FFF0EE] text-[#C74444]";
   return (
@@ -1013,6 +920,7 @@ function RequestDetails({ request, token, onFeeUpdated }) {
         )}
       </div>
       </section>
+      <IdentityComparison review={request.identity_review} />
       <section aria-labelledby="applicant-information-heading" className="mt-6 border-t border-slate-100 pt-5">
         <div className="mb-3">
           <h3 id="applicant-information-heading" className="text-sm font-bold text-[#172B4D]">Applicant-provided information</h3>
@@ -1030,6 +938,55 @@ function RequestDetails({ request, token, onFeeUpdated }) {
         </div>
       </section>
     </div>
+  );
+}
+
+function IdentityComparison({ review }) {
+  const isClear = review?.ok === true;
+  const hasReview = Boolean(review);
+
+  return (
+    <section aria-labelledby="identity-comparison-heading" className={`mt-6 rounded-xl border p-4 ${isClear ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/70"}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="identity-comparison-heading" className="text-sm font-bold text-[#172B4D]">Identity verification</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-600">
+            {isClear
+              ? "Resident profile and submitted identity information match the barangay registry."
+              : review?.message || "Identity information does not match. Review the differences below before taking action."}
+          </p>
+        </div>
+        <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${isClear ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+          {isClear ? "Match confirmed" : hasReview ? "Review required" : "Checking required"}
+        </span>
+      </div>
+      {review?.fields?.length > 0 && (
+        <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+          <table className="w-full min-w-[620px] text-left text-xs">
+            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-2.5">Field</th>
+                <th className="px-3 py-2.5">Resident profile</th>
+                <th className="px-3 py-2.5">Barangay registry</th>
+                <th className="px-3 py-2.5">Submitted request</th>
+                <th className="px-3 py-2.5">Check</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {review.fields.map((field) => (
+                <tr key={field.key} className={field.ok ? "" : "bg-red-50/70"}>
+                  <th className="px-3 py-2.5 font-semibold text-slate-700">{field.label}</th>
+                  <td className="px-3 py-2.5 text-slate-600">{formatFieldValue(field.profile)}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{formatFieldValue(field.registry)}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{formatFieldValue(field.submitted)}</td>
+                  <td className={`px-3 py-2.5 font-bold ${field.ok ? "text-emerald-700" : "text-red-700"}`}>{field.ok ? "Match" : "Mismatch"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 

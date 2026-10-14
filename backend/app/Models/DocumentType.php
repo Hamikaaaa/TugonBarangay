@@ -15,6 +15,7 @@ class DocumentType extends Model
         'enabled',
         'value',
         'label',
+        'description',
         'fee_mode',
         'fee',
         'one_time',
@@ -26,6 +27,8 @@ class DocumentType extends Model
         'uploaded_template_path',
         'uploaded_template_name',
         'template_enabled',
+        'paper_size',
+        'document_layout',
     ];
 
     protected function casts(): array
@@ -38,6 +41,7 @@ class DocumentType extends Model
             'fields' => 'array',
             'requirements' => 'array',
             'template_enabled' => 'boolean',
+            'document_layout' => 'array',
         ];
     }
 }

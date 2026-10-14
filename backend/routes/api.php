@@ -26,6 +26,7 @@ Route::middleware(['auth:sanctum', 'role:resident'])->prefix('resident')->group(
         ->middleware('verified');
     Route::post('/requests/{documentRequest}/resubmit', [ResidentController::class, 'resubmitRequest'])
         ->middleware('verified');
+    Route::get('/requests/{documentRequest}/requirements/{requirement}', [ResidentController::class, 'viewRequestRequirement']);
     Route::get('/complaints', [ResidentController::class, 'complaints']);
     Route::post('/complaints', [ResidentController::class, 'storeComplaint'])
         ->middleware('verified');
@@ -49,6 +50,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::patch('/staff-accounts/{staff}/status', [AdminController::class, 'updateStaffAccountStatus']);
     Route::get('/notifications', [AdminController::class, 'notifications']);
     Route::get('/reports', [AdminController::class, 'reports']);
+    Route::get('/reports/document-requests', [AdminController::class, 'documentRequestReport']);
+    Route::get('/reports/complaints', [AdminController::class, 'complaintReport']);
     Route::get('/feedback', [AdminController::class, 'feedback']);
     Route::get('/document-types', [DocumentTypeController::class, 'adminIndex']);
     Route::post('/document-types', [DocumentTypeController::class, 'store']);
@@ -69,6 +72,8 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/bantaybot/stats', [ResidentController::class, 'adminBotStats']);
     Route::get('/residents/registry-stats', [AdminController::class, 'residentRegistryStats']);
     Route::get('/barangay-registry', [AdminController::class, 'barangayRegistry']);
+    Route::get('/resident-accounts', [AdminController::class, 'residentAccounts']);
+    Route::patch('/resident-accounts/{resident}/status', [AdminController::class, 'updateResidentAccountStatus']);
     Route::get('/pending-residents', [AdminController::class, 'pendingResidents']);
     Route::patch('/residents/{user}/verify', [AdminController::class, 'verifyResident']);
     Route::patch('/residents/{user}/reject', [AdminController::class, 'rejectResident']);

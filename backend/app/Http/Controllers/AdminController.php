@@ -113,6 +113,33 @@ class AdminController extends Controller
             ->paginate($validated['per_page'] ?? 25);
     }
 
+    public function residentAccounts(Request $request)
+    {
+        $validated = $request->validate(['search' => ['nullable', 'string', 'max:150']]);
+        $query = Resident::query()
+            ->select(['id','name','first_name','middle_name','last_name','email','verification_status','is_active','last_login_at','created_at'])
+            ->selectRaw('(SELECT COUNT(*) FROM residents AS same_name_accounts WHERE LOWER(TRIM(COALESCE(same_name_accounts.first_name, \'\'))) = LOWER(TRIM(COALESCE(residents.first_name, \'\'))) AND LOWER(TRIM(COALESCE(same_name_accounts.middle_name, \'\'))) = LOWER(TRIM(COALESCE(residents.middle_name, \'\'))) AND LOWER(TRIM(COALESCE(same_name_accounts.last_name, \'\'))) = LOWER(TRIM(COALESCE(residents.last_name, \'\')))) AS same_name_accounts');
+        if (!empty($validated['search'])) {
+            $term = trim($validated['search']);
+            $query->where(fn ($q) => $q->where('name', 'like', "%{$term}%")->orWhere('email', 'like', "%{$term}%"));
+        }
+        return $query
+            ->orderByRaw("LOWER(TRIM(COALESCE(first_name, '')))")
+            ->orderByRaw("LOWER(TRIM(COALESCE(middle_name, '')))")
+            ->orderByRaw("LOWER(TRIM(COALESCE(last_name, '')))")
+            ->orderByRaw('CASE WHEN last_login_at IS NULL THEN 0 ELSE 1 END')
+            ->orderBy('last_login_at')
+            ->paginate(50);
+    }
+
+    public function updateResidentAccountStatus(Request $request, Resident $resident)
+    {
+        $validated = $request->validate(['is_active' => ['required', 'boolean']]);
+        $resident->update(['is_active' => $validated['is_active']]);
+        if (!$resident->is_active) $resident->tokens()->delete();
+        return response()->json(['message' => $resident->is_active ? 'Resident account enabled.' : 'Resident account disabled and active sessions revoked.']);
+    }
+
     public function residentRegistryStats()
     {
         $pendingResidents = Resident::query()->where('verification_status', 'pending');
@@ -220,10 +247,15 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'months' => ['sometimes', 'integer', 'in:6,12,24'],
+            'from' => ['sometimes', 'date'],
+            'to' => ['sometimes', 'date', 'after_or_equal:from'],
         ]);
         $months = (int) ($validated['months'] ?? 12);
         $end = now();
         $start = $end->copy()->startOfMonth()->subMonths($months - 1);
+        if (!empty($validated['from'])) $start = \Illuminate\Support\Carbon::parse($validated['from'])->startOfDay();
+        if (!empty($validated['to'])) $end = \Illuminate\Support\Carbon::parse($validated['to'])->endOfDay();
+        if ($start->gt($end)) return response()->json(['message' => 'The from date must be on or before the to date.'], 422);
         $startDate = $start->toDateString();
         $endDate = $end->toDateString();
 
@@ -317,6 +349,45 @@ class AdminController extends Controller
                 ],
             ],
             'complaint_categories' => $complaintCategories,
+        ]);
+    }
+
+    public function documentRequestReport(Request $request)
+    {
+        $validated = $request->validate([
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+        ]);
+        $rows = DocumentRequest::query()->with(['resident:id,name,first_name,middle_name,last_name,email', 'assignedStaff:id,name', 'type'])
+            ->whereBetween('created_at', [\Illuminate\Support\Carbon::parse($validated['from'])->startOfDay(), \Illuminate\Support\Carbon::parse($validated['to'])->endOfDay()])
+            ->orderBy('created_at')->get();
+        return response()->json(['from' => $validated['from'], 'to' => $validated['to'], 'data' => $rows]);
+    }
+
+    public function complaintReport(Request $request)
+    {
+        $validated = $request->validate([
+            'from' => ['required', 'date'],
+            'to' => ['required', 'date', 'after_or_equal:from'],
+        ]);
+        $complaints = Complaint::query()->with('user:id,name,email')
+            ->whereBetween('created_at', [
+                \Illuminate\Support\Carbon::parse($validated['from'])->startOfDay(),
+                \Illuminate\Support\Carbon::parse($validated['to'])->endOfDay(),
+            ])
+            ->orderBy('created_at')
+            ->get();
+
+        return response()->json([
+            'from' => $validated['from'],
+            'to' => $validated['to'],
+            'summary' => [
+                'total' => $complaints->count(),
+                'open' => $complaints->whereNotIn('status', ['resolved', 'rejected', 'closed'])->count(),
+                'resolved' => $complaints->whereIn('status', ['resolved', 'closed'])->count(),
+                'rejected' => $complaints->where('status', 'rejected')->count(),
+            ],
+            'data' => $complaints,
         ]);
     }
 

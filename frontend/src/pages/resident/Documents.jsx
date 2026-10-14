@@ -24,20 +24,34 @@ const APPLICANT_FIELDS = {
 };
 
 function getApplicantDefaults(user = {}) {
+  const profileNameParts = String(user.name || "").trim().split(/\s+/).filter(Boolean);
+  const firstName = user.first_name || profileNameParts[0] || "";
+  const middleName = user.middle_name || profileNameParts.slice(1, -1).join(" ");
+  const lastName = user.last_name || (profileNameParts.length > 1 ? profileNameParts.at(-1) : "");
   const fullName = [
-    user.first_name,
-    user.middle_name,
-    user.last_name,
+    firstName,
+    middleName,
+    lastName,
     user.suffix,
   ]
     .filter(Boolean)
     .join(" ");
 
+  const dateOfBirth = user.date_of_birth
+    ? String(user.date_of_birth).slice(0, 10)
+    : "";
+
   return {
     full_name: fullName || user.name || "",
+    first_name: firstName,
+    middle_name: middleName,
+    last_name: lastName,
     address: user.address || "",
-    date_of_birth: user.date_of_birth || "",
+    date_of_birth: dateOfBirth,
+    age: calculateAge(dateOfBirth),
     sex: user.sex || "",
+    civil_status: user.civil_status || "",
+    citizenship: user.citizenship || "Filipino",
     purok: user.purok || "",
     contact_number: user.mobile_number || "",
     email_address: user.email || "",
@@ -46,6 +60,45 @@ function getApplicantDefaults(user = {}) {
     business_contact_number: user.mobile_number || "",
     business_email_address: user.email || "",
   };
+}
+
+function getFriendlyRequestError(error, document) {
+  const message = String(error?.message || "");
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("unable to connect") || normalized.includes("server took too long")) {
+    return "We couldn’t reach the barangay service. Check your connection and try again.";
+  }
+  if (normalized.includes("already requested") || normalized.includes("one-time")) {
+    return "This certificate has already been requested or issued for your account.";
+  }
+  if (normalized.includes("date_of_birth") || normalized.includes("date of birth")) {
+    return "Enter a valid date of birth. It must be today or an earlier date.";
+  }
+  if (normalized.includes("age")) {
+    return "We couldn’t calculate your age from your date of birth. Update your profile date of birth and try again.";
+  }
+  if (normalized.includes("requirements.")) {
+    const requirement = document?.requirements.find((item) =>
+      normalized.includes(item.key.toLowerCase()),
+    );
+    if (normalized.includes("required")) {
+      return requirement
+        ? `Please upload your ${requirement.label}.`
+        : "Please upload all required documents before submitting.";
+    }
+    if (normalized.includes("mimes")) {
+      return "Uploaded documents must be PDF, JPG, or PNG files.";
+    }
+    if (normalized.includes("max")) {
+      return "Each uploaded document must be 5 MB or smaller.";
+    }
+    return "We couldn’t use one of the uploaded documents. Check the file and try again.";
+  }
+  if (normalized.includes("required") || normalized.includes("form_fields")) {
+    return "Please complete all required information in the form.";
+  }
+  return message || "We couldn’t submit your request. Please check the form and try again.";
 }
 
 function calculateAge(dateOfBirth) {
@@ -315,6 +368,7 @@ function Documents({ requests, token, onRefresh, user }) {
   const [editingRequest, setEditingRequest] = useState(null);
   const [requirementFiles, setRequirementFiles] = useState({});
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState("info");
   const [submitting, setSubmitting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [history, setHistory] = useState(requests);
@@ -330,6 +384,12 @@ function Documents({ requests, token, onRefresh, user }) {
   const formRef = useRef(null);
 
   useEffect(() => {
+    if (!documentType && !editingRequest) {
+      setFormFields(getApplicantDefaults(user));
+    }
+  }, [documentType, editingRequest, user]);
+
+  useEffect(() => {
     let active = true;
     residentApi("/resident/document-types", token)
       .then((result) => {
@@ -338,7 +398,8 @@ function Documents({ requests, token, onRefresh, user }) {
       .catch((error) => {
         if (active) {
           setCatalogTypes([]);
-          setMessage(error.message);
+          setMessage("We couldn't load document types. Refresh the page and try again.");
+          setMessageTone("error");
         }
       });
     return () => {
@@ -385,9 +446,11 @@ function Documents({ requests, token, onRefresh, user }) {
     if (catalogTypes === null) return DOCUMENT_TYPES;
     return catalogTypes.map(mapConfiguredDocumentType);
   }, [catalogTypes]);
-  const selectedDocument = availableDocuments.find(
-    (document) => (document.value || document.label) === documentType,
-  ) || (editingRequest?.type ? mapConfiguredDocumentType(editingRequest.type) : null);
+  const selectedDocument = (catalogTypes === null && editingRequest?.type
+    ? mapConfiguredDocumentType(editingRequest.type)
+    : availableDocuments.find(
+        (document) => (document.value || document.label) === documentType,
+      )) || (editingRequest?.type ? mapConfiguredDocumentType(editingRequest.type) : null);
   const documentOptions = selectedDocument && !availableDocuments.some(
     (document) => (document.value || document.label) === documentType,
   )
@@ -427,9 +490,16 @@ function Documents({ requests, token, onRefresh, user }) {
 
     setEditingRequest(request);
     setDocumentType(request.document_type);
+    const applicantDefaults = getApplicantDefaults(user);
     setFormFields({
-      ...getApplicantDefaults(user),
+      ...applicantDefaults,
       ...existingFields,
+      ...(applicantDefaults.date_of_birth
+        ? {
+            date_of_birth: applicantDefaults.date_of_birth,
+            age: applicantDefaults.age,
+          }
+        : {}),
       ...(hasCustomPurpose
         ? { purpose: "Other", purpose_other: existingFields.purpose }
         : {}),
@@ -437,6 +507,7 @@ function Documents({ requests, token, onRefresh, user }) {
     setNotes(request.details?.notes || "");
     setRequirementFiles({});
     setMessage("");
+    setMessageTone("info");
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -447,13 +518,25 @@ function Documents({ requests, token, onRefresh, user }) {
     setNotes("");
     setRequirementFiles({});
     setMessage("");
+    setMessageTone("info");
     formRef.current?.reset();
   };
 
   const submitRequest = async (event) => {
     event.preventDefault();
+    if (!selectedDocument) {
+      setMessage("Choose a document type before submitting your request.");
+      setMessageTone("error");
+      return;
+    }
+    if (!formFields.date_of_birth && selectedDocument.applicantFields.includes("date_of_birth")) {
+      setMessage("Your date of birth is missing. Add it to your profile before requesting this document.");
+      setMessageTone("error");
+      return;
+    }
     setSubmitting(true);
     setMessage("");
+    setMessageTone("info");
     try {
       const formData = new FormData();
       formData.append("document_type", documentType);
@@ -498,6 +581,7 @@ function Documents({ requests, token, onRefresh, user }) {
           ? `Correction submitted. Request ${data.request.id} is pending verification.`
           : `Request submitted. Your Request ID is ${data.request.id}.`,
       );
+      setMessageTone("success");
       if (!editingRequest && selectedDocument.one_time) {
         setCatalogTypes((current) =>
           (current || []).map((type) => type.value === documentType
@@ -530,7 +614,8 @@ function Documents({ requests, token, onRefresh, user }) {
         // The request is saved; the request history has its own refresh state.
       }
     } catch (error) {
-      setMessage(error.message);
+      setMessage(getFriendlyRequestError(error, selectedDocument));
+      setMessageTone("error");
     } finally {
       setSubmitting(false);
     }
@@ -649,6 +734,11 @@ function Documents({ requests, token, onRefresh, user }) {
 
           {selectedDocument && (
             <>
+              {selectedDocument.description && (
+                <p className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm leading-6 text-slate-600">
+                  {selectedDocument.description}
+                </p>
+              )}
               {selectedDocument.notice && (
                 <p className="mt-5 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm text-[#41658A]">
                   {selectedDocument.notice}
@@ -913,8 +1003,14 @@ function Documents({ requests, token, onRefresh, user }) {
 
           {message && (
             <p
-              role="status"
-              className="mt-4 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]"
+              role={messageTone === "error" ? "alert" : "status"}
+              className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
+                messageTone === "error"
+                  ? "bg-red-50 text-red-700"
+                  : messageTone === "success"
+                    ? "bg-emerald-50 text-emerald-700"
+                    : "bg-[#EEF4FF] text-[#2455D6]"
+              }`}
             >
               {message}
             </p>
@@ -986,7 +1082,7 @@ function Documents({ requests, token, onRefresh, user }) {
           <div className="divide-y divide-slate-100 px-6 sm:px-8">
             {history.map((request) => (
               <div key={request.id} className="transition hover:bg-slate-50/70">
-                <RequestRow request={request} />
+                <RequestRow request={request} token={token} />
                 {request.status === "for_correction" && (
                   <div className="pb-4 pl-[52px]">
                     <button

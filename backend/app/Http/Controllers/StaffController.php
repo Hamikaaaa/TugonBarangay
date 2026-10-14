@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Complaint;
+use App\Models\BarangayRegistry;
 use App\Models\DocumentRequest;
 use App\Models\DocumentRequestEvent;
 use App\Models\DocumentType;
@@ -77,7 +78,17 @@ class StaffController extends Controller
             $query->orderBy($sortBy, $direction);
         }
 
-        return $query->paginate($validated['per_page'] ?? 25);
+        $page = $query->paginate($validated['per_page'] ?? 25);
+        $page->getCollection()->transform(function (DocumentRequest $documentRequest) {
+            $documentRequest->setAttribute(
+                'identity_review',
+                $this->documentRequestIdentityReview($documentRequest),
+            );
+
+            return $documentRequest;
+        });
+
+        return $page;
     }
 
     public function documentRequestDashboard()
@@ -87,68 +98,28 @@ class StaffController extends Controller
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
-        $typeCounts = DocumentRequest::query()
+        $countsByType = DocumentRequest::query()
             ->selectRaw('document_type, status, COUNT(*) as count')
             ->groupBy('document_type', 'status')
             ->get()
-            ->groupBy('document_type');
-        $types = DocumentType::query()
-            ->whereNotNull('value')
-            ->where('active', true)
-            ->orderBy('label')
-            ->get(['value', 'label'])
-            ->map(fn (DocumentType $type) => [
-                'value' => $type->value,
-                'label' => $type->label,
-            ]);
+            ->groupBy('document_type')
+            ->map(function ($typeRows, string $documentType) use ($statuses) {
+                $statusCounts = $typeRows->keyBy('status');
+                $result = ['value' => $documentType];
+                foreach ($statuses as $status) {
+                    $result[$status] = (int) ($statusCounts->get($status)?->count ?? 0);
+                }
 
-        foreach ($typeCounts as $value => $statusCounts) {
-            if (!$types->contains('value', $value)) {
-                $types->push([
-                    'value' => $value,
-                    'label' => DocumentType::where('value', $value)->value('label') ?? $value,
-                ]);
-            }
-        }
-
-        $summaryByType = $types->map(function (array $type) use ($typeCounts, $statuses) {
-            $countsForType = $typeCounts->get($type['value'], collect())->keyBy('status');
-            $result = [
-                'value' => $type['value'],
-                'label' => $type['label'],
-                'total' => $countsForType->sum('count'),
-            ];
-            foreach ($statuses as $status) {
-                $result[$status] = (int) ($countsForType->get($status)?->count ?? 0);
-            }
-
-            return $result;
-        })->values();
-
-        $relations = ['resident', 'type', 'assignedStaff'];
-        $attention = DocumentRequest::query()
-            ->with($relations)
-            ->whereIn('status', ['pending', 'under_review', 'processing', 'for_correction', 'ready_for_release'])
-            ->orderByRaw("CASE status WHEN 'for_correction' THEN 0 WHEN 'pending' THEN 1 WHEN 'under_review' THEN 2 ELSE 3 END")
-            ->orderBy('created_at')
-            ->limit(8)
-            ->get();
-        $recent = DocumentRequest::query()
-            ->with($relations)
-            ->whereNotIn('id', $attention->modelKeys())
-            ->orderByDesc('updated_at')
-            ->limit(10)
-            ->get();
-
+                return $result;
+            })
+            ->values();
         return response()->json([
             'data' => [
                 'total' => (int) $counts->sum(),
                 'counts' => collect($statuses)->mapWithKeys(fn (string $status) => [
                     $status => (int) ($counts[$status] ?? 0),
                 ]),
-                'summary_by_type' => $summaryByType,
-                'attention' => $attention,
-                'recent' => $recent,
+                'summary_by_type' => $countsByType,
                 'updated_at' => Carbon::now()->toIso8601String(),
             ],
         ]);
@@ -163,9 +134,9 @@ class StaffController extends Controller
 
     public function generateDocumentPreview(Request $request, DocumentRequest $documentRequest)
     {
-        if ($documentRequest->status !== 'processing') {
+        if (!in_array($documentRequest->status, ['processing', 'ready_for_release'], true)) {
             return response()->json([
-                'message' => 'A document preview can only be generated while the request is processing.',
+                'message' => 'A document preview can only be generated while the request is processing or ready for release.',
             ], 409);
         }
 
@@ -357,7 +328,10 @@ class StaffController extends Controller
 
         return response()->json([
             'message' => 'Document request updated successfully.',
-            'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']),
+            'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff'])->setAttribute(
+                'identity_review',
+                $this->documentRequestIdentityReview($documentRequest),
+            ),
         ]);
     }
 
@@ -613,5 +587,141 @@ class StaffController extends Controller
             'status' => $documentRequest->status,
             'notes' => $documentRequest->staff_remarks ?? 'No remarks',
         ]);
+    }
+
+    private function documentRequestIdentityReview(DocumentRequest $documentRequest): array
+    {
+        $resident = $documentRequest->resident;
+        if (!$resident) {
+            return [
+                'ok' => false,
+                'registry_found' => false,
+                'fields' => [],
+                'message' => 'The resident profile could not be found.',
+            ];
+        }
+
+        $registryQuery = BarangayRegistry::query()
+            ->whereRaw('LOWER(first_name) = ?', [mb_strtolower(trim((string) $resident->first_name))])
+            ->whereRaw('LOWER(last_name) = ?', [mb_strtolower(trim((string) $resident->last_name))]);
+        $registry = (clone $registryQuery)
+            ->whereDate('date_of_birth', $resident->date_of_birth)
+            ->whereRaw('LOWER(sex) = ?', [mb_strtolower(trim((string) $resident->sex))])
+            ->whereRaw('LOWER(purok) = ?', [mb_strtolower(trim((string) $resident->purok))])
+            ->first();
+        if (!$registry) {
+            $dateMatches = (clone $registryQuery)
+                ->whereDate('date_of_birth', $resident->date_of_birth)
+                ->limit(2)
+                ->get();
+            if ($dateMatches->count() === 1) {
+                $registry = $dateMatches->first();
+            }
+        }
+        if (!$registry) {
+            $nameMatches = (clone $registryQuery)->limit(2)->get();
+            if ($nameMatches->count() === 1) {
+                $registry = $nameMatches->first();
+            }
+        }
+
+        if (!$registry) {
+            return [
+                'ok' => false,
+                'registry_found' => false,
+                'fields' => [],
+                'message' => 'No unique barangay registry record matches this resident. Ask an administrator to verify the resident records.',
+            ];
+        }
+
+        $profileFullName = collect([
+            $resident->first_name,
+            $resident->middle_name,
+            $resident->last_name,
+            $resident->suffix,
+        ])->filter()->implode(' ');
+        $registryFullName = collect([
+            $registry->first_name,
+            $registry->middle_name,
+            $registry->last_name,
+            $registry->suffix,
+        ])->filter()->implode(' ');
+        $submitted = $documentRequest->details['form_fields'] ?? [];
+        $values = [
+            'full_name' => ['label' => 'Full name', 'profile' => $profileFullName, 'registry' => $registryFullName],
+            'date_of_birth' => ['label' => 'Date of birth', 'profile' => $resident->date_of_birth, 'registry' => $registry->date_of_birth],
+            'sex' => ['label' => 'Sex', 'profile' => $resident->sex, 'registry' => $registry->sex],
+            'purok' => ['label' => 'Purok', 'profile' => $resident->purok, 'registry' => $registry->purok],
+            'address' => ['label' => 'Address', 'profile' => $resident->address, 'registry' => $registry->address],
+        ];
+
+        $fields = [];
+        foreach ($values as $key => $value) {
+            if ($key === 'address' && blank($value['registry'])) {
+                continue;
+            }
+            $submittedValue = $key === 'full_name'
+                ? (collect([$submitted['first_name'] ?? null, $submitted['middle_name'] ?? null, $submitted['last_name'] ?? null, $submitted['suffix'] ?? null])->filter()->implode(' ') ?: ($submitted['full_name'] ?? $profileFullName))
+                : ($submitted[$key] ?? null);
+            $profileMatches = blank($value['profile']) || ($key === 'full_name'
+                ? $this->profileNameMatchesRegistry($resident, $registry)
+                : $this->sameIdentityValue($value['profile'], $value['registry'], $key));
+            $submissionMatches = blank($submittedValue) || $this->sameIdentityValue($submittedValue, $value['registry'], $key);
+            $fields[] = [
+                'key' => $key,
+                'label' => $value['label'],
+                'profile' => $value['profile'],
+                'registry' => $value['registry'],
+                'submitted' => $submittedValue,
+                'ok' => $profileMatches && $submissionMatches,
+            ];
+        }
+
+        $registryAge = Carbon::parse($registry->date_of_birth)->age;
+        if (array_key_exists('age', $submitted)) {
+            $fields[] = [
+                'key' => 'age',
+                'label' => 'Age',
+                'profile' => null,
+                'registry' => $registryAge,
+                'submitted' => $submitted['age'],
+                'ok' => (string) $submitted['age'] === (string) $registryAge,
+            ];
+        }
+
+        return [
+            'ok' => collect($fields)->every(fn (array $field) => $field['ok']),
+            'registry_found' => true,
+            'fields' => $fields,
+            'message' => null,
+        ];
+    }
+
+    private function sameIdentityValue(mixed $left, mixed $right, string $key): bool
+    {
+        if ($key === 'date_of_birth') {
+            return substr((string) $left, 0, 10) === substr((string) $right, 0, 10);
+        }
+
+        $normalize = fn ($value) => mb_strtolower(preg_replace('/\s+/', ' ', trim((string) $value)));
+
+        return $normalize($left) === $normalize($right);
+    }
+
+    private function profileNameMatchesRegistry(Resident $resident, BarangayRegistry $registry): bool
+    {
+        foreach ([
+            'first_name' => 'first_name',
+            'middle_name' => 'middle_name',
+            'last_name' => 'last_name',
+            'suffix' => 'suffix',
+        ] as $profileField => $registryField) {
+            $profileValue = $resident->{$profileField};
+            if (!blank($profileValue) && !$this->sameIdentityValue($profileValue, $registry->{$registryField}, $profileField)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

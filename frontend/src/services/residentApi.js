@@ -56,7 +56,7 @@ export async function residentApi(path, token, options = {}) {
   return data;
 }
 
-export async function downloadResidentFile(path, token, fallbackName) {
+export async function downloadResidentFile(path, token, fallbackName, options = {}) {
   let response;
   try {
     response = await fetch(`${API_URL}${path}`, {
@@ -80,9 +80,14 @@ export async function downloadResidentFile(path, token, fallbackName) {
   const objectUrl = URL.createObjectURL(await response.blob());
   const link = document.createElement("a");
   link.href = objectUrl;
-  link.download = filename;
+  if (options.open) {
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+  } else {
+    link.download = filename;
+  }
   document.body.append(link);
   link.click();
   link.remove();
-  URL.revokeObjectURL(objectUrl);
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
 }

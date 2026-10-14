@@ -114,6 +114,13 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if ($user instanceof Resident && !$user->is_active) {
+            return response()->json(['message' => 'This resident account is disabled. Please contact an administrator.'], 403);
+        }
+        if ($user instanceof Resident) {
+            $user->forceFill(['last_login_at' => now()])->save();
+        }
+
         if ($user instanceof Staff && !$user->is_active) {
             return response()->json([
                 'message' => 'This staff account is disabled. Please contact an administrator.',
