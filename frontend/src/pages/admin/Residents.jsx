@@ -25,8 +25,12 @@ function Residents() {
   const navigate = useNavigate();
   const isDashboard = location.pathname.endsWith("/dashboard");
   const isVerification = location.pathname.endsWith("/verification");
+  const isAccounts = location.pathname.endsWith("/accounts");
   const [registry, setRegistry] = useState([]);
   const [pendingResidents, setPendingResidents] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [accountLastPage, setAccountLastPage] = useState(1);
+  const [accountTotal, setAccountTotal] = useState(0);
   const [dashboardStats, setDashboardStats] = useState(null);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -108,13 +112,49 @@ function Residents() {
     }
   }, [isDashboard, isVerification, token]);
 
+  const loadAccounts = useCallback(async () => {
+    if (!token || !isAccounts) return;
+    setLoading(true);
+    try {
+      const query = new URLSearchParams({ page: String(page), per_page: "50" });
+      if (search) query.set("search", search);
+      const response = await fetch(`${API_URL}/admin/resident-accounts?${query}`, { headers: authHeaders(token) });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to load resident accounts.");
+      setAccounts(payload.data || []);
+      setAccountLastPage(payload.last_page || 1);
+      setAccountTotal(payload.total || 0);
+    } catch (loadError) { setError(loadError.message); }
+    finally { setLoading(false); }
+  }, [isAccounts, page, search, token]);
+
   useEffect(() => {
     // Keep each resident workspace view synchronized with its source records.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (isDashboard) loadDashboardStats();
+    else if (isAccounts) loadAccounts();
     else if (isVerification) loadPendingResidents();
     else loadRegistry();
-  }, [isDashboard, isVerification, loadDashboardStats, loadPendingResidents, loadRegistry]);
+  }, [isDashboard, isAccounts, isVerification, loadAccounts, loadDashboardStats, loadPendingResidents, loadRegistry]);
+
+  const setAccountActive = async (account) => {
+    if (savingId) return;
+    setSavingId(account.id);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/admin/resident-accounts/${account.id}/status`, {
+        method: "PATCH", headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: !account.is_active }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to update account.");
+      await loadAccounts();
+    } catch (updateError) {
+      setError(updateError.message);
+    } finally {
+      setSavingId(null);
+    }
+  };
 
   const applySearch = (event) => {
     event.preventDefault();
@@ -165,7 +205,7 @@ function Residents() {
           ? "Residents & Registry Dashboard"
           : isVerification
             ? "Account Verification"
-            : "Barangay Masterlist"
+            : isAccounts ? "Resident Accounts" : "Barangay Masterlist"
       }
     >
       <div className="space-y-6 pt-6">
@@ -176,14 +216,14 @@ function Residents() {
               ? "Residents & Registry dashboard"
               : isVerification
                 ? "Account verification"
-                : "Barangay masterlist"
+                : isAccounts ? "Resident accounts" : "Barangay masterlist"
           }
           description={
             isDashboard
               ? "View the official registry and resident account verification workload at a glance."
               : isVerification
                 ? "Review resident registrations against barangay registry records and approve eligible accounts."
-                : "Browse the official resident records used to validate resident account registrations."
+                : isAccounts ? "Review every registered account, its login activity, and disable inactive accounts." : "Browse the official resident records used to validate resident account registrations."
           }
         >
           <div className="flex min-h-12 items-center gap-3 rounded-xl border border-white/20 bg-white/10 px-4 py-2">
@@ -194,10 +234,10 @@ function Residents() {
                   ? (dashboardStats?.pending_total ?? 0)
                   : isVerification
                     ? pendingResidents.length
-                    : total.toLocaleString()}
+                    : isAccounts ? accountTotal.toLocaleString() : total.toLocaleString()}
             </span>
             <span className="text-xs font-semibold leading-4 text-white/75">
-              {isDashboard || isVerification ? "awaiting review" : "registry records"}
+              {isDashboard || isVerification ? "awaiting review" : isAccounts ? "resident accounts" : "registry records"}
             </span>
           </div>
         </AdminPageHeader>
@@ -217,12 +257,21 @@ function Residents() {
           </button>
           <button
             type="button"
+            onClick={() => { setPage(1); navigate("/admin/residents/accounts"); }}
+            aria-current={isAccounts ? "page" : undefined}
+            className={tabClass(isAccounts)}
+          >
+            <Users className="h-4 w-4" aria-hidden="true" />
+            Residents Account
+          </button>
+          <button
+            type="button"
             onClick={() => {
               setPage(1);
               navigate("/admin/residents");
             }}
-            aria-current={!isDashboard && !isVerification ? "page" : undefined}
-            className={tabClass(!isDashboard && !isVerification)}
+            aria-current={!isDashboard && !isVerification && !isAccounts ? "page" : undefined}
+            className={tabClass(!isDashboard && !isVerification && !isAccounts)}
           >
             <Users className="h-4 w-4" aria-hidden="true" />
             Barangay Masterlist
@@ -254,9 +303,9 @@ function Residents() {
               onClick={
                 isDashboard
                   ? loadDashboardStats
-                  : isVerification
+                : isVerification
                     ? loadPendingResidents
-                    : loadRegistry
+                    : isAccounts ? loadAccounts : loadRegistry
               }
               className="font-bold underline"
             >
@@ -273,7 +322,42 @@ function Residents() {
           </p>
         )}
 
-        {isDashboard ? (
+        {isAccounts ? (
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <form onSubmit={applySearch} className="flex flex-wrap gap-2 border-b border-slate-100 p-4">
+              <label className="sr-only" htmlFor="resident-account-search">Search resident accounts</label>
+              <input id="resident-account-search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search by name or email" className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm" />
+              <button type="submit" className="rounded-lg bg-[#2455D6] px-4 py-2 text-sm font-semibold text-white">Search</button>
+            </form>
+            <p className="border-b border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+              Accounts with matching names are grouped together. Accounts without a recorded login appear first in each group so admins can review and disable extra accounts.
+            </p>
+            <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-4">Account</th><th className="p-4">Registered</th><th className="p-4">Verification</th><th className="p-4">Last login</th><th className="p-4">Activity</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
+              <tbody className="divide-y divide-slate-100">{accounts.map((account, index) => {
+                const nameKey = accountNameKey(account);
+                const previousNameKey = index > 0 ? accountNameKey(accounts[index - 1]) : null;
+                const startsDuplicateGroup = account.same_name_accounts > 1 && nameKey !== previousNameKey;
+                return <tr key={account.id} className={startsDuplicateGroup ? "border-t-2 border-t-blue-200 bg-blue-50/30" : ""}>
+                <td className="p-4"><strong>{account.name}</strong>{account.same_name_accounts > 1 && <span className="ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">{account.same_name_accounts} accounts with this name</span>}<span className="block text-xs text-slate-500">{account.email}</span></td>
+                <td className="p-4">{account.created_at ? new Date(account.created_at).toLocaleDateString() : "—"}</td>
+                <td className="p-4">{account.verification_status}</td>
+                <td className="p-4">{account.last_login_at ? new Date(account.last_login_at).toLocaleString() : "Never"}</td>
+                <td className="p-4">{account.last_login_at ? "Login recorded" : <span className="font-semibold text-amber-700">No login recorded</span>}</td>
+                <td className="p-4"><span className={`rounded-full px-3 py-1.5 text-xs font-bold ${account.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{account.is_active ? "Enabled" : "Disabled"}</span></td>
+                <td className="p-4"><button type="button" onClick={() => setAccountActive(account)} disabled={savingId === account.id} className={`min-w-24 rounded-xl border px-3 py-2 text-xs font-bold transition disabled:cursor-wait disabled:opacity-50 ${account.is_active ? "border-red-100 text-red-700 hover:bg-red-50" : "border-emerald-100 text-emerald-700 hover:bg-emerald-50"}`}>{savingId === account.id ? "Saving..." : account.is_active ? "Disable" : "Enable"}</button></td>
+              </tr>})}</tbody>
+            </table></div>
+            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+              <span>{accountTotal.toLocaleString()} registered accounts</span>
+              <div className="flex items-center gap-2">
+                <button type="button" disabled={page <= 1 || loading} onClick={() => setPage((current) => current - 1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">Previous</button>
+                <span>Page {page} of {accountLastPage}</span>
+                <button type="button" disabled={page >= accountLastPage || loading} onClick={() => setPage((current) => current + 1)} className="rounded-lg border px-3 py-2 disabled:opacity-40">Next</button>
+              </div>
+            </div>
+          </section>
+        ) : isDashboard ? (
           <ResidentsRegistryDashboard
             stats={dashboardStats}
             loading={loading}
@@ -881,6 +965,14 @@ function EmptyState({ title, detail }) {
 
 function authHeaders(token) {
   return { Accept: "application/json", Authorization: `Bearer ${token}` };
+}
+
+function accountNameKey(account) {
+  return [account.first_name, account.middle_name, account.last_name]
+    .filter(Boolean)
+    .join(" ")
+    .trim()
+    .toLocaleLowerCase();
 }
 
 function tabClass(active) {

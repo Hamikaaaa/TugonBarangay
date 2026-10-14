@@ -21,6 +21,7 @@ function ResidentDashboard() {
               dashboard={dashboard}
               onNavigate={setView}
               user={user}
+              token={token}
             />
           )}
           {view === "documents" && (

@@ -11,6 +11,7 @@ const STATUSES = [
   ["all", "All requests"],
   ["delayed", "Delayed"],
   ["pending", "Pending"],
+  ["under_review", "Under review"],
   ["processing", "Processing"],
   ["for_correction", "For correction"],
   ["ready_for_release", "Ready for release"],
@@ -20,7 +21,6 @@ const STATUSES = [
 
 function DocumentRequestHistory() {
   const { token } = useAuth();
-  const [overview, setOverview] = useState(null);
   const [requests, setRequests] = useState([]);
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditPagination, setAuditPagination] = useState({ current_page: 1, last_page: 1 });
@@ -32,17 +32,10 @@ function DocumentRequestHistory() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadOverview = useCallback(async () => {
-    const response = await fetch(`${API_URL}/admin/document-requests/overview`, {
-      headers: authHeaders(token),
-    });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.message || "Unable to load document request statistics.");
-    setOverview(payload.data);
-  }, [token]);
-
   const loadRequests = useCallback(async (page = 1) => {
-    const query = new URLSearchParams({ status, search, page: String(page), per_page: "15" });
+    const query = new URLSearchParams({ status, page: String(page), per_page: "15" });
+    const normalizedSearch = search.trim();
+    if (normalizedSearch) query.set("search", normalizedSearch);
     const response = await fetch(`${API_URL}/admin/document-requests?${query}`, {
       headers: authHeaders(token),
     });
@@ -73,13 +66,13 @@ function DocumentRequestHistory() {
     setLoading(true);
     setError("");
     try {
-      await Promise.all([loadOverview(), loadRequests(page), loadAuditEvents()]);
+      await Promise.all([loadRequests(page), loadAuditEvents()]);
     } catch (loadError) {
       setError(loadError.message);
     } finally {
       setLoading(false);
     }
-  }, [loadAuditEvents, loadOverview, loadRequests, token]);
+  }, [loadAuditEvents, loadRequests, token]);
 
   useEffect(() => {
     // Load current dashboard data when search and status filters change.
@@ -101,62 +94,18 @@ function DocumentRequestHistory() {
     }
   };
 
-  const cards = overview ? [
-    ["Total requests", overview.total, "slate"],
-    ["Pending", overview.pending, "amber"],
-    ["Processing", overview.processing, "blue"],
-    ["For correction", overview.for_correction, "amber"],
-    ["Ready for release", overview.ready_for_release, "emerald"],
-    ["Delayed · over 3 days", overview.delayed, "red"],
-    ["Rejected", overview.rejected, "rose"],
-    ["Released", overview.released, "emerald"],
-    ["Active workload", overview.active, "blue"],
-  ] : [];
-
   return (
-    <AdminLayout title="Document Request Oversight">
+    <AdminLayout title="Document Request History">
       <section className="space-y-6 pt-6">
         <AdminPageHeader
           eyebrow="Read-only oversight"
-          title="Document request oversight"
-          description="Monitor request volume, delays, staff workload, outcomes, processing history, and audit activity. Requests pending or processing for more than three days are marked delayed."
+          title="Document request history"
+          description="Search past requests, inspect submitted information and processing history, and view generated document copies."
         />
 
         <DocumentRequestTabs />
 
         {error && <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {cards.map(([label, value, tone]) => (
-            <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-semibold text-slate-500">{label}</p>
-              <p className={`mt-2 text-3xl font-bold ${toneClass(tone)}`}>{value}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="font-bold text-[#172B4D]">Staff workload</h3>
-              <p className="mt-1 text-xs text-slate-500">Active requests assigned when the officer first moves them into processing.</p>
-            </div>
-          </div>
-          {overview?.staff_workload?.length ? (
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {overview.staff_workload.map((staff) => (
-                <div key={staff.id} className="flex items-center justify-between rounded-xl bg-slate-50 px-4 py-3">
-                  <span className="text-sm font-semibold text-slate-700">{staff.name}</span>
-                  <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
-                    {staff.active_requests} active
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-4 text-sm text-slate-500">No document request officers found.</p>
-          )}
-        </div>
 
         <div>
           <div className="flex gap-2 border-b border-slate-200">
@@ -406,17 +355,6 @@ function statusClass(status) {
     completed: "bg-emerald-50 text-emerald-700",
     rejected: "bg-red-50 text-red-700",
   }[status] || "bg-slate-100 text-slate-700";
-}
-
-function toneClass(tone) {
-  return {
-    slate: "text-slate-800",
-    amber: "text-amber-600",
-    red: "text-red-600",
-    rose: "text-rose-600",
-    emerald: "text-emerald-600",
-    blue: "text-blue-600",
-  }[tone] || "text-slate-800";
 }
 
 function tabClass(active) {

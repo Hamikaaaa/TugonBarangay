@@ -23,7 +23,12 @@ const SERVICE_SERIES = [
 function Reports() {
   const { token } = useAuth();
   const [months, setMonths] = useState("12");
+  const [fromDate, setFromDate] = useState(() => startOfRecentPeriod(12));
+  const [toDate, setToDate] = useState(() => localDateString(new Date()));
   const [report, setReport] = useState(null);
+  const [reportType, setReportType] = useState("all");
+  const [generatedReport, setGeneratedReport] = useState(null);
+  const [generatingReport, setGeneratingReport] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -33,7 +38,7 @@ function Reports() {
     setError("");
     try {
       const response = await fetch(
-        `${API_URL}/admin/reports?months=${months}`,
+        `${API_URL}/admin/reports?months=${months}&from=${fromDate}&to=${toDate}`,
         {
           headers: {
             Accept: "application/json",
@@ -46,12 +51,13 @@ function Reports() {
         throw new Error(payload.message || "Unable to load cross-service reports.");
       }
       setReport(payload);
+      return payload;
     } catch (loadError) {
       setError(loadError.message);
     } finally {
       setLoading(false);
     }
-  }, [months, token]);
+  }, [fromDate, months, toDate, token]);
 
   useEffect(() => {
     // Refresh the cross-service summary when the selected period changes.
@@ -87,13 +93,20 @@ function Reports() {
       "Feedback responses",
       "Average feedback rating",
     ];
-    const rows = [header, ...report.monthly.map((item) => [
+    const rows = [
+      ["TUGONBARANGAY | REPORTS AND ANALYTICS"],
+      [`Reporting period: ${formatDate(report.period.start)} to ${formatDate(report.period.end)}`],
+      [],
+      ["MONTHLY SERVICE ACTIVITY"],
+      header,
+      ...report.monthly.map((item) => [
       item.label,
       ...SERVICE_SERIES.map((series) => item[series.key]),
       item.new_residents,
       item.feedback,
       item.feedback_average_rating ?? "",
-    ])];
+      ]),
+    ];
     rows.push([
       "Selected period total",
       ...SERVICE_SERIES.map(({ key }) => totals[key]),
@@ -132,18 +145,84 @@ function Reports() {
       rows.push([category, count]),
     );
 
-    const csv = rows
-      .map((row) => row.map(csvCell).join(","))
-      .join("\r\n");
-    const blob = new Blob(["\uFEFF", csv], {
-      type: "text/csv;charset=utf-8",
-    });
-    const url = URL.createObjectURL(blob);
+    downloadCsv(rows, `barangay-cross-service-report-${report.period.start}-to-${report.period.end}.csv`);
+  };
+
+  const exportFormattedExcel = () => {
+    if (!report) return;
+    const rows = [
+      ["TugonBarangay | Reports and Analytics"],
+      [`Reporting period: ${formatDate(report.period.start)} to ${formatDate(report.period.end)}`],
+      [],
+      ["Month", ...SERVICE_SERIES.map((series) => series.label), "New residents", "Feedback responses", "Average rating"],
+      ...report.monthly.map((item) => [item.label, ...SERVICE_SERIES.map(({ key }) => item[key]), item.new_residents, item.feedback, item.feedback_average_rating ?? ""]),
+      ["Selected period total", ...SERVICE_SERIES.map(({ key }) => totals[key]), totals.new_residents, totals.feedback, report.summary.feedback.average_rating],
+      [], ["Service outcomes"],
+      ["Service", "Total", "Completed / resolved", "Open / pending", "Rejected"],
+      ["Document requests", report.summary.document_requests.total, report.summary.document_requests.completed, "", report.summary.document_requests.rejected],
+      ["Complaints", report.summary.complaints.total, report.summary.complaints.resolved, report.summary.complaints.open, ""],
+      ["BantayBot escalations", report.summary.chatbot_escalations.total, report.summary.chatbot_escalations.replied, report.summary.chatbot_escalations.pending, ""],
+      [], ["Resident feedback"],
+      ["Feedback responses", report.summary.feedback.total],
+      ["Average rating", report.summary.feedback.average_rating],
+      [], ["Complaint categories"],
+      ["Category", "Count"],
+      ...report.complaint_categories.map(({ category, count }) => [category, count]),
+    ];
+    const htmlRows = rows.map((row, index) => {
+      const isTitle = index === 0;
+      const isHeading = ["Month", "Service outcomes", "Service", "Resident feedback", "Complaint categories", "Category"].includes(row[0]);
+      return `<tr>${row.map((cell) => `<${isTitle ? "th" : "td"} style="${isTitle ? "font-size:20px;background:#123f70;color:#fff;padding:14px;" : isHeading ? "font-weight:bold;background:#eaf1f8;color:#172b4d;padding:9px;" : "padding:8px;border-bottom:1px solid #e5eaf0;"}">${escapeHtml(cell)}</${isTitle ? "th" : "td"}>`).join("")}</tr>`;
+    }).join("");
+    const excel = `<html><head><meta charset="utf-8"></head><body><table style="border-collapse:collapse;font-family:Arial,sans-serif;min-width:900px">${htmlRows}</table></body></html>`;
+    const url = URL.createObjectURL(new Blob(["\uFEFF", excel], { type: "application/vnd.ms-excel;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = `barangay-cross-service-report-${report.period.start}-to-${report.period.end}.csv`;
+    link.download = `barangay-report-${report.period.start}-to-${report.period.end}.xls`;
     link.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const generateSelectedReport = async () => {
+    setGeneratingReport(true);
+    setError("");
+    try {
+      if (reportType === "all") {
+        const payload = await loadReport();
+        if (payload) setGeneratedReport({ type: "all", from: payload.period.start, to: payload.period.end, data: payload });
+      } else {
+        const endpoint = reportType === "documents" ? "document-requests" : "complaints";
+        const response = await fetch(`${API_URL}/admin/reports/${endpoint}?from=${fromDate}&to=${toDate}`, {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || "Unable to generate the selected report.");
+        setGeneratedReport({ type: reportType, ...payload });
+      }
+    } catch (generationError) { setError(generationError.message); }
+    finally { setGeneratingReport(false); }
+  };
+
+  const downloadGeneratedReport = () => {
+    if (!generatedReport || (generatedReport.from !== fromDate || generatedReport.to !== toDate)) return;
+    if (generatedReport.type === "all") { exportCsv(); return; }
+    const rows = generatedReport.type === "documents" ? [
+      ["TUGONBARANGAY | DOCUMENT REQUEST REPORT"],
+      [`Reporting period: ${formatDate(generatedReport.from)} to ${formatDate(generatedReport.to)}`],
+      [],
+      ["Request ID", "Date submitted", "Resident", "Document", "Status", "Handled by", "Fee (PHP)"],
+      ...generatedReport.data.map((item) => [item.id, formatDateTime(item.created_at), fullResidentName(item.resident), item.document_type_label || item.document_type, item.status, item.assigned_staff?.name || "Unassigned", item.fee]),
+      [], ["TOTAL REQUESTS", generatedReport.data.length],
+      ["TOTAL FEES (PHP)", generatedReport.data.reduce((sum, item) => sum + Number(item.fee || 0), 0).toFixed(2)],
+    ] : [
+      ["TUGONBARANGAY | COMPLAINT MANAGEMENT REPORT"],
+      [`Reporting period: ${formatDate(generatedReport.from)} to ${formatDate(generatedReport.to)}`],
+      [],
+      ["Complaint ID", "Date submitted", "Resident", "Category", "Subject", "Priority", "Status", "Incident date", "Location", "Resolution", "Resolved at"],
+      ...generatedReport.data.map((item) => [item.id, formatDateTime(item.created_at), item.user?.name || "Unknown resident", item.category, item.subject, item.priority || "Normal", item.status, item.incident_date || "", item.location || "", item.resolution_details || "", item.resolved_at ? formatDateTime(item.resolved_at) : ""]),
+      [], ["TOTAL COMPLAINTS", generatedReport.summary.total], ["OPEN", generatedReport.summary.open], ["RESOLVED / CLOSED", generatedReport.summary.resolved], ["REJECTED", generatedReport.summary.rejected],
+    ];
+    downloadCsv(rows, `barangay-${generatedReport.type}-report-${generatedReport.from}-to-${generatedReport.to}.csv`);
   };
 
   return (
@@ -173,30 +252,38 @@ function Reports() {
               </div>
             )
           }
-        >
-          <label className="flex min-h-12 items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2.5 text-sm text-white backdrop-blur-sm">
-            <CalendarDays className="h-4 w-4 text-white/80" aria-hidden="true" />
-            <span className="sr-only">Reporting period</span>
-            <select
-              value={months}
-              onChange={(event) => setMonths(event.target.value)}
-              className="bg-transparent font-semibold text-white outline-none [&>option]:text-[#172B4D]"
-            >
-              <option value="6">Last 6 months</option>
-              <option value="12">Last 12 months</option>
-              <option value="24">Last 24 months</option>
-            </select>
-          </label>
-          <button
-            type="button"
-            onClick={exportCsv}
-            disabled={!report || loading}
-            className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#2455D6] shadow-lg transition hover:-translate-y-0.5 hover:bg-[#EEF4FF] hover:shadow-xl active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-            Export CSV
-          </button>
-        </AdminPageHeader>
+        />
+
+        <section aria-label="Report generation and filters" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <label className="flex min-h-12 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 xl:col-span-1">
+              <CalendarDays className="h-4 w-4 shrink-0 text-[#2455D6]" aria-hidden="true" />
+              <span className="sr-only">Quick reporting period</span>
+              <select value={months} onChange={(event) => { setMonths(event.target.value); setFromDate(startOfRecentPeriod(Number(event.target.value))); setGeneratedReport(null); }} className="min-w-0 flex-1 bg-transparent font-semibold outline-none">
+                <option value="6">Last 6 months</option><option value="12">Last 12 months</option><option value="24">Last 24 months</option>
+              </select>
+            </label>
+            <label className="flex min-h-12 min-w-0 flex-col justify-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-500">
+              From date<input aria-label="Report from date" type="date" value={fromDate} max={toDate} onChange={(event) => { setFromDate(event.target.value); setGeneratedReport(null); }} className="w-full min-w-0 bg-transparent text-sm font-semibold text-[#172B4D] outline-none" />
+            </label>
+            <label className="flex min-h-12 min-w-0 flex-col justify-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-500">
+              To date<input aria-label="Report to date" type="date" value={toDate} min={fromDate} onChange={(event) => { setToDate(event.target.value); setGeneratedReport(null); }} className="w-full min-w-0 bg-transparent text-sm font-semibold text-[#172B4D] outline-none" />
+            </label>
+            <label className="flex min-h-12 min-w-0 flex-col justify-center gap-1 rounded-xl border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-500 xl:col-span-2">
+              Report type<select value={reportType} onChange={(event) => { setReportType(event.target.value); setGeneratedReport(null); }} className="w-full bg-transparent text-sm font-semibold text-[#172B4D] outline-none">
+                <option value="all">General / all reports</option><option value="documents">Document request report</option><option value="complaints">Complaint management report</option>
+              </select>
+            </label>
+            <button type="button" onClick={generateSelectedReport} disabled={generatingReport || loading} className="min-h-12 rounded-xl bg-[#2455D6] px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-50">{generatingReport ? "Generating..." : "Generate selected report"}</button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+            {reportType !== "all" && (
+              <button type="button" onClick={downloadGeneratedReport} disabled={!generatedReport || generatedReport.from !== fromDate || generatedReport.to !== toDate} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#123F70] px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" />Download generated CSV</button>
+            )}
+            <button type="button" onClick={exportCsv} disabled={!report || loading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-[#2455D6] hover:bg-[#EEF4FF] disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" />Download all reports CSV</button>
+            <button type="button" onClick={exportFormattedExcel} disabled={!report || loading} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-[#2455D6] hover:bg-[#EEF4FF] disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" />Download all reports Excel</button>
+          </div>
+        </section>
 
         {error && (
           <div
@@ -656,12 +743,46 @@ function csvCell(value) {
   return `"${text.replaceAll('"', '""')}"`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function localDateString(date) {
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return offsetDate.toISOString().slice(0, 10);
+}
+
+function startOfRecentPeriod(monthCount) {
+  const today = new Date();
+  return localDateString(new Date(today.getFullYear(), today.getMonth() - monthCount + 1, 1));
+}
+
 function formatDate(value) {
   if (!value) return "Date unavailable";
   return new Intl.DateTimeFormat("en-PH", {
     dateStyle: "medium",
     timeZone: "Asia/Manila",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+function formatDateTime(value) {
+  return value ? new Intl.DateTimeFormat("en-PH", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Manila" }).format(new Date(value)) : "";
+}
+
+function fullResidentName(resident) {
+  if (!resident) return "Unknown resident";
+  return [resident.first_name, resident.middle_name, resident.last_name].filter(Boolean).join(" ") || resident.name || "Unknown resident";
+}
+
+function downloadCsv(rows, filename) {
+  const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export default Reports;

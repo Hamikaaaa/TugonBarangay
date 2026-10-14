@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, GripVertical } from "lucide-react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
@@ -7,20 +8,50 @@ import { primaryButtonClass } from "../../utils/buttonStyles";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const fieldTypes = ["text", "textarea", "number", "date", "email", "tel", "select"];
+const fieldTypeLabels = {
+  text: "Short answer",
+  textarea: "Long answer",
+  number: "Number",
+  date: "Date",
+  email: "Email address",
+  tel: "Phone number",
+  select: "Choose from a list",
+};
+
+const BARANGAY_CERTIFICATE_WORDING = `This is to certify that {{first_name}} {{middle_name}} {{last_name}}, {{age}} years old, {{sex}}, {{civil_status}}, {{citizenship}} citizen, and a bona fide resident of Purok {{purok}}, Barangay Tayud, Consolacion, Cebu, is an indigent member of this barangay.\n\nThis certification is issued at the request of the above-named person for {{purpose}} and for whatever legal purpose it may serve.\n\nIssued and given this {{issued_day}} day of {{issued_month}}, {{issued_year}}, at Barangay Tayud, Consolacion, Cebu, Philippines.`;
+
+function makeFieldKey(label, fallback = "answer") {
+  const key = String(label || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  return key.length >= 2 ? key.slice(0, 64) : fallback;
+}
 
 const blankType = () => ({
   label: "",
+  description: "",
   fee_mode: "fixed",
   fee: "0",
   one_time: false,
   active: true,
   template_enabled: true,
+  paper_size: "letter",
+  document_layout: { content_top: 64, content_left: 19, content_right: 19, content_bottom: 19, font_size_pt: 12, text_color: "#1f2937", accent_color: "#123f70" },
   template: "",
   applicant_fields: [],
   fields: [],
   requirements: [],
   templateFile: null,
   remove_template: false,
+});
+
+const RECOMMENDED_LAYOUT = { content_top: 64, content_left: 19, content_right: 19, content_bottom: 19, font_size_pt: 12, text_color: "#1f2937", accent_color: "#123f70" };
+const clampLayout = (layout = {}) => ({
+  ...RECOMMENDED_LAYOUT,
+  ...layout,
+  content_top: Math.min(76, Math.max(51, Number(layout.content_top ?? RECOMMENDED_LAYOUT.content_top))),
+  content_left: Math.min(38, Math.max(13, Number(layout.content_left ?? RECOMMENDED_LAYOUT.content_left))),
+  content_right: Math.min(38, Math.max(13, Number(layout.content_right ?? RECOMMENDED_LAYOUT.content_right))),
+  content_bottom: Math.min(38, Math.max(13, Number(layout.content_bottom ?? RECOMMENDED_LAYOUT.content_bottom))),
+  font_size_pt: Math.min(14, Math.max(10, Number(layout.font_size_pt ?? RECOMMENDED_LAYOUT.font_size_pt))),
 });
 
 function DocumentTypes() {
@@ -67,7 +98,9 @@ function DocumentTypes() {
     setNotice("");
     const payload = {
       ...draft,
-      fee: Number(draft.fee || 0),
+      description: draft.description || "",
+      // Keep the decimal string intact through JSON; the API stores fee as DECIMAL(10,2).
+      fee: String(draft.fee || "0"),
       applicant_fields: draft.applicant_fields.map(normalizeField),
       fields: draft.fields.map(normalizeField),
       requirements: draft.requirements.map((requirement) => ({
@@ -79,6 +112,7 @@ function DocumentTypes() {
     };
     delete payload.templateFile;
     delete payload.remove_template;
+    delete payload.templatePreviewUrl;
     try {
       const response = await fetch(
         draft.id
@@ -108,6 +142,7 @@ function DocumentTypes() {
         }
       }
       setNotice(result.message || "Document type saved.");
+      if (draft.templatePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(draft.templatePreviewUrl);
       setDraft(null);
       await loadTypes();
     } catch (saveError) {
@@ -194,11 +229,65 @@ function DocumentTypes() {
     }));
   };
 
+  const openEditType = async (type) => {
+    if (draft?.templatePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(draft.templatePreviewUrl);
+    setDraft({
+      ...type,
+      fee: String(type.fee),
+      template: type.template || (type.value === "Barangay Certificate" ? BARANGAY_CERTIFICATE_WORDING : ""),
+      document_layout: clampLayout(type.document_layout),
+      templateFile: null,
+      templatePreviewUrl: "",
+      remove_template: false,
+      applicant_fields: (type.applicant_fields || []).map((field) => ({ enabled: true, ...field })),
+      fields: (type.fields || []).map((field) => ({ enabled: true, ...field })),
+      requirements: (type.requirements || []).map((requirement) => ({ enabled: true, ...requirement })),
+    });
+    if (!type.uploaded_template_name || !/\.jpe?g$/i.test(type.uploaded_template_name)) return;
+    try {
+      const response = await fetch(`${API_URL}/admin/document-types/${type.id}/template`, {
+        headers: authHeaders(token),
+      });
+      if (!response.ok) return;
+      const previewUrl = URL.createObjectURL(await response.blob());
+      setDraft((current) => current?.id === type.id ? { ...current, templatePreviewUrl: previewUrl } : current);
+    } catch {
+      // The current image remains available through the download button if preview fails.
+    }
+  };
+
+  const chooseTemplate = (file) => {
+    setDraft((current) => {
+      if (current.templatePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(current.templatePreviewUrl);
+      return {
+        ...current,
+        templateFile: file || null,
+        templatePreviewUrl: file?.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+        remove_template: false,
+      };
+    });
+  };
+
+  const closeEditor = () => {
+    if (draft?.templatePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(draft.templatePreviewUrl);
+    setDraft(null);
+  };
+
   const removeEntry = (section, index) => {
     setDraft((current) => ({
       ...current,
       [section]: current[section].filter((_, entryIndex) => entryIndex !== index),
     }));
+  };
+
+  const reorderEntry = (section, fromIndex, toIndex) => {
+    setDraft((current) => {
+      const items = [...current[section]];
+      if (fromIndex < 0 || fromIndex >= items.length || toIndex < 0 || toIndex >= items.length || fromIndex === toIndex) return current;
+      const [moved] = items.splice(fromIndex, 1);
+      items.splice(toIndex, 0, moved);
+      return { ...current, [section]: items };
+    });
   };
 
   return (
@@ -207,7 +296,7 @@ function DocumentTypes() {
         <AdminPageHeader
           eyebrow="Resident service configuration"
           title="Document types"
-          description="Configure document types, resident information fields, fees, required uploads, and certificate templates. Staff handle request review, decisions, and release workflow."
+          description="Add and update the documents residents can request, the details they must provide, and the design used for each document."
         >
           <button
             type="button"
@@ -224,21 +313,21 @@ function DocumentTypes() {
         {notice && <p role="status" className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
 
         {draft && (
-          <form onSubmit={saveType} className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <form onSubmit={saveType} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-[#172B4D]">{draft.id ? "Edit document type" : "New document type"}</h3>
-              <button type="button" onClick={() => setDraft(null)} className="text-sm font-semibold text-slate-500 hover:text-slate-800">Cancel</button>
+              <div><h3 className="text-lg font-bold text-[#172B4D]">{draft.id ? "Edit document" : "Add a document"}</h3><p className="mt-1 text-sm text-slate-500">Set what residents see and what they need to submit.</p></div>
+              <button type="button" onClick={closeEditor} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800">Close</button>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label className="sm:col-span-2">
-                <span className="text-xs font-bold text-slate-600">Resident-facing name</span>
-                <input required maxLength={150} value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} className={controlClass} />
+                <span className="text-sm font-semibold text-slate-700">Document name</span>
+                <input required maxLength={150} value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} className={controlClass} placeholder="For example, Barangay Clearance" />
               </label>
               <label>
-                <span className="text-xs font-bold text-slate-600">Fee setting</span>
+                <span className="text-sm font-semibold text-slate-700">Fee</span>
                 <select value={draft.fee_mode} onChange={(event) => setDraft({ ...draft, fee_mode: event.target.value })} className={controlClass}>
-                  <option value="fixed">Fixed fee</option>
-                  <option value="assessed">Staff assesses fee</option>
+                  <option value="fixed">Set amount</option>
+                  <option value="assessed">Set by staff</option>
                 </select>
               </label>
               <label>
@@ -250,49 +339,94 @@ function DocumentTypes() {
                 Available to residents
               </label>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <input type="checkbox" checked={draft.template_enabled !== false} onChange={(event) => setDraft({ ...draft, template_enabled: event.target.checked })} />
-                Enable document templates
-              </label>
-              <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                 <input type="checkbox" checked={draft.one_time} onChange={(event) => setDraft({ ...draft, one_time: event.target.checked })} />
-                Limit to one active/issued request per resident
+                Allow one request per resident
               </label>
             </div>
 
-            <SchemaEditor title="Applicant information" section="applicant_fields" fields={draft.applicant_fields} changeField={changeField} addField={addField} removeEntry={removeEntry} />
-            <SchemaEditor title="Additional request fields" section="fields" fields={draft.fields} changeField={changeField} addField={addField} removeEntry={removeEntry} />
-
-            <label className="block border-t border-slate-100 pt-4">
-              <span className="text-sm font-bold text-[#172B4D]">Document template</span>
-              <span className="mt-1 block text-xs text-slate-500">
-                Write the certificate body. Use placeholders such as {"{{full_name}}"}, {"{{address}}"}, {"{{purpose}}"}, {"{{document_number}}"}, and {"{{date_issued}}"}, plus any configured form-field key.
-                Leave blank to use the built-in template.
-              </span>
-              <textarea
-                rows={9}
-                maxLength={20000}
-                value={draft.template || ""}
-                onChange={(event) => setDraft({ ...draft, template: event.target.value })}
-                className={`${controlClass} font-mono`}
-                placeholder={"This is to certify that {{full_name}}, residing at {{address}}, is requesting this document for {{purpose}}."}
-              />
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Description for residents</span>
+              <textarea rows={3} maxLength={1000} value={draft.description || ""} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className={controlClass} placeholder="Explain what this document is for and any important information." />
             </label>
 
+            <SchemaEditor title="Information residents provide" description="Add the questions residents should answer on the request form. Drag a question or use the arrow buttons to change its order." section="applicant_fields" fields={draft.applicant_fields} changeField={changeField} addField={addField} removeEntry={removeEntry} reorderEntry={reorderEntry} />
+            <SchemaEditor title="Other request details" description="Add document-specific questions, such as the purpose of the request. Drag a question or use the arrow buttons to change its order." section="fields" fields={draft.fields} changeField={changeField} addField={addField} removeEntry={removeEntry} reorderEntry={reorderEntry} />
+
+            <label className="block">
+              <span className="text-sm font-semibold text-slate-700">Printed page size</span>
+              <select value={draft.paper_size || "letter"} onChange={(event) => setDraft({ ...draft, paper_size: event.target.value })} className={controlClass}>
+                <option value="letter">Letter (8.5 × 11 in)</option>
+                <option value="a4">A4 (210 × 297 mm)</option>
+                <option value="legal">Legal (8.5 × 14 in)</option>
+              </select>
+              <span className="mt-1 block text-xs text-slate-500">Staff print previews use this paper size.</span>
+            </label>
+
+            <section className="grid gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <h4 className="text-sm font-bold text-[#172B4D]">Printed text layout</h4>
+                <p className="mt-1 text-xs text-slate-500">Set the text position on the page. The recommended layout is a good starting point.</p>
+              </div>
+              <label className="text-xs font-semibold text-slate-600">Space from the top edge (inches)
+                <input type="number" min="2" max="3" step="0.1" value={((draft.document_layout?.content_top ?? 64) / 25.4).toFixed(1)} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, content_top: Math.round(Number(event.target.value) * 25.4) } })} className={controlClass} />
+                <span className="mt-1 block font-normal text-slate-500">Starts below the letterhead. Choose 2 to 3 inches.</span>
+              </label>
+              <label className="text-xs font-semibold text-slate-600">Space from both side edges (inches)
+                <input type="number" min="0.5" max="1.5" step="0.1" value={(((draft.document_layout?.content_left ?? 19) + (draft.document_layout?.content_right ?? 19)) / 2 / 25.4).toFixed(1)} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, content_left: Math.round(Number(event.target.value) * 25.4), content_right: Math.round(Number(event.target.value) * 25.4) } })} className={controlClass} />
+                <span className="mt-1 block font-normal text-slate-500">Keeps the wording centered between the left and right edges.</span>
+              </label>
+              <label className="text-xs font-semibold text-slate-600">Space from the bottom edge (inches)
+                <input type="number" min="0.5" max="1.5" step="0.1" value={((draft.document_layout?.content_bottom ?? 19) / 25.4).toFixed(1)} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, content_bottom: Math.round(Number(event.target.value) * 25.4) } })} className={controlClass} />
+                <span className="mt-1 block font-normal text-slate-500">Leaves room at the bottom of the page.</span>
+              </label>
+              <label className="text-xs font-semibold text-slate-600">Body text size
+                <select value={draft.document_layout?.font_size_pt ?? 12} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, font_size_pt: Number(event.target.value) } })} className={controlClass}>
+                  {[10, 11, 12, 13, 14].map((size) => <option key={size} value={size}>{size} pt</option>)}
+                </select>
+                <span className="mt-1 block font-normal text-slate-500">12 pt is a clear standard size for printed wording.</span>
+              </label>
+              <label className="text-xs font-semibold text-slate-600">Body text color
+                <input type="color" value={draft.document_layout?.text_color || "#1f2937"} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, text_color: event.target.value } })} className="mt-1 block h-10 w-full rounded-lg border border-slate-200 bg-white p-1" />
+              </label>
+              <label className="text-xs font-semibold text-slate-600">Heading/accent color
+                <input type="color" value={draft.document_layout?.accent_color || "#123f70"} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, accent_color: event.target.value } })} className="mt-1 block h-10 w-full rounded-lg border border-slate-200 bg-white p-1" />
+              </label>
+              <div className="sm:col-span-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-slate-600">Page preview</p>
+                  <button type="button" onClick={() => setDraft({ ...draft, document_layout: { ...RECOMMENDED_LAYOUT } })} className="text-xs font-bold text-[#2455D6] hover:underline">Reset to recommended layout</button>
+                </div>
+                <div className="relative mx-auto mt-2 aspect-[8.5/11] max-h-56 overflow-hidden border border-slate-300 bg-white shadow-sm" aria-label="Preview showing where printed wording will sit">
+                  <div className="absolute border-t border-dashed border-slate-300" style={{ top: `${Math.min(76, Math.max(51, draft.document_layout?.content_top ?? 64)) / 279.4 * 100}%`, left: "4%", right: "4%" }} />
+                  <div className="absolute" style={{ top: `${Math.min(76, Math.max(51, draft.document_layout?.content_top ?? 64)) / 279.4 * 100}%`, left: `${Math.min(38, Math.max(13, draft.document_layout?.content_left ?? 19)) / 215.9 * 100}%`, right: `${Math.min(38, Math.max(13, draft.document_layout?.content_right ?? 19)) / 215.9 * 100}%`, color: draft.document_layout?.text_color || "#1f2937" }}>
+                    <p className="border-b pb-1 text-center text-[9px] font-bold" style={{ color: draft.document_layout?.accent_color || "#123f70", borderColor: draft.document_layout?.accent_color || "#123f70" }}>{draft.label || "Document title"}</p>
+                    <p className="mt-2 leading-relaxed" style={{ fontSize: `${draft.document_layout?.font_size_pt ?? 12}pt` }}>Document wording starts here. It will be printed within the page margins.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section className="block border-t border-slate-100 pt-4">
+              <span className="text-sm font-bold text-[#172B4D]">Document wording</span>
+              <span className="mt-1 block text-xs leading-5 text-slate-500">Write the document as you want it to read. Use the buttons below to add request details automatically. Leave this blank to use the standard wording.</span>
+              <WordingEditor value={draft.template || ""} onChange={(template) => setDraft({ ...draft, template })} />
+              <label className="mt-3 flex items-center gap-2 text-sm font-medium text-slate-600">
+                <input type="checkbox" checked={draft.template_enabled !== false} onChange={(event) => setDraft({ ...draft, template_enabled: event.target.checked })} />
+                Use my wording on the generated document
+              </label>
+            </section>
+
             <div className="border-t border-slate-100 pt-4">
-              <h4 className="text-sm font-bold text-[#172B4D]">Uploaded template file</h4>
-              <p className="mt-1 text-xs text-slate-500">Upload a PDF or Word template file up to 10 MB. This file is managed alongside the automatically generated text template above.</p>
+              <h4 className="text-sm font-bold text-[#172B4D]">Paper design</h4>
+              <p className="mt-1 text-xs text-slate-500">Upload a JPEG image of the document paper design (up to 10 MB). Older PDF or Word files can still be downloaded.</p>
               {draft.uploaded_template_name && !draft.remove_template && (
                 <p className="mt-3 text-xs font-semibold text-slate-600">Current file: {draft.uploaded_template_name}</p>
               )}
               <div className="mt-3 flex flex-wrap items-center gap-3">
                 <input
                   type="file"
-                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                  onChange={(event) => setDraft({
-                    ...draft,
-                    templateFile: event.target.files?.[0] || null,
-                    remove_template: false,
-                  })}
+                  accept=".jpg,.jpeg,image/jpeg,.pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                  onChange={(event) => chooseTemplate(event.target.files?.[0])}
                   className="block max-w-full text-xs text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-[#2455D6]/10 file:px-3 file:py-2 file:text-xs file:font-bold file:text-[#2455D6]"
                 />
                 {draft.uploaded_template_name && (
@@ -306,10 +440,16 @@ function DocumentTypes() {
                         templateFile: event.target.checked ? null : draft.templateFile,
                       })}
                     />
-                    Remove uploaded template
+                    Remove current design
                   </label>
                 )}
               </div>
+              {draft.templatePreviewUrl && !draft.remove_template && (
+                <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="mb-2 text-xs font-semibold text-slate-600">Design preview</p>
+                  <img src={draft.templatePreviewUrl} alt="Uploaded document paper design" className="max-h-96 max-w-full rounded-lg border border-slate-200 bg-white object-contain shadow-sm" />
+                </div>
+              )}
               {!draft.id && (draft.templateFile || draft.remove_template) && (
                 <p className="mt-2 text-xs text-amber-700">The file will upload after this document type is saved.</p>
               )}
@@ -317,33 +457,22 @@ function DocumentTypes() {
 
             <div className="border-t border-slate-100 pt-4">
               <div className="mb-3 flex items-center justify-between">
-                <h4 className="text-sm font-bold text-[#172B4D]">Required uploads</h4>
-                <button type="button" onClick={() => setDraft((current) => ({ ...current, requirements: [...current.requirements, { key: `upload_${current.requirements.length + 1}`, label: "", required: true, enabled: true }] }))} className="text-xs font-bold text-[#2455D6]">Add upload</button>
+                <div><h4 className="text-sm font-bold text-[#172B4D]">Documents residents must attach</h4><p className="mt-1 text-xs text-slate-500">For example, a valid ID or a certificate from the purok.</p></div>
+                <button type="button" onClick={() => setDraft((current) => ({ ...current, requirements: [...current.requirements, { key: `upload_${current.requirements.length + 1}`, label: "", required: true, enabled: true }] }))} className="text-sm font-bold text-[#2455D6]">Add attachment</button>
               </div>
               <div className="space-y-2">
                 {draft.requirements.map((requirement, index) => (
                   <div key={`${requirement.key}-${index}`} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
-                    <input required aria-label="Upload key" value={requirement.key} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, key: event.target.value } : item) }))} className={controlClass} />
-                    <input required aria-label="Upload name" placeholder="e.g. Government-issued ID" value={requirement.label} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) }))} className={controlClass} />
+                    <input required aria-label="Attachment name" placeholder="For example, Government-issued ID" value={requirement.label} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value, key: makeFieldKey(event.target.value, `upload_${index + 1}`) } : item) }))} className={controlClass} />
                     <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={requirement.required} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, required: event.target.checked } : item) }))} />Required</label>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={requirement.enabled !== false} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: event.target.checked } : item) }))} />Enabled</label>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={requirement.enabled !== false} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: event.target.checked } : item) }))} />Show to residents</label>
                     <button type="button" onClick={() => removeEntry("requirements", index)} className="text-xs font-bold text-red-600">Remove</button>
-                    <ConditionEditor
-                      label="Required when"
-                      condition={requirement.requiredWhen}
-                      onChange={(requiredWhen) => setDraft((current) => ({
-                        ...current,
-                        requirements: current.requirements.map((item, itemIndex) =>
-                          itemIndex === index ? { ...item, requiredWhen } : item,
-                        ),
-                      }))}
-                    />
                   </div>
                 ))}
                 {draft.requirements.length === 0 && <p className="text-xs text-slate-400">No upload requirements configured.</p>}
               </div>
             </div>
-            <button disabled={saving} className={primaryButtonClass}>{saving ? "Saving..." : "Save document type"}</button>
+            <button disabled={saving} className={primaryButtonClass}>{saving ? "Saving..." : "Save document"}</button>
           </form>
         )}
 
@@ -354,6 +483,7 @@ function DocumentTypes() {
                 <div key={type.id} className="flex flex-wrap items-center justify-between gap-4 p-4 sm:p-5">
                   <div>
                     <p className="font-bold text-[#172B4D]">{type.label}</p>
+                    {type.description && <p className="mt-1 max-w-2xl text-sm text-slate-500">{type.description}</p>}
                     <p className="mt-1 text-xs text-slate-500">
                       {type.fee_mode === "assessed" ? "Fee assessed by staff" : `₱${Number(type.fee).toFixed(2)}`}
                       {" · "}{type.applicant_fields.length + type.fields.length} form fields
@@ -375,15 +505,7 @@ function DocumentTypes() {
                         {downloadingTemplateId === type.id ? "Downloading..." : "Download template"}
                       </button>
                     )}
-                    <button type="button" onClick={() => setDraft({
-                      ...type,
-                      fee: String(type.fee),
-                      templateFile: null,
-                      remove_template: false,
-                      applicant_fields: (type.applicant_fields || []).map((field) => ({ enabled: true, ...field })),
-                      fields: (type.fields || []).map((field) => ({ enabled: true, ...field })),
-                      requirements: (type.requirements || []).map((requirement) => ({ enabled: true, ...requirement })),
-                    })} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]">Edit settings</button>
+                    <button type="button" onClick={() => openEditType(type)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]">Edit document</button>
                     <button type="button" onClick={() => deleteType(type)} disabled={deletingTypeId === type.id} className="rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 disabled:opacity-50">
                       {deletingTypeId === type.id ? "Deleting..." : "Delete"}
                     </button>
@@ -398,20 +520,113 @@ function DocumentTypes() {
   );
 }
 
-function SchemaEditor({ title, section, fields, changeField, addField, removeEntry }) {
+function WordingEditor({ value, onChange }) {
+  const inputRef = useRef(null);
+  const selectionRef = useRef(null);
+  const tokenLabels = [
+    ["full_name", "Resident's name"], ["resident_name", "Resident's name"],
+    ["first_name", "First name"], ["middle_name", "Middle name"], ["last_name", "Last name"],
+    ["age", "Age"], ["sex", "Sex"], ["civil_status", "Civil status"],
+    ["citizenship", "Citizenship"], ["address", "Address"], ["purok", "Purok"],
+    ["purpose", "Purpose"], ["date_issued", "Issue date"],
+    ["issued_day", "Day"], ["issued_month", "Month"], ["issued_year", "Year"],
+  ];
+  const toEditorText = (source) => tokenLabels.reduce((text, [key, label]) => text.replaceAll(`{{${key}}}`, `[${label}]`), source).replaceAll("**", "");
+  const toTemplateText = (text) => tokenLabels.reduce((source, [key, label]) => source.replaceAll(`[${label}]`, `{{${key}}}`), text);
+  const editorValue = toEditorText(value);
+  const insertValue = (token) => {
+    const input = inputRef.current;
+    const label = token.match(/^\{\{(.+)\}\}$/)?.[1];
+    const friendlyLabel = tokenLabels.find(([key]) => key === label)?.[1] || label;
+    const insertion = `[${friendlyLabel}]`;
+    const start = input?.selectionStart ?? editorValue.length;
+    const end = input?.selectionEnd ?? editorValue.length;
+    const updated = `${editorValue.slice(0, start)}${insertion}${editorValue.slice(end)}`;
+    selectionRef.current = start + insertion.length;
+    onChange(toTemplateText(updated));
+    requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(selectionRef.current, selectionRef.current);
+    });
+  };
+  const insertOptions = [
+    ["Resident's name", "{{full_name}}"],
+    ["Age", "{{age}}"],
+    ["Sex", "{{sex}}"],
+    ["Civil status", "{{civil_status}}"],
+    ["Citizenship", "{{citizenship}}"],
+    ["Address", "{{address}}"],
+    ["Purpose", "{{purpose}}"],
+    ["Issue date", "{{date_issued}}"],
+    ["Day", "{{issued_day}}"],
+    ["Month", "{{issued_month}}"],
+    ["Year", "{{issued_year}}"],
+  ];
+
+  return (
+    <div className="mt-2">
+      <div className="mb-2 rounded-xl border border-blue-100 bg-blue-50/70 p-3">
+        <p className="text-xs font-semibold text-[#244873]">Add details automatically</p>
+        <p className="mt-1 text-xs text-slate-600">Click where the detail should go in your wording, then choose a button.</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {insertOptions.map(([label, token]) => (
+            <button key={token} type="button" onClick={() => insertValue(token)} className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-semibold text-[#2455D6] hover:bg-blue-100 focus:outline-none focus:ring-2 focus:ring-blue-300">
+              + {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <textarea
+        ref={inputRef}
+        rows={8}
+        maxLength={20000}
+        value={editorValue}
+        onChange={(event) => onChange(toTemplateText(event.target.value))}
+        className={controlClass}
+        placeholder="Example: This is to certify that [insert resident's name], a resident of [insert address], requested this document for [insert purpose]."
+      />
+    </div>
+  );
+}
+
+function SchemaEditor({ title, description, section, fields, changeField, addField, removeEntry, reorderEntry }) {
   return (
     <div className="border-t border-slate-100 pt-4">
       <div className="mb-3 flex items-center justify-between">
-        <h4 className="text-sm font-bold text-[#172B4D]">{title}</h4>
-        <button type="button" onClick={() => addField(section)} className="text-xs font-bold text-[#2455D6]">Add field</button>
+        <div><h4 className="text-sm font-bold text-[#172B4D]">{title}</h4><p className="mt-1 text-xs text-slate-500">{description}</p></div>
+        <button type="button" onClick={() => addField(section)} className="whitespace-nowrap text-sm font-bold text-[#2455D6]">Add question</button>
       </div>
       <div className="space-y-3">
         {fields.map((field, index) => (
-          <div key={`${field.key}-${index}`} className="grid gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-2 lg:grid-cols-4">
-            <input required aria-label="Field key" value={field.key} onChange={(event) => changeField(section, index, { key: event.target.value })} className={controlClass} />
-            <input required aria-label="Field label" placeholder="Field label" value={field.label} onChange={(event) => changeField(section, index, { label: event.target.value })} className={controlClass} />
-            <select value={field.type} onChange={(event) => changeField(section, index, { type: event.target.value })} className={controlClass}>
-              {fieldTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+          <div
+            key={`${field.key}-${index}`}
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              const fromIndex = Number(event.dataTransfer.getData("text/plain"));
+              reorderEntry(section, fromIndex, index);
+            }}
+            className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2"
+          >
+            <div className="flex items-center gap-1 sm:col-span-2">
+              <button
+                type="button"
+                draggable
+                onDragStart={(event) => {
+                  event.dataTransfer.setData("text/plain", String(index));
+                  event.dataTransfer.effectAllowed = "move";
+                }}
+                aria-label={`Drag to reorder ${field.label || "question"}`}
+                title="Drag to reorder"
+                className="cursor-grab touch-none rounded p-1.5 text-slate-500 hover:bg-slate-200 active:cursor-grabbing"
+              ><GripVertical className="h-4 w-4" aria-hidden="true" /></button>
+              <span className="mr-auto text-xs font-semibold text-slate-500">Question {index + 1}</span>
+              <button type="button" onClick={() => reorderEntry(section, index, index - 1)} disabled={index === 0} aria-label={`Move ${field.label || "question"} up`} className="rounded p-1.5 text-slate-500 hover:bg-slate-200 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
+              <button type="button" onClick={() => reorderEntry(section, index, index + 1)} disabled={index === fields.length - 1} aria-label={`Move ${field.label || "question"} down`} className="rounded p-1.5 text-slate-500 hover:bg-slate-200 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
+            </div>
+            <input required aria-label="Question" placeholder="Question residents will answer" value={field.label} onChange={(event) => changeField(section, index, { label: event.target.value, key: makeFieldKey(event.target.value, field.key) })} className={controlClass} />
+            <select aria-label="Answer format" value={field.type} onChange={(event) => changeField(section, index, { type: event.target.value })} className={controlClass}>
+              {fieldTypes.map((type) => <option key={type} value={type}>{fieldTypeLabels[type]}</option>)}
             </select>
             {field.type === "number" && (
               <div className="grid grid-cols-3 gap-2 sm:col-span-2 lg:col-span-4">
@@ -423,64 +638,23 @@ function SchemaEditor({ title, section, fields, changeField, addField, removeEnt
             <div className="flex items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={field.required} onChange={(event) => changeField(section, index, { required: event.target.checked })} />Required</label>
-                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={field.enabled !== false} onChange={(event) => changeField(section, index, { enabled: event.target.checked })} />Enabled</label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={field.enabled !== false} onChange={(event) => changeField(section, index, { enabled: event.target.checked })} />Show this question</label>
               </div>
               <button type="button" onClick={() => removeEntry(section, index)} className="text-xs font-bold text-red-600">Remove</button>
             </div>
             {field.type === "select" && (
               <input
                 aria-label="Dropdown options"
-                placeholder="Dropdown options, separated by commas"
+                placeholder="Choices separated by commas (for example: Single, Married, Widowed)"
                 value={(field.options || []).join(", ")}
                 onChange={(event) => changeField(section, index, { options: event.target.value.split(",").map((item) => item.trim()).filter(Boolean) })}
                 className={`${controlClass} sm:col-span-2 lg:col-span-4`}
               />
             )}
-            <ConditionEditor
-              label="Show when"
-              condition={field.showWhen}
-              onChange={(showWhen) => changeField(section, index, { showWhen })}
-            />
-            <ConditionEditor
-              label="Required when"
-              condition={field.requiredWhen}
-              onChange={(requiredWhen) => changeField(section, index, { requiredWhen })}
-            />
           </div>
         ))}
         {fields.length === 0 && <p className="text-xs text-slate-400">No fields in this section.</p>}
       </div>
-    </div>
-  );
-}
-
-function ConditionEditor({ label, condition, onChange }) {
-  return (
-    <div className="grid gap-2 sm:col-span-2 lg:col-span-4 sm:grid-cols-2">
-      <input
-        aria-label={`${label} field key`}
-        placeholder={`${label}: controlling field key (optional)`}
-        value={condition?.key || ""}
-        onChange={(event) => {
-          const key = event.target.value.trim();
-          onChange(key ? { key, value: condition?.value ?? "" } : undefined);
-        }}
-        className={controlClass}
-      />
-      <input
-        aria-label={`${label} value`}
-        placeholder={`${label}: matching value(s), comma-separated`}
-        value={Array.isArray(condition?.value) ? condition.value.join(", ") : condition?.value || ""}
-        disabled={!condition?.key}
-        onChange={(event) => {
-          const rawValue = event.target.value;
-          const values = rawValue.split(",").map((value) => value.trim()).filter(Boolean);
-          onChange(condition?.key
-            ? { key: condition.key, value: values.length > 1 ? values : values[0] || "" }
-            : undefined);
-        }}
-        className={controlClass}
-      />
     </div>
   );
 }

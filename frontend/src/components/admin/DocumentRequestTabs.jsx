@@ -1,10 +1,11 @@
-import { ClipboardList, FileCog } from "lucide-react";
+import { ChartNoAxesColumn, ClipboardList, FileCog } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 function DocumentRequestTabs() {
   const location = useLocation();
   const navigate = useNavigate();
   const isDocumentTypes = location.pathname === "/admin/document-types";
+  const isDashboard = location.pathname === "/admin/document-requests/dashboard";
 
   return (
     <nav
@@ -13,9 +14,18 @@ function DocumentRequestTabs() {
     >
       <button
         type="button"
+        onClick={() => navigate("/admin/document-requests/dashboard")}
+        aria-current={isDashboard ? "page" : undefined}
+        className={tabClass(isDashboard)}
+      >
+        <ChartNoAxesColumn className="h-4 w-4" aria-hidden="true" />
+        Dashboard
+      </button>
+      <button
+        type="button"
         onClick={() => navigate("/admin/document-requests")}
-        aria-current={!isDocumentTypes ? "page" : undefined}
-        className={tabClass(!isDocumentTypes)}
+        aria-current={!isDocumentTypes && !isDashboard ? "page" : undefined}
+        className={tabClass(!isDocumentTypes && !isDashboard)}
       >
         <ClipboardList className="h-4 w-4" aria-hidden="true" />
         Document Requests

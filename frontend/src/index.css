@@ -4,11 +4,32 @@
   width: 8.5in;
   min-height: 11in;
   box-sizing: border-box;
+  break-after: avoid-page;
+  page-break-after: avoid;
+}
+
+.document-paper--designed {
+  height: var(--paper-height, 11in);
+  min-height: var(--paper-height, 11in);
+}
+
+.document-paper--designed .document-template-heading {
+  display: none;
+}
+
+.document-paper .text-slate-800,
+.document-paper .text-slate-700 {
+  color: var(--document-text-color, #1f2937) !important;
+}
+
+.document-paper .text-\[\#2455D6\],
+.document-paper .text-\[\#123F70\] {
+  color: var(--document-accent-color, #123f70) !important;
 }
 
 @media print {
   @page {
-    size: letter;
+    size: var(--document-paper-size, letter);
     margin: 0;
   }
 
@@ -16,30 +37,65 @@
     background: #ffffff !important;
   }
 
+  body * {
+    visibility: hidden !important;
+  }
+
+  #document-preview-modal {
+    position: static !important;
+    display: block !important;
+    width: var(--paper-width, 8.5in) !important;
+    min-height: var(--paper-height, 11in) !important;
+    height: auto !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+  }
+
   .document-preview-scroll {
+    position: static !important;
+    display: block !important;
     overflow: visible !important;
     padding: 0 !important;
     background: #ffffff !important;
   }
 
+  .document-paper,
+  .document-paper * {
+    visibility: visible !important;
+  }
+
   .document-paper {
-    width: 8.5in !important;
-    min-height: 11in !important;
+    position: relative !important;
+    width: var(--paper-width, 8.5in) !important;
+    height: var(--paper-height, 11in) !important;
+    min-height: var(--paper-height, 11in) !important;
+    max-width: none !important;
     margin: 0 !important;
+    padding: 0.55in !important;
     box-shadow: none !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
 
-  .document-preview-modal > div {
+  .document-paper--designed {
+    padding: 0 !important;
+  }
+
+  #document-preview-modal > div {
+    display: block !important;
+    width: var(--paper-width, 8.5in) !important;
+    max-width: none !important;
+    margin: 0 !important;
     max-height: none !important;
     overflow: visible !important;
     border-radius: 0 !important;
     box-shadow: none !important;
   }
 
-  .document-preview-modal > div > div:first-child,
-  .document-preview-modal button {
+  #document-preview-modal > div > div:first-child,
+  #document-preview-modal button {
     display: none !important;
   }
 }

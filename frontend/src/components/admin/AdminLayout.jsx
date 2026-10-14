@@ -33,9 +33,10 @@ const navigation = [
   },
   {
     label: "Document Request",
-    path: "/admin/document-requests",
+    path: "/admin/document-requests/dashboard",
     icon: ClipboardList,
     children: [
+      { label: "Dashboard", path: "/admin/document-requests/dashboard" },
       { label: "Document Requests", path: "/admin/document-requests" },
       { label: "Document Types", path: "/admin/document-types" },
     ],
@@ -68,28 +69,30 @@ const navigation = [
   },
 ];
 
+const matchesRoute = (routePath, pathname) =>
+  pathname === routePath || pathname.startsWith(`${routePath}/`);
+
+const getActiveChild = (item, pathname) =>
+  item.children
+    ?.filter((child) => matchesRoute(child.path, pathname))
+    .sort((left, right) => right.path.length - left.path.length)[0];
+
+const isActiveNavigationItem = (item, pathname) =>
+  (item.label === "Chatbot" && pathname === "/admin/chatbot") ||
+  matchesRoute(item.path, pathname) ||
+  Boolean(getActiveChild(item, pathname));
+
 function AdminLayout({ children, title }) {
   const { user, token, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const activeItem = navigation.find(
-    (item) =>
-      item.path === location.pathname ||
-      (item.label === "Chatbot" && location.pathname === "/admin/chatbot") ||
-      item.children?.some(
-        (child) =>
-          child.path === location.pathname ||
-          (child.path !== item.path &&
-            location.pathname.startsWith(`${child.path}/`)),
-      ),
+  const activeItem = navigation.find((item) =>
+    isActiveNavigationItem(item, location.pathname),
   );
-  const activeChild = activeItem?.children?.find(
-    (child) =>
-      child.path === location.pathname ||
-      (child.path !== activeItem.path &&
-        location.pathname.startsWith(`${child.path}/`)),
-  );
+  const activeChild = activeItem
+    ? getActiveChild(activeItem, location.pathname)
+    : undefined;
   const activePanel = activeChild?.label || activeItem?.label || title;
 
   const handleSelect = (path) => {
@@ -126,14 +129,17 @@ function AdminLayout({ children, title }) {
 
 function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
   const [openMenu, setOpenMenu] = useState("");
-  const isActiveItem = (item) =>
-    (item.label === "Chatbot" && activePath === "/admin/chatbot") ||
-    item.children.some(
-      (child) =>
-        child.path === activePath ||
-        (child.path !== item.path &&
-          activePath.startsWith(`${child.path}/`)),
-    );
+  const activeNavigationItem = navigation.find((item) =>
+    isActiveNavigationItem(item, activePath),
+  );
+
+  useEffect(() => {
+    if (activeNavigationItem?.children) {
+      setOpenMenu(activeNavigationItem.label);
+    }
+  }, [activeNavigationItem?.label]);
+
+  const isActiveItem = (item) => isActiveNavigationItem(item, activePath);
 
   return (
     <>
@@ -234,9 +240,7 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
                         type="button"
                         onClick={() => onSelect(child.path)}
                         className={`flex w-full items-center rounded-lg px-3 py-2.5 text-left text-xs font-semibold ${
-                          activePath === child.path ||
-                          (child.path !== item.path &&
-                            activePath.startsWith(`${child.path}/`))
+                          getActiveChild(item, activePath)?.path === child.path
                             ? "bg-white/15 text-white"
                             : "text-blue-100/75"
                         }`}

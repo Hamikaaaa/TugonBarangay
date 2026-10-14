@@ -199,7 +199,7 @@ function Login() {
         "
         >
           <img
-            src="/images/consolacion-logo.png"
+            src="/images/TayudLogo.png"
             alt="Municipality of Consolacion"
             className="
             w-23
@@ -236,16 +236,16 @@ function Login() {
           {/* Welcome Content */}
           <div className="mt-auto max-w-xl pb-10">
             <p className="mb-3 text-xl font-semibold text-blue-200">
-              Welcome, Tugonizen!
+              Welcome, Tayuranon!
             </p>
 
             <h2 className="font-bold leading-tight tracking-tight">
               <span className="block text-5xl text-white">
-                Serving Barangays of
+                Your Digital Gateway to
               </span>
 
               <span className="block text-5xl text-[#FF6B6B] whitespace-nowrap">
-                Municipality of Consolacion
+                Barangay Tayud Services
               </span>
             </h2>
 

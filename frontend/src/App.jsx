@@ -14,6 +14,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import Residents from "./pages/admin/Residents";
 import DocumentTypes from "./pages/admin/DocumentTypes";
 import DocumentRequestHistory from "./pages/admin/DocumentRequestHistory";
+import AdminDocumentRequestsDashboard from "./pages/admin/AdminDocumentRequestsDashboard";
 import Complaints from "./pages/admin/Complaints";
 import Chatbot from "./pages/admin/Chatbot";
 import Feedback from "./pages/admin/Feedback";
@@ -134,6 +135,19 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <Residents />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/residents/accounts"
+            element={<ProtectedRoute allowedRoles={["admin"]}><Residents /></ProtectedRoute>}
+          />
+
+          <Route
+            path="/admin/document-requests/dashboard"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <AdminDocumentRequestsDashboard />
               </ProtectedRoute>
             }
           />

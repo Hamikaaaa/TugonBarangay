@@ -5,7 +5,7 @@ import { RequestRow } from "../../components/resident/ResidentUI";
 const BRAND_GRADIENT =
   "bg-gradient-to-r from-[#2455D6] via-[#7138E8] to-[#E52B32]";
 
-function Overview({ firstName, verified, dashboard, onNavigate, user }) {
+function Overview({ firstName, verified, dashboard, onNavigate, user, token }) {
   const stats = dashboard?.stats || {};
   const requests = dashboard?.requests || [];
 
@@ -399,9 +399,9 @@ function Overview({ firstName, verified, dashboard, onNavigate, user }) {
               requests.map((request) => (
                 <div
                   key={request.id}
-                  className="transition hover:bg-slate-50/70"
+                  className="px-6 transition hover:bg-slate-50/70"
                 >
-                  <RequestRow request={request} />
+                  <RequestRow request={request} token={token} />
                 </div>
               ))
             )}

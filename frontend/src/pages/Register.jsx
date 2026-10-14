@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { PUROKS } from "../constants/puroks";
 
 const formSteps = [
   {
@@ -35,6 +37,9 @@ function Register() {
   const [message, setMessage] = useState("");
   const [fieldErrors, setFieldErrors] = useState({});
   const [passwordValidationAttempted, setPasswordValidationAttempted] =
+    useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showPasswordConfirmation, setShowPasswordConfirmation] =
     useState(false);
 
   const [formData, setFormData] = useState({
@@ -382,7 +387,7 @@ function Register() {
             <div className="h-12 w-px bg-white/20" />
 
             <img
-              src="/images/consolacion-logo.png"
+              src="/images/TayudLogo.png"
               alt="Municipality of Consolacion"
               className="h-20 w-20 rounded-full object-contain"
             />
@@ -623,18 +628,24 @@ function Register() {
                 <Field
                   label="Password"
                   name="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={formData.password}
                   onChange={update}
                   error={showPasswordErrors ? fieldErrors.password : ""}
                   placeholder="Create a strong password"
                   required
+                  trailingAction={
+                    <PasswordVisibilityButton
+                      visible={showPassword}
+                      onClick={() => setShowPassword((visible) => !visible)}
+                    />
+                  }
                 />
 
                 <Field
                   label="Confirm password"
                   name="password_confirmation"
-                  type="password"
+                  type={showPasswordConfirmation ? "text" : "password"}
                   value={formData.password_confirmation}
                   onChange={update}
                   error={
@@ -642,6 +653,14 @@ function Register() {
                   }
                   placeholder="Re-enter your password"
                   required
+                  trailingAction={
+                    <PasswordVisibilityButton
+                      visible={showPasswordConfirmation}
+                      onClick={() =>
+                        setShowPasswordConfirmation((visible) => !visible)
+                      }
+                    />
+                  }
                 />
 
                 <p className="-mt-2 text-xs leading-5 text-slate-500">
@@ -849,6 +868,7 @@ function Field({
   type = "text",
   error,
   required,
+  trailingAction,
   ...props
 }) {
   return (
@@ -876,25 +896,32 @@ function Field({
             </>
           ) : (
             <>
-              {[1, 2, 3, 4, 5].map((item) => (
-                <option key={item} value={`Purok ${item}`}>
-                  Purok {item}
+              {PUROKS.map((purok) => (
+                <option key={purok} value={purok}>
+                  {purok}
                 </option>
               ))}
             </>
           )}
         </select>
       ) : (
-        <input
-          name={name}
-          value={value}
-          onChange={onChange}
-          type={type}
-          className={`mt-2 h-14 w-full rounded-2xl border bg-[#FBFCFE] px-4 font-normal outline-none transition focus:border-[#2455D6] focus:bg-white focus:ring-4 focus:ring-[#2455D6]/10 ${
-            error ? "border-red-300" : "border-slate-200"
-          }`}
-          {...props}
-        />
+        <div className="relative mt-2">
+          <input
+            name={name}
+            value={value}
+            onChange={onChange}
+            type={type}
+            className={`h-14 w-full rounded-2xl border bg-[#FBFCFE] px-4 pr-12 font-normal outline-none transition focus:border-[#2455D6] focus:bg-white focus:ring-4 focus:ring-[#2455D6]/10 ${
+              error ? "border-red-300" : "border-slate-200"
+            }`}
+            {...props}
+          />
+          {trailingAction && (
+            <span className="absolute right-3 top-1/2 -translate-y-1/2">
+              {trailingAction}
+            </span>
+          )}
+        </div>
       )}
 
       {error && (
@@ -903,6 +930,22 @@ function Field({
         </span>
       )}
     </label>
+  );
+}
+
+function PasswordVisibilityButton({ visible, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={visible ? "Hide password" : "Show password"}
+      className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+    >
+      <span className="sr-only">
+        {visible ? "Hide password" : "Show password"}
+      </span>
+      {visible ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+    </button>
   );
 }
 

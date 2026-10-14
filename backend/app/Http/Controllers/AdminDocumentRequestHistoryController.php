@@ -14,7 +14,7 @@ class AdminDocumentRequestHistoryController extends Controller
     {
         $validated = $request->validate([
             'status' => ['sometimes', 'string', 'in:all,pending,under_review,processing,for_correction,ready_for_release,completed,rejected,delayed'],
-            'search' => ['sometimes', 'string', 'max:150'],
+            'search' => ['nullable', 'string', 'max:150'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
         ]);
 

@@ -163,6 +163,21 @@ class ResidentController extends Controller
             ->paginate(10);
     }
 
+    public function viewRequestRequirement(Request $request, DocumentRequest $documentRequest, string $requirement)
+    {
+        abort_unless((int) $documentRequest->resident_id === (int) $request->user()->id, 404);
+        $file = $documentRequest->details['requirements'][$requirement] ?? null;
+        abort_unless(is_array($file) && !empty($file['path']), 404);
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists($file['path']), 404);
+
+        $filename = $file['original_name'] ?? basename($file['path']);
+        return $disk->response($file['path'], $filename, [
+            'Cache-Control' => 'private, no-store',
+            'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $filename).'"',
+        ], 'inline');
+    }
+
     public function storeRequest(Request $request)
     {
         $documentType = $request->input('document_type');

@@ -100,12 +100,12 @@ class DocumentTypeController extends Controller
     public function uploadTemplate(Request $request, DocumentType $documentType)
     {
         $validated = $request->validate([
-            'template_file' => ['sometimes', 'file', 'mimes:pdf,doc,docx', 'max:10240'],
+            'template_file' => ['sometimes', 'file', 'mimes:jpg,jpeg,pdf,doc,docx', 'max:10240'],
             'remove_template' => ['sometimes', 'boolean'],
         ]);
 
         if (empty($validated['template_file']) && empty($validated['remove_template'])) {
-            abort(422, 'Choose a PDF or Word template to upload, or select remove template.');
+            abort(422, 'Choose a JPEG, PDF, or Word document design to upload, or select remove template.');
         }
 
         $disk = Storage::disk('local');
@@ -158,12 +158,22 @@ class DocumentTypeController extends Controller
         $validated = $request->validate([
             'value' => [$documentType ? 'sometimes' : 'required', 'string', 'max:100', Rule::unique('document_types', 'value')->ignore($ignoreId)],
             'label' => ['required', 'string', 'max:150'],
+            'description' => ['nullable', 'string', 'max:1000'],
             'fee_mode' => ['required', Rule::in(['fixed', 'assessed'])],
             'fee' => ['required', 'numeric', 'min:0', 'max:1000000000'],
             'one_time' => ['required', 'boolean'],
             'active' => ['required', 'boolean'],
             'template_enabled' => ['sometimes', 'boolean'],
             'template' => ['nullable', 'string', 'max:20000'],
+            'paper_size' => ['sometimes', Rule::in(['letter', 'a4', 'legal'])],
+            'document_layout' => ['sometimes', 'array'],
+            'document_layout.content_top' => ['sometimes', 'integer', 'between:51,76'],
+            'document_layout.content_left' => ['sometimes', 'integer', 'between:13,38'],
+            'document_layout.content_right' => ['sometimes', 'integer', 'between:13,38'],
+            'document_layout.content_bottom' => ['sometimes', 'integer', 'between:13,38'],
+            'document_layout.font_size_pt' => ['sometimes', 'integer', 'between:10,14'],
+            'document_layout.text_color' => ['sometimes', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'document_layout.accent_color' => ['sometimes', 'regex:/^#[0-9A-Fa-f]{6}$/'],
             'applicant_fields' => ['present', 'array', 'max:30'],
             'applicant_fields.*.key' => ['required', 'regex:/^[a-z][a-z0-9_]{1,63}$/'],
             'applicant_fields.*.label' => ['required', 'string', 'max:100'],
@@ -254,6 +264,7 @@ class DocumentTypeController extends Controller
             'id' => $type->id,
             'value' => $type->value,
             'label' => $type->label,
+            'description' => $type->description,
             'fee_mode' => $type->fee_mode,
             'fee' => $type->fee,
             'one_time' => $type->one_time,
@@ -263,6 +274,8 @@ class DocumentTypeController extends Controller
             'requirements' => $type->requirements ?? [],
             'template' => $type->template,
             'template_enabled' => $type->template_enabled ?? true,
+            'paper_size' => $type->paper_size ?: 'letter',
+            'document_layout' => $type->document_layout ?? [],
             'uploaded_template_name' => $type->uploaded_template_name,
         ];
     }
