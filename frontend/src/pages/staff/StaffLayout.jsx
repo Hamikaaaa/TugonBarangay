@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { Archive, CalendarDays, CheckCircle2, ChevronDown, Clock3, FileText, LayoutDashboard, LoaderCircle, LogOut, Menu, MessageSquareWarning, X, XCircle } from "lucide-react";
+import { Archive, CalendarDays, CheckCircle2, Clock3, FileText, LayoutDashboard, LoaderCircle, LogOut, Menu, MessageSquareWarning, X, XCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
-function StaffLayout({ title, navigationItems, notificationCounts = {}, activePath, onNavigate, selectedNavigationChild, onNavigationChildSelect, children }) {
+function StaffLayout({ title, navigationItems, notificationCounts = {}, activePath, onNavigate, children }) {
   const { user, token, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [expandedNavigation, setExpandedNavigation] = useState(null);
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
   const [pendingComplaintCount, setPendingComplaintCount] = useState(0);
 
@@ -61,8 +60,6 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
           <div className="space-y-1">
             {navigationItems.map((item) => {
               const active = activePath === item.path;
-              const hasChildren = Boolean(item.children?.length);
-              const expanded = expandedNavigation === item.path;
               const Icon = item.icon || (item.value
                 ? FileText
                 : item.label === "Pending"
@@ -83,15 +80,10 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
                   <button
                     type="button"
                     onClick={() => {
-                      if (hasChildren) {
-                        setExpandedNavigation(expanded ? null : item.path);
-                        return;
-                      }
                       onNavigate(item.path);
                       setSidebarOpen(false);
                     }}
                     aria-current={active ? "page" : undefined}
-                    aria-expanded={hasChildren ? expanded : undefined}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${active ? "bg-white text-[#123F70] shadow-lg" : "text-white/85 hover:bg-white/10"}`}
                   >
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-[#EAF1FF] text-[#2455D6]" : "bg-white/10 text-white/85"}`}>
@@ -106,33 +98,10 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
                     {item.label === "Pending" && pendingComplaintCount > 0 && user?.designation === "Complaint Management Officer" && (
                       <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white" aria-label={`${pendingComplaintCount} pending complaints`}>{pendingComplaintCount > 99 ? "99+" : pendingComplaintCount}</span>
                     )}
-                    {hasChildren ? (
-                      <ChevronDown size={15} className={`shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
-                    ) : active ? (
+                    {active && (
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF6B6B]" />
-                    ) : null}
+                    )}
                   </button>
-                  {hasChildren && expanded && (
-                    <div className="ml-7 border-l border-white/20 py-1 pl-5" role="group" aria-label="Complaint categories">
-                      {item.children.map((category) => {
-                        const selected = selectedNavigationChild === category;
-                        return (
-                          <button
-                            key={category}
-                            type="button"
-                            onClick={() => {
-                              onNavigationChildSelect?.(category);
-                              setSidebarOpen(false);
-                            }}
-                            aria-pressed={selected}
-                            className={`block w-full py-2 text-left text-xs font-medium leading-4 transition ${selected ? "text-white" : "text-white/75 hover:text-white"}`}
-                          >
-                            {category}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
                 </div>
               );
             })}

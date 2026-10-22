@@ -10,6 +10,8 @@ import StaffHome from "./pages/staff/StaffHome";
 import { StaffDocumentTypePage } from "./pages/staff/StaffDashboardProfessional";
 import ComplaintManagement from "./pages/staff/ComplaintManagement";
 import ComplaintReview from "./pages/staff/ComplaintReview";
+import BlotterManagement from "./pages/staff/BlotterManagement";
+import SummonForm from "./pages/staff/SummonForm";
 import AdminDashboard from "./pages/AdminDashboard";
 import Residents from "./pages/admin/Residents";
 import DocumentTypes from "./pages/admin/DocumentTypes";
@@ -92,6 +94,24 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Complaint Management Officer"]}>
                 <ComplaintManagement />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/staff/blotter"
+            element={
+              <ProtectedRoute allowedRoles={["staff"]}>
+                <BlotterManagement />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/staff/blotter/summon"
+            element={
+              <ProtectedRoute allowedRoles={["staff"]}>
+                <SummonForm />
               </ProtectedRoute>
             }
           />
@@ -196,6 +216,14 @@ function App() {
           />
           <Route
             path="/admin/complaints/categories"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <Complaints />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/complaints/blotter-history"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <Complaints />

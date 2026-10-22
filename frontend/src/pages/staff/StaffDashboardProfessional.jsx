@@ -24,6 +24,7 @@ import DocumentPreviewModal from "./DocumentPreviewModal";
 import FeeAssessment from "../../components/document/FeeAssessment";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import StaffLayout from "./StaffLayout";
+import useBlotterNavigation from "../../hooks/useBlotterNavigation";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const DOCUMENT_TYPES_CACHE_KEY = "staff-document-types";
@@ -106,6 +107,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
   const { token, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const blotterNavigation = useBlotterNavigation();
   const [documentTypes, setDocumentTypes] = useState(
     () => readCachedDocumentTypes() || DEFAULT_DOCUMENT_TYPES,
   );
@@ -482,6 +484,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
       icon: DOCUMENT_TYPE_ICONS[item.value] || FileText,
       path: `/staff/document-types/${encodeURIComponent(item.value)}`,
     })),
+    blotterNavigation,
   ];
 
   if (documentType && !documentTypesLoading && !activeType) {
@@ -498,7 +501,11 @@ function StaffDashboardProfessional({ documentType = "" }) {
       activePath={documentType ? `/staff/document-types/${encodeURIComponent(documentType)}` : "/staff/dashboard"}
       onNavigate={(path) => {
         const item = navigationItems.find((navigationItem) => navigationItem.path === path);
-        if (item) selectDocumentType(item.value);
+        if (item) {
+          selectDocumentType(item.value);
+          return;
+        }
+        navigate(path);
       }}
     >
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">

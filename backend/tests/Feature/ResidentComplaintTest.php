@@ -209,4 +209,49 @@ class ResidentComplaintTest extends TestCase
             ->assertJsonPath('data.0.involved_persons', null)
             ->assertJsonPath('data.0.staff_remarks', 'An officer has been assigned to review your report.');
     }
+
+    public function test_resident_complaint_history_can_be_filtered_by_status(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        Complaint::create([
+            'resident_id' => $resident->id,
+            'category' => 'Neighbor Dispute',
+            'subject' => 'Pending report',
+            'description' => 'A complaint that is still queued for review.',
+            'status' => 'pending',
+        ]);
+        Complaint::create([
+            'resident_id' => $resident->id,
+            'category' => 'Noise Disturbance',
+            'subject' => 'Resolved report',
+            'description' => 'A complaint that staff already resolved.',
+            'status' => 'resolved',
+        ]);
+        Sanctum::actingAs($resident);
+
+        $this->getJson('/api/resident/complaints?status=resolved')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.status', 'resolved')
+            ->assertJsonPath('status_counts.all', 2)
+            ->assertJsonPath('status_counts.pending', 1)
+            ->assertJsonPath('status_counts.resolved', 1)
+            ->assertJsonPath('status_counts.in_progress', 0)
+            ->assertJsonPath('status_counts.rejected', 0)
+            ->assertJsonPath('status_counts.closed', 0);
+
+        $this->getJson('/api/resident/complaints?status=all')
+            ->assertOk()
+            ->assertJsonCount(2, 'data');
+    }
+
+    public function test_resident_complaint_history_rejects_unknown_status_filter(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        Sanctum::actingAs($resident);
+
+        $this->getJson('/api/resident/complaints?status=archived')
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('status');
+    }
 }
