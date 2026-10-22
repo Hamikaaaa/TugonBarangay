@@ -38,6 +38,9 @@ const DOCUMENT_TYPES = [
   { label: "Business Clearance", value: "Business Permit" },
   { label: "Certificate of Good Moral Character", value: "Certificate of Good Moral Character" },
   { label: "First-Time Jobseeker Certification", value: "First-Time Jobseeker Certification" },
+  { label: "Cedula (Community Tax Certificate)", value: "Cedula" },
+  { label: "Fencing Permit", value: "Fencing Permit" },
+  { label: "Construction Permit", value: "Construction Permit" },
 ];
 
 function StaffDashboard() {

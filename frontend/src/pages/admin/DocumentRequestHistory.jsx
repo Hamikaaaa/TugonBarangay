@@ -61,24 +61,30 @@ function DocumentRequestHistory() {
     });
   }, [token]);
 
-  const refreshDashboard = useCallback(async (page = 1) => {
+  const refreshDashboard = useCallback(async (page = pagination.current_page, silent = false) => {
     if (!token) return;
-    setLoading(true);
-    setError("");
+    if (!silent) { setLoading(true); setError(""); }
     try {
       await Promise.all([loadRequests(page), loadAuditEvents()]);
     } catch (loadError) {
-      setError(loadError.message);
+      if (!silent) setError(loadError.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
-  }, [loadAuditEvents, loadRequests, token]);
+  }, [loadAuditEvents, loadRequests, pagination.current_page, token]);
 
   useEffect(() => {
     // Load current dashboard data when search and status filters change.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     refreshDashboard(1);
   }, [refreshDashboard]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible" && !selectedRequest) refreshDashboard(pagination.current_page, true);
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [pagination.current_page, refreshDashboard, selectedRequest]);
 
   const openRequest = async (requestId) => {
     setError("");

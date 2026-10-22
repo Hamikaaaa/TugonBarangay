@@ -81,6 +81,9 @@ function RequestRow({ request, token }) {
     "Barangay Indigency": "Certificate of Indigency",
     "Business Permit": "Business Clearance",
     "First-Time Jobseeker Certification": "First-Time Job Seeker Certification",
+    Cedula: "Cedula (Community Tax Certificate)",
+    "Fencing Permit": "Fencing Permit",
+    "Construction Permit": "Construction Permit",
   };
 
   const title =

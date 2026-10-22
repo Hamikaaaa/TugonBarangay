@@ -11,6 +11,7 @@ use App\Models\DocumentRequestEvent;
 use App\Models\DocumentType;
 use App\Models\Feedback;
 use App\Models\ResidentNotification;
+use App\Support\ResidentIdentityKey;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -66,6 +67,9 @@ class ResidentController extends Controller
 
     private const APPLICANT_FIELD_RULES = [
         'full_name' => ['required', 'string', 'max:255'],
+        'first_name' => ['required', 'string', 'max:100'],
+        'middle_name' => ['nullable', 'string', 'max:100'],
+        'last_name' => ['required', 'string', 'max:100'],
         'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
         'age' => ['required', 'integer', 'min:0', 'max:150'],
         'sex' => ['required', 'string', 'max:50'],
@@ -88,17 +92,13 @@ class ResidentController extends Controller
             'purok',
         ],
         'Barangay Residency' => [
-            'full_name',
-            'address',
+            'first_name',
+            'middle_name',
+            'last_name',
             'purok',
-            'date_of_birth',
-            'sex',
         ],
         'Barangay Indigency' => [
             'full_name',
-            'address',
-            'date_of_birth',
-            'sex',
             'purok',
         ],
         'Business Permit' => ['full_name', 'contact_number', 'email_address'],
@@ -110,7 +110,6 @@ class ResidentController extends Controller
         ],
         'Barangay Residency' => [
             'years_of_residency' => ['required', 'integer', 'min:0', 'max:150'],
-            'months_of_residency' => ['sometimes', 'integer', 'min:0', 'max:11'],
             'purpose' => ['required', 'string', 'max:255'],
         ],
         'Barangay Indigency' => [
@@ -247,9 +246,14 @@ class ResidentController extends Controller
         }
 
         $validated = $request->validate($rules);
-        if ($configuredType && $this->hasField($configuredType, 'age') && $this->hasField($configuredType, 'date_of_birth')) {
+        if ($configuredType
+            && $validated['document_type'] !== 'Barangay Residency'
+            && $this->hasField($configuredType, 'age')
+            && $this->hasField($configuredType, 'date_of_birth')) {
             $validated['form_fields']['age'] = Carbon::parse($validated['form_fields']['date_of_birth'])->age;
-        } elseif (in_array($validated['document_type'], ['Barangay Certification', 'Barangay Residency'], true)) {
+        } elseif ($validated['document_type'] === 'First-Time Jobseeker Certification' && $request->user()->date_of_birth) {
+            $validated['form_fields']['age'] = Carbon::parse($request->user()->date_of_birth)->age;
+        } elseif ($validated['document_type'] === 'Barangay Certification') {
             $validated['form_fields']['age'] = Carbon::parse($validated['form_fields']['date_of_birth'])->age;
         }
         $requirements = $configuredType
@@ -260,19 +264,39 @@ class ResidentController extends Controller
             : self::DOCUMENT_FEES[$validated['document_type']];
         $storedPaths = [];
         $userId = $request->user()->id;
+        $jobseekerIdentityHash = $validated['document_type'] === 'First-Time Jobseeker Certification'
+            ? ResidentIdentityKey::make($request->user())
+            : null;
 
         try {
-            $documentRequest = DB::transaction(function () use ($request, $validated, $requirements, $userId, $fee, $configuredType, &$storedPaths) {
+            $documentRequest = DB::transaction(function () use ($request, $validated, $requirements, $userId, $fee, $configuredType, $jobseekerIdentityHash, &$storedPaths) {
                 if ($configuredType?->one_time) {
                     \App\Models\Resident::whereKey($userId)->lockForUpdate()->firstOrFail();
-                    abort_if(
-                        DocumentRequest::where('resident_id', $userId)
-                            ->where('document_type', $validated['document_type'])
-                            ->where('status', '!=', 'rejected')
-                            ->exists(),
-                        409,
-                        'This one-time certificate has already been requested or issued.',
-                    );
+                    if ($validated['document_type'] === 'First-Time Jobseeker Certification') {
+                        abort_if(
+                            DocumentRequest::where('resident_id', $userId)
+                                ->where('document_type', $validated['document_type'])
+                                ->where('status', '!=', 'rejected')
+                                ->exists(),
+                            409,
+                            'You have already availed this one-time certificate. You cannot request it again.',
+                        );
+                        abort_if(!$jobseekerIdentityHash, 422, 'Your resident profile must include your full name and date of birth to request this certificate.');
+                        $claimed = DB::table('first_time_jobseeker_availments')->insertOrIgnore([
+                            'identity_hash' => $jobseekerIdentityHash,
+                            'claimed_at' => now(),
+                        ]);
+                        abort_if($claimed === 0, 409, 'This resident has already availed the First-Time Jobseeker Certificate. It can only be availed once, even when using another account.');
+                    } else {
+                        abort_if(
+                            DocumentRequest::where('resident_id', $userId)
+                                ->where('document_type', $validated['document_type'])
+                                ->where('status', '!=', 'rejected')
+                                ->exists(),
+                            409,
+                            'You have already availed this one-time certificate. You cannot request it again.',
+                        );
+                    }
                 }
                 $uploadedRequirements = [];
 
@@ -305,6 +329,11 @@ class ResidentController extends Controller
                     'fee' => $fee,
                     'status' => 'pending',
                 ]);
+                if ($jobseekerIdentityHash) {
+                    DB::table('first_time_jobseeker_availments')
+                        ->where('identity_hash', $jobseekerIdentityHash)
+                        ->update(['document_request_id' => $documentRequest->id]);
+                }
                 DocumentRequestEvent::record(
                     $documentRequest,
                     $request->user(),
@@ -412,9 +441,14 @@ class ResidentController extends Controller
         }
 
         $validated = $request->validate($rules);
-        if (($configuredType && $this->hasField($configuredType, 'age') && $this->hasField($configuredType, 'date_of_birth'))
-            || in_array($documentType, ['Barangay Certification', 'Barangay Residency'], true)) {
+        if (($configuredType
+                && $documentType !== 'Barangay Residency'
+                && $this->hasField($configuredType, 'age')
+                && $this->hasField($configuredType, 'date_of_birth'))
+            || $documentType === 'Barangay Certification') {
             $validated['form_fields']['age'] = Carbon::parse($validated['form_fields']['date_of_birth'])->age;
+        } elseif ($documentType === 'First-Time Jobseeker Certification' && $request->user()->date_of_birth) {
+            $validated['form_fields']['age'] = Carbon::parse($request->user()->date_of_birth)->age;
         }
         $details = $documentRequest->details ?? [];
         $details['form_fields'] = $validated['form_fields'];
@@ -998,7 +1032,7 @@ class ResidentController extends Controller
             }
             switch ($field['type']) {
                 case 'number':
-                    $fieldRules[] = 'numeric';
+                    $fieldRules[] = (float) ($field['step'] ?? 0) === 1.0 ? 'integer' : 'numeric';
                     if (isset($field['min'])) {
                         $fieldRules[] = 'min:'.$field['min'];
                     }

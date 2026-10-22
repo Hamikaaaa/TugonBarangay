@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\DocumentRequest;
 use App\Models\DocumentType;
+use App\Support\ResidentIdentityKey;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -15,18 +17,30 @@ class DocumentTypeController extends Controller
     {
         $types = DocumentType::whereNotNull('value')->where('active', true)->orderBy('label')->get();
         $residentId = $request->user()->id;
+        $identityHash = ResidentIdentityKey::make($request->user());
 
         return response()->json([
-            'data' => $types->map(function (DocumentType $type) use ($residentId) {
-                $alreadyRequested = $type->one_time && DocumentRequest::where('resident_id', $residentId)
-                    ->where('document_type', $type->value)
-                    ->where('status', '!=', 'rejected')
-                    ->exists();
+            'data' => $types->map(function (DocumentType $type) use ($residentId, $identityHash) {
+                $alreadyRequested = false;
+                if ($type->one_time && $type->value === 'First-Time Jobseeker Certification' && $identityHash) {
+                    $alreadyRequested = DB::table('first_time_jobseeker_availments')
+                        ->where('identity_hash', $identityHash)
+                        ->exists()
+                        || DocumentRequest::where('resident_id', $residentId)
+                            ->where('document_type', $type->value)
+                            ->where('status', '!=', 'rejected')
+                            ->exists();
+                } elseif ($type->one_time) {
+                    $alreadyRequested = DocumentRequest::where('resident_id', $residentId)
+                        ->where('document_type', $type->value)
+                        ->where('status', '!=', 'rejected')
+                        ->exists();
+                }
 
                 return $this->serialize($type) + [
                     'available' => !$alreadyRequested,
                     'unavailable_reason' => $alreadyRequested
-                        ? 'This one-time certificate has already been requested or issued.'
+                    ? 'You have already availed this one-time certificate. You cannot request it again.'
                         : null,
                 ];
             }),
@@ -57,6 +71,9 @@ class DocumentTypeController extends Controller
             $request->merge(['value' => Str::slug($request->input('label'))]);
         }
         $validated = $this->validateDocumentType($request);
+        if ($validated['value'] === 'First-Time Jobseeker Certification') {
+            $validated['one_time'] = true;
+        }
         $validated['name'] = $validated['label'];
         $validated['enabled'] = $validated['active'];
 
@@ -69,6 +86,9 @@ class DocumentTypeController extends Controller
     public function update(Request $request, DocumentType $documentType)
     {
         $validated = $this->validateDocumentType($request, $documentType);
+        if (($validated['value'] ?? $documentType->value) === 'First-Time Jobseeker Certification') {
+            $validated['one_time'] = true;
+        }
         $validated['name'] = $validated['label'];
         $validated['enabled'] = $validated['active'];
         $documentType->update($validated);
