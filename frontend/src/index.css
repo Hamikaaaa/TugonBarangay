@@ -13,54 +13,6 @@
   min-height: var(--paper-height, 11in);
 }
 
-.document-paper--multi-page {
-  display: block;
-  height: auto;
-  min-height: 0;
-  overflow: visible;
-  padding: 0;
-}
-
-.jobseeker-page {
-  position: relative;
-  box-sizing: border-box;
-  width: var(--paper-width, 8.5in);
-  height: var(--paper-height, 11in);
-  min-height: var(--paper-height, 11in);
-  margin: 0 auto 24px;
-  padding: 0.55in;
-  overflow: hidden;
-  background: #fff;
-  box-shadow: 0 1px 5px rgb(15 23 42 / 16%);
-  break-after: page;
-  page-break-after: always;
-}
-
-.jobseeker-page > :not(img) {
-  position: relative;
-  z-index: 1;
-}
-
-.jobseeker-page p {
-  margin: 0 0 0.08in;
-  text-align: justify;
-}
-
-.jobseeker-page .document-title--formal-certificate {
-  margin-bottom: 0.55in;
-  line-height: 1.15;
-}
-
-.jobseeker-page .jobseeker-list-item {
-  padding-left: 0.25in;
-  text-indent: -0.25in;
-}
-
-.jobseeker-page:last-child {
-  break-after: auto;
-  page-break-after: auto;
-}
-
 .document-paper--designed .document-template-heading {
   display: none;
 }
@@ -75,37 +27,10 @@
   color: var(--document-accent-color, #123f70) !important;
 }
 
-.barangay-certificate-wording .font-semibold {
-  font-weight: 700;
-}
-
-.document-paper--barangay-certificate .document-title--formal-certificate {
-  line-height: 1.15;
-  margin-bottom: 0.55in;
-}
-
-.document-paper--indigency-certificate .document-title--formal-certificate {
-  line-height: 1.15;
-  margin-bottom: 0.55in;
-}
-
-.document-paper--residency-certificate .document-title--formal-certificate {
-  line-height: 1.15;
-  margin-bottom: 0.55in;
-}
-
 @media print {
   @page {
     size: var(--document-paper-size, letter);
     margin: 0;
-  }
-
-  body *:has(#document-preview-modal) {
-    display: contents !important;
-  }
-
-  body *:not(:has(#document-preview-modal)):not(#document-preview-modal):not(#document-preview-modal *) {
-    display: none !important;
   }
 
   body {
@@ -154,63 +79,12 @@
     -webkit-print-color-adjust: exact;
   }
 
-  .document-paper--barangay-certificate .barangay-certificate-wording,
-  .document-paper--indigency-certificate .indigency-certificate-wording,
-  .document-paper--residency-certificate .document-wording {
-    font-size: 12pt !important;
-    line-height: 1.65 !important;
-  }
-
-  .document-paper--barangay-certificate {
-    break-after: avoid-page !important;
-    page-break-after: avoid !important;
-    break-inside: avoid-page !important;
-    page-break-inside: avoid !important;
-  }
-
-  .document-paper--indigency-certificate {
-    break-after: avoid-page !important;
-    page-break-after: avoid !important;
-    break-inside: avoid-page !important;
-    page-break-inside: avoid !important;
-  }
-
-  .document-paper--residency-certificate {
-    break-after: avoid-page !important;
-    page-break-after: avoid !important;
-    break-inside: avoid-page !important;
-    page-break-inside: avoid !important;
+  .document-paper--clearance {
+    padding: 0.3in !important;
   }
 
   .document-paper--designed {
     padding: 0 !important;
-  }
-
-  .document-paper--cedula {
-    padding: 0 !important;
-  }
-
-  .document-paper--multi-page {
-    display: block !important;
-    height: auto !important;
-    min-height: 0 !important;
-    overflow: visible !important;
-    padding: 0 !important;
-  }
-
-  .jobseeker-page {
-    width: var(--paper-width, 8.5in) !important;
-    height: var(--paper-height, 11in) !important;
-    min-height: var(--paper-height, 11in) !important;
-    margin: 0 !important;
-    box-shadow: none !important;
-    break-after: page !important;
-    page-break-after: always !important;
-  }
-
-  .jobseeker-page:last-child {
-    break-after: auto !important;
-    page-break-after: auto !important;
   }
 
   #document-preview-modal > div {

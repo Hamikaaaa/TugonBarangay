@@ -1,5 +1,10 @@
+fix-document-templates
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Camera, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+
+ main
 import {
   inputClass,
   primaryButtonClass,
@@ -11,9 +16,6 @@ import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
 
 const APPLICANT_FIELDS = {
   full_name: { label: "Full Name", type: "text" },
-  first_name: { label: "First Name", type: "text" },
-  middle_name: { label: "Middle Name", type: "text", required: false },
-  last_name: { label: "Last Name", type: "text" },
   address: {
     label: "House/Building No., Street, and Subdivision",
     type: "text",
@@ -22,9 +24,6 @@ const APPLICANT_FIELDS = {
   purok: { label: "Purok", type: "text" },
   date_of_birth: { label: "Date of Birth", type: "date" },
   sex: { label: "Sex", type: "select", options: ["Female", "Male", "Other"] },
-  civil_status: { label: "Civil status", type: "select", options: ["Single", "Married", "Widowed", "Separated"] },
-  citizenship: { label: "Citizenship", type: "text" },
-  occupation: { label: "Occupation or profession", type: "text" },
   contact_number: { label: "Contact Number", type: "tel" },
   email_address: { label: "Email Address", type: "email" },
 };
@@ -91,6 +90,9 @@ function getFriendlyRequestError(error, document) {
     const requirement = document?.requirements.find((item) =>
       normalized.includes(item.key.toLowerCase()),
     );
+    if (normalized.includes("applicant_photo") && normalized.includes("mimes")) {
+      return "Applicant photos must be JPG or PNG images up to 5 MB.";
+    }
     if (normalized.includes("required")) {
       return requirement
         ? `Please upload your ${requirement.label}.`
@@ -171,14 +173,28 @@ const DOCUMENT_TYPES = [
     label: "Certificate of Residency",
     value: "Barangay Residency",
     fee: 130,
-    applicantFields: ["first_name", "last_name", "middle_name", "purok"],
+    applicantFields: [
+      "full_name",
+      "address",
+      "purok",
+      "date_of_birth",
+      "sex",
+    ],
     fields: [
       {
         key: "years_of_residency",
         label: "Length of residency (years)",
         type: "number",
-        required: true,
         min: "0",
+        step: "1",
+      },
+      {
+        key: "months_of_residency",
+        label: "Additional months of residency",
+        type: "number",
+        required: false,
+        min: "0",
+        max: "11",
         step: "1",
       },
       {
@@ -203,7 +219,13 @@ const DOCUMENT_TYPES = [
   },
   {
     label: "Barangay Indigency",
-    applicantFields: ["full_name", "purok"],
+    applicantFields: [
+      "full_name",
+      "address",
+      "date_of_birth",
+      "sex",
+      "purok",
+    ],
     fields: [
       {
         key: "purpose",
@@ -282,89 +304,29 @@ const DOCUMENT_TYPES = [
     ],
   },
   {
-    label: "Cedula (Community Tax Certificate)",
-    value: "Cedula",
+    label: "Certificate of Good Moral Character",
+    value: "Certificate of Good Moral Character",
     fee: 0,
-    fee_mode: "assessed",
-    applicantFields: ["first_name", "last_name", "middle_name", "purok"],
-    applicantFieldConfigs: [
-      { key: "first_name", label: "First Name", type: "text", required: true },
-      { key: "last_name", label: "Last Name", type: "text", required: true },
-      { key: "middle_name", label: "Middle Name", type: "text", required: true },
-      { key: "purok", label: "Purok", type: "text", required: true },
-    ],
+    applicantFields: ["full_name", "address", "purok", "date_of_birth", "sex"],
     fields: [
       {
-        key: "taxable_amount",
-        label: "Annual Gross Salary (PHP)",
-        type: "number",
-        required: true,
-        min: 0,
-        step: 1,
+        key: "purpose",
+        label: "Purpose of request",
+        type: "select",
+        options: GENERAL_REQUEST_PURPOSES,
+      },
+      {
+        key: "purpose_other",
+        label: "Please specify your purpose",
+        type: "text",
+        submit: false,
+        showWhen: { key: "purpose", value: "Other" },
+        requiredWhen: { key: "purpose", value: "Other" },
       },
     ],
     requirements: [
-      { key: "national_government_id", label: "National Government ID", required: true },
-    ],
-  },
-  {
-    label: "Fencing Permit",
-    value: "Fencing Permit",
-    fee: 0,
-    fee_mode: "assessed",
-    applicantFields: ["full_name", "contact_number", "email_address"],
-    fields: [
-      { key: "property_owner_name", label: "Property owner's name", type: "text", required: true },
-      { key: "property_address", label: "Property address", type: "text", required: true },
-      { key: "property_purok", label: "Property Purok", type: "text", required: true },
-      { key: "property_ownership", label: "Applicant's relationship to property", type: "select", required: true, options: ["Owner", "Authorized Representative"] },
-      { key: "fence_material", label: "Fence material", type: "text", required: true },
-      { key: "fence_height", label: "Fence height (meters)", type: "number", required: true, min: 0, step: "0.01" },
-      { key: "fence_length", label: "Fence length (meters)", type: "number", required: true, min: 0, step: "0.01" },
-      { key: "proposed_construction_date", label: "Proposed construction date", type: "date", required: true },
-      { key: "project_description", label: "Additional project details", type: "textarea", required: false },
-    ],
-    requirements: [
+      { key: "purok_certificate", label: "Purok Certificate", required: true },
       { key: "valid_id", label: "Valid government-issued ID", required: true },
-      { key: "proof_of_ownership", label: "Proof of ownership", required: false },
-      { key: "lease_or_authorization", label: "Owner authorization or lease", required: false, requiredWhen: { key: "property_ownership", value: "Authorized Representative" } },
-      { key: "site_plan", label: "Property sketch or site plan", required: false },
-    ],
-  },
-  {
-    label: "Construction Permit",
-    value: "Construction Permit",
-    fee: 0,
-    fee_mode: "assessed",
-    applicantFields: ["full_name", "contact_number", "email_address"],
-    fields: [
-      { key: "valid_id_type", label: "Valid ID type", type: "text", required: true },
-      { key: "valid_id_number", label: "Valid ID number", type: "text", required: true },
-      { key: "property_owner_name", label: "Property owner's name", type: "text", required: true },
-      { key: "property_street_number", label: "Property street/house number", type: "text", required: false },
-      { key: "property_purok", label: "Property Purok", type: "text", required: true },
-      { key: "lot_number", label: "Lot number", type: "text", required: false },
-      { key: "tax_declaration_number", label: "Tax Declaration number", type: "text", required: false },
-      { key: "title_number", label: "TCT/OCT number", type: "text", required: false },
-      { key: "property_ownership", label: "Applicant's relationship to property", type: "select", required: true, options: ["Owner", "Authorized Representative"] },
-      { key: "construction_type", label: "Type of construction", type: "select", required: true, options: ["New construction", "Renovation", "Repair", "Extension", "Fencing"] },
-      { key: "structure_type", label: "Type of structure", type: "select", required: true, options: ["Residential", "Commercial", "Other"] },
-      { key: "structure_details", label: "Specify structure", type: "text", required: true, requiredWhen: { key: "structure_type", value: "Other" }, showWhen: { key: "structure_type", value: "Other" } },
-      { key: "number_of_floors", label: "Number of floors", type: "number", required: true, min: 1 },
-      { key: "estimated_project_cost", label: "Estimated project cost (PHP)", type: "number", required: true, min: 0 },
-      { key: "proposed_construction_date", label: "Proposed construction date", type: "date", required: true },
-      { key: "project_description", label: "Brief construction description", type: "textarea", required: true },
-    ],
-    requirements: [
-      { key: "valid_id", label: "Valid ID", required: true },
-      { key: "proof_of_ownership", label: "Proof of ownership", required: false },
-      { key: "title_or_tax_declaration", label: "TCT/OCT or Tax Declaration", required: false },
-      { key: "lease_or_authorization", label: "Lease or owner authorization", required: false, requiredWhen: { key: "property_ownership", value: "Authorized Representative" } },
-      { key: "architectural_plans", label: "Building/architectural plans", required: false },
-      { key: "structural_plans", label: "Structural plans", required: false },
-      { key: "electrical_plans", label: "Electrical plans", required: false },
-      { key: "plumbing_plans", label: "Plumbing/sanitary plans", required: false },
-      { key: "other_plans", label: "Other plans required by the Building Official", required: false },
     ],
   },
 ];
@@ -392,6 +354,84 @@ function mapConfiguredDocumentType(type) {
   };
 }
 
+function ApplicantCamera({ stream, onCapture, onCancel }) {
+  const videoRef = useRef(null);
+  const [ready, setReady] = useState(false);
+  const [captureError, setCaptureError] = useState("");
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.srcObject = stream;
+  }, [stream]);
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    if (!video?.videoWidth || !video.videoHeight) {
+      setCaptureError("The camera is not ready yet. Please wait and try again.");
+      return;
+    }
+
+    const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = window.document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setCaptureError("We couldn’t prepare the photo. Please try again or upload an image.");
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setCaptureError("We couldn’t capture the photo. Please try again or upload an image.");
+        return;
+      }
+      if (blob.size > 5 * 1024 * 1024) {
+        setCaptureError("The captured photo is larger than 5 MB. Please try again or upload a smaller image.");
+        return;
+      }
+
+      const filename = `applicant-photo-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
+      onCapture(new File([blob], filename, { type: "image/jpeg" }));
+    }, "image/jpeg", 0.85);
+  };
+
+  return (
+    <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        onLoadedMetadata={() => setReady(true)}
+        aria-label="Live applicant photo camera preview"
+        className="max-h-80 w-full rounded-lg bg-black object-contain"
+      />
+      {captureError && (
+        <p role="alert" className="text-sm text-red-700">
+          {captureError}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={capturePhoto}
+          disabled={!ready}
+          className={`${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+        >
+          Capture photo
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+        >
+          Close camera
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Documents({ requests, token, onRefresh, user }) {
   const [catalogTypes, setCatalogTypes] = useState(null);
   const [documentType, setDocumentType] = useState("");
@@ -401,6 +441,10 @@ function Documents({ requests, token, onRefresh, user }) {
   const [notes, setNotes] = useState("");
   const [editingRequest, setEditingRequest] = useState(null);
   const [requirementFiles, setRequirementFiles] = useState({});
+  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [applicantPhotoPreview, setApplicantPhotoPreview] = useState("");
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("info");
   const [submitting, setSubmitting] = useState(false);
@@ -417,6 +461,76 @@ function Documents({ requests, token, onRefresh, user }) {
   const [historyError, setHistoryError] = useState("");
   const [reloadHistory, setReloadHistory] = useState(0);
   const formRef = useRef(null);
+  const photoPreviewUrlRef = useRef(null);
+  const cameraRequestRef = useRef(0);
+
+  useEffect(() => () => {
+    cameraStream?.getTracks().forEach((track) => track.stop());
+  }, [cameraStream]);
+
+  useEffect(() => () => {
+    if (photoPreviewUrlRef.current) URL.revokeObjectURL(photoPreviewUrlRef.current);
+  }, []);
+
+  const setRequirementFile = (key, file) => {
+    if (key === "applicant_photo") {
+      if (photoPreviewUrlRef.current) {
+        URL.revokeObjectURL(photoPreviewUrlRef.current);
+      }
+      photoPreviewUrlRef.current = file ? URL.createObjectURL(file) : null;
+      setApplicantPhotoPreview(photoPreviewUrlRef.current || "");
+    }
+    setRequirementFiles((current) => ({ ...current, [key]: file }));
+  };
+
+  const clearRequirementFiles = () => {
+    if (photoPreviewUrlRef.current) {
+      URL.revokeObjectURL(photoPreviewUrlRef.current);
+      photoPreviewUrlRef.current = null;
+    }
+    setApplicantPhotoPreview("");
+    setRequirementFiles({});
+  };
+
+  const closeApplicantCamera = () => {
+    cameraRequestRef.current += 1;
+    setCameraLoading(false);
+    setCameraStream(null);
+  };
+
+  const openApplicantCamera = async () => {
+    setCameraError("");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera access isn’t available here. It usually requires HTTPS and browser permission. You can still upload a JPG or PNG photo.");
+      return;
+    }
+
+    const requestId = cameraRequestRef.current + 1;
+    cameraRequestRef.current = requestId;
+    setCameraLoading(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: "user" },
+      });
+      if (cameraRequestRef.current !== requestId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      setCameraStream(stream);
+    } catch (error) {
+      if (cameraRequestRef.current !== requestId) return;
+      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+        setCameraError("Camera permission was denied. Allow camera access in your browser settings, or upload a JPG or PNG photo.");
+      } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+        setCameraError("No camera was found. You can upload a JPG or PNG photo instead.");
+      } else {
+        setCameraError("We couldn’t open the camera. Check your camera connection and browser permissions, or upload a JPG or PNG photo.");
+      }
+    } finally {
+      if (cameraRequestRef.current === requestId) setCameraLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!documentType && !editingRequest) {
@@ -424,35 +538,23 @@ function Documents({ requests, token, onRefresh, user }) {
     }
   }, [documentType, editingRequest, user]);
 
-  const loadCatalogTypes = useCallback(async (silent = false) => {
-    if (!token) return;
-    try {
-      const result = await residentApi("/resident/document-types", token);
-      const nextTypes = result.data || [];
-      setCatalogTypes((current) =>
-        JSON.stringify(current) === JSON.stringify(nextTypes) ? current : nextTypes,
-      );
-    } catch {
-      if (!silent) {
-        setCatalogTypes([]);
-        setMessage("We couldn't load document types. Refresh the page and try again.");
-        setMessageTone("error");
-      }
-    }
-  }, [token]);
-
   useEffect(() => {
-    loadCatalogTypes();
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") loadCatalogTypes(true);
-    };
-    const timer = window.setInterval(refreshWhenVisible, 15000);
-    window.addEventListener("focus", refreshWhenVisible);
+    let active = true;
+    residentApi("/resident/document-types", token)
+      .then((result) => {
+        if (active) setCatalogTypes(result.data || []);
+      })
+      .catch((error) => {
+        if (active) {
+          setCatalogTypes([]);
+          setMessage("We couldn't load document types. Refresh the page and try again.");
+          setMessageTone("error");
+        }
+      });
     return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", refreshWhenVisible);
+      active = false;
     };
-  }, [loadCatalogTypes]);
+  }, [token]);
 
   const changeHistoryPage = (page) => {
     setHistoryLoading(true);
@@ -520,6 +622,8 @@ function Documents({ requests, token, onRefresh, user }) {
   ) || [];
 
   const startCorrection = (request) => {
+    closeApplicantCamera();
+    setCameraError("");
     const existingFields = request.details?.form_fields || {};
     const requestDocument = availableDocuments.find(
       (document) => (document.value || document.label) === request.document_type,
@@ -552,18 +656,22 @@ function Documents({ requests, token, onRefresh, user }) {
         : {}),
     });
     setNotes(request.details?.notes || "");
-    setRequirementFiles({});
+    clearRequirementFiles();
     setMessage("");
     setMessageTone("info");
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const cancelCorrection = () => {
+    closeApplicantCamera();
+    setCameraError("");
     setEditingRequest(null);
     setDocumentType("");
+    closeApplicantCamera();
+    setCameraError("");
     setFormFields(getApplicantDefaults(user));
     setNotes("");
-    setRequirementFiles({});
+    clearRequirementFiles();
     setMessage("");
     setMessageTone("info");
     formRef.current?.reset();
@@ -578,11 +686,6 @@ function Documents({ requests, token, onRefresh, user }) {
     }
     if (!formFields.date_of_birth && selectedDocument.applicantFields.includes("date_of_birth")) {
       setMessage("Your date of birth is missing. Add it to your profile before requesting this document.");
-      setMessageTone("error");
-      return;
-    }
-    if (selectedDocument.value === "First-Time Jobseeker Certification" && (formFields.age === undefined || formFields.age === null || formFields.age === "")) {
-      setMessage("Your age could not be calculated. Make sure your date of birth is recorded in your resident profile.");
       setMessageTone("error");
       return;
     }
@@ -643,7 +746,7 @@ function Documents({ requests, token, onRefresh, user }) {
             ? {
                 ...type,
                 available: false,
-                unavailable_reason: "You have already availed this one-time certificate. You cannot request it again.",
+                unavailable_reason: "This one-time certificate has already been requested or issued.",
               }
             : type),
         );
@@ -658,7 +761,7 @@ function Documents({ requests, token, onRefresh, user }) {
       setDocumentType("");
       setFormFields(getApplicantDefaults(user));
       setNotes("");
-      setRequirementFiles({});
+      clearRequirementFiles();
       formRef.current?.reset();
       setHistoryPage(1);
       setHistoryLoading(true);
@@ -764,6 +867,7 @@ function Documents({ requests, token, onRefresh, user }) {
                 value={documentType}
                 disabled={catalogTypes === null || Boolean(editingRequest)}
                 onChange={(event) => {
+fix-document-templates
                   const nextDocumentType = event.target.value;
                   setDocumentType(nextDocumentType);
                   const applicantDefaults = getApplicantDefaults(user);
@@ -782,6 +886,12 @@ function Documents({ requests, token, onRefresh, user }) {
                       : {}),
                   });
                   setRequirementFiles({});
+                  closeApplicantCamera();
+                  setCameraError("");
+                  setDocumentType(event.target.value);
+                  setFormFields(getApplicantDefaults(user));
+                  clearRequirementFiles();
+main
                 }}
                 className={inputClass}
               >
@@ -795,7 +905,7 @@ function Documents({ requests, token, onRefresh, user }) {
                     disabled={!editingRequest && document.one_time && document.available === false}
                   >
                     {document.label}
-                    {document.one_time && document.available === false ? " (Already availed)" : ""}
+                    {document.one_time && document.available === false ? " (Already requested)" : ""}
                   </option>
                 ))}
               </select>
@@ -830,10 +940,8 @@ function Documents({ requests, token, onRefresh, user }) {
                 </p>
                 {selectedDocument.fee_mode === "assessed" ? (
                   <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
-                    {selectedDocument.value === "Cedula"
-                      ? "Community tax will be assessed by barangay staff."
-                      : "Fee will be assessed by barangay staff based on your business information."}
-                  </p>
+                              Fee will be assessed by barangay staff based on your business information.
+                            </p>
                 ) : selectedDocument.fee !== undefined && (
                             <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
                               {Number(selectedDocument.fee) === 0
@@ -911,7 +1019,7 @@ function Documents({ requests, token, onRefresh, user }) {
                 </div>
               </div>
 
-              {selectedDocument.fields.length > 0 && <div className="mt-6 border-t border-slate-100 pt-5">
+              <div className="mt-6 border-t border-slate-100 pt-5">
                 <h3 className="text-sm font-bold text-[#172B4D]">
                   Request details
                 </h3>
@@ -976,6 +1084,7 @@ function Documents({ requests, token, onRefresh, user }) {
                     })}
                     </Fragment>)}
                 </div>
+ fix-document-templates
                 {selectedDocument.value === "Business Permit" && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-xs text-slate-600">The attestation is optional to review and is not required to submit this online request.</p>
@@ -983,8 +1092,9 @@ function Documents({ requests, token, onRefresh, user }) {
                   </div>
                 </div>}
               </div>}
+              </div>main
 
-              {visibleRequirements.length > 0 && <div className="mt-6 border-t border-slate-100 pt-5">
+              <div className="mt-6 border-t border-slate-100 pt-5">
                 <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-end">
                   <div>
                     <h3 className="text-sm font-bold text-[#172B4D]">
@@ -993,7 +1103,7 @@ function Documents({ requests, token, onRefresh, user }) {
                     <p className="mt-1 text-xs text-slate-500">
                       Upload PDF, JPG, or PNG files up to 5 MB each. Optional
                       documents can be provided if applicable or requested by
-                      barangay staff.
+                      barangay staff. Applicant photos must be JPG or PNG.
                     </p>
                   </div>
                   <span className="text-xs font-semibold text-[#55708F]">
@@ -1025,29 +1135,88 @@ function Documents({ requests, token, onRefresh, user }) {
                         : requirement.label;
                     }
 
+                    const inputId = `requirement-${requirement.key}`;
+                    const isApplicantPhoto = requirement.key === "applicant_photo";
+
                     return (
-                      <label key={requirement.key} className="block">
-                        <span className="text-sm font-bold text-slate-700">
+                      <div key={requirement.key} className="block">
+                        <label htmlFor={inputId} className="text-sm font-bold text-slate-700">
                           {label}
                           {!required && (
                             <span className="ml-1 font-normal text-slate-400">
                               (optional)
                             </span>
                           )}
-                        </span>
+                        </label>
                         <input
-                          required={required && !hasExistingFile}
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={(event) =>
-                            setRequirementFiles((current) => ({
-                              ...current,
-                              [requirement.key]:
-                                event.target.files?.[0] || null,
-                            }))
+                          id={inputId}
+                          required={
+                            required &&
+                            !hasExistingFile &&
+                            !requirementFiles[requirement.key]
                           }
+                          type="file"
+                          accept={isApplicantPhoto
+                            ? ".jpg,.jpeg,.png,image/jpeg,image/png"
+                            : ".pdf,.jpg,.jpeg,.png"}
+                          capture={isApplicantPhoto ? "user" : undefined}
+                          onChange={(event) => {
+                            if (isApplicantPhoto) {
+                              closeApplicantCamera();
+                              setCameraError("");
+                            }
+                            setRequirementFile(
+                              requirement.key,
+                              event.target.files?.[0] || null,
+                            );
+                          }}
                           className={`${inputClass} file:mr-3 file:rounded-lg file:border-0 file:bg-[#2455D6]/10 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#2455D6]`}
                         />
+                        {isApplicantPhoto && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={openApplicantCamera}
+                              disabled={Boolean(cameraStream) || cameraLoading}
+                              className="mt-2 inline-flex items-center gap-2 rounded-lg border border-[#2455D6]/30 px-3 py-2 text-sm font-semibold text-[#2455D6] hover:bg-[#2455D6]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Camera className="h-4 w-4" aria-hidden="true" />
+                              {cameraLoading
+                                ? "Opening camera…"
+                                : cameraStream
+                                  ? "Camera is open"
+                                  : "Take a new photo"}
+                            </button>
+                            {cameraError && (
+                              <p role="alert" className="mt-2 text-sm text-red-700">
+                                {cameraError}
+                              </p>
+                            )}
+                            {cameraStream && (
+                              <ApplicantCamera
+                                stream={cameraStream}
+                                onCapture={(file) => {
+                                  setRequirementFile("applicant_photo", file);
+                                  closeApplicantCamera();
+                                  setCameraError("");
+                                }}
+                                onCancel={closeApplicantCamera}
+                              />
+                            )}
+                            {applicantPhotoPreview && requirementFiles.applicant_photo && (
+                              <div className="mt-3 flex items-center gap-3">
+                                <img
+                                  src={applicantPhotoPreview}
+                                  alt="Applicant photo selected for upload"
+                                  className="h-20 w-20 rounded-lg border border-slate-200 object-cover"
+                                />
+                                <span className="text-sm text-slate-600">
+                                  {requirementFiles.applicant_photo.name}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )}
                         {hasExistingFile &&
                           !requirementFiles[requirement.key] && (
                             <span className="mt-1 block text-xs text-slate-500">
@@ -1058,15 +1227,15 @@ function Documents({ requests, token, onRefresh, user }) {
                               . Choose a replacement if requested.
                             </span>
                           )}
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
-              </div>}
+              </div>
             </>
           )}
 
-          {selectedDocument && selectedDocument.value !== "Cedula" && (
+          {selectedDocument && (
             <label className="mt-5 block">
               <span className="text-sm font-bold text-slate-700">
                 Note to staff{" "}

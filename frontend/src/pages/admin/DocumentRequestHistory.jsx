@@ -259,6 +259,7 @@ function RequestHistoryModal({ request, onClose }) {
   const [documentOpen, setDocumentOpen] = useState(false);
   const fields = request.details?.form_fields || {};
   const hasGeneratedDocument = request.document_content && Object.keys(request.document_content).length > 0;
+  const canPreviewDocument = Boolean(request.document_type);
 
   return (
     <>
@@ -288,17 +289,17 @@ function RequestHistoryModal({ request, onClose }) {
                 <p className="mt-1 text-xs text-slate-500">
                   {hasGeneratedDocument
                     ? `Soft copy generated ${formatDateTime(request.document_generated_at)}.`
-                    : "A generated soft copy is not available for this request."}
+                    : "No saved soft copy is available yet. You can still preview the document template."}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setDocumentOpen(true)}
-                disabled={!hasGeneratedDocument}
+                disabled={!canPreviewDocument}
                 className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-45"
               >
                 <Eye size={14} aria-hidden="true" />
-                View Document
+                {hasGeneratedDocument ? "View Document" : "Preview Template"}
               </button>
             </div>
 
@@ -328,7 +329,7 @@ function RequestHistoryModal({ request, onClose }) {
           </div>
         </div>
       </div>
-      {documentOpen && hasGeneratedDocument && (
+      {documentOpen && canPreviewDocument && (
         <DocumentPreviewModal
           request={request}
           readOnly
