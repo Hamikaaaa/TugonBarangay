@@ -19,6 +19,15 @@ const fieldTypeLabels = {
 };
 
 const BARANGAY_CERTIFICATE_WORDING = `This is to certify that {{first_name}} {{middle_name}} {{last_name}}, {{age}} years old, {{sex}}, {{civil_status}}, {{citizenship}} citizen, and a bona fide resident of Purok {{purok}}, Barangay Tayud, Consolacion, Cebu, is an indigent member of this barangay.\n\nThis certification is issued at the request of the above-named person for {{purpose}} and for whatever legal purpose it may serve.\n\nIssued and given this {{issued_day}} day of {{issued_month}}, {{issued_year}}, at Barangay Tayud, Consolacion, Cebu, Philippines.`;
+const GOOD_MORAL_CHARACTER_WORDING = `TO WHOM IT MAY CONCERN:\n\nThis is to certify that {{full_name}}, of legal age, a resident of {{purok}}, Barangay Tayud, Municipality of Consolacion, Province of Cebu, Philippines, has been known to this office and is, to the best of our knowledge and based on available barangay records, a person of good moral character and reputation in the community.\n\nThis certification is issued upon the request of the above-named person for {{purpose}} and for whatever lawful purpose it may serve.\n\nIssued this {{issued_day}} day of {{issued_month}}, {{issued_year}}, at Barangay Tayud, Municipality of Consolacion, Cebu, Philippines.\nRespectfully yours,\n\n[NAME OF PUNONG BARANGAY]\nPunong Barangay`;
+const BARANGAY_CLEARANCE_WORDING = `This is to certify that the applicant whose name, picture, signature and thumb marks appearing hereto has not been brought before the Lupon/Pangkat of this Barangay for any complaint against {{object_pronoun}}, nor has committed any infraction of laws/ordinances as of this date, {{subject_pronoun}} {{subject_verb}} a law abiding citizen.\n\nNAME                 : {{full_name}}\nHOME ADDRESS         : {{address}}\nPLACE OF BIRTH       : {{place_of_birth}}\nDATE OF BIRTH        : {{date_of_birth}}\nREMARKS              : {{derogatory_remarks}}\n\nPURPOSE              : {{purpose}}\n\n______________________________\nApplicant's Signature\n\nVALID FOR            : Six (6) Months\n\nRes. Cert. No.        : ____________________\nIssued at             : CONSOLACION, CEBU\n\nLeft Thumb Mark                       Right Thumb Mark\n\nHon. fe Q. Cuyos\nPunong Barangay\n\nPaid Under\nO.R. No.              : ____________________\nAmount Paid           : ₱75.00\nDoc. Stamp            : ₱30.00`;
+
+function defaultDocumentWording(type) {
+  if (type.value === "Barangay Certification") return BARANGAY_CLEARANCE_WORDING;
+  if (type.value === "Barangay Certificate") return BARANGAY_CERTIFICATE_WORDING;
+  if (type.value === "Certificate of Good Moral Character") return GOOD_MORAL_CHARACTER_WORDING;
+  return "";
+}
 
 function makeFieldKey(label, fallback = "answer") {
   const key = String(label || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -234,7 +243,7 @@ function DocumentTypes() {
     setDraft({
       ...type,
       fee: String(type.fee),
-      template: type.template || (type.value === "Barangay Certificate" ? BARANGAY_CERTIFICATE_WORDING : ""),
+      template: type.template || defaultDocumentWording(type),
       document_layout: clampLayout(type.document_layout),
       templateFile: null,
       templatePreviewUrl: "",
@@ -528,6 +537,9 @@ function WordingEditor({ value, onChange }) {
     ["first_name", "First name"], ["middle_name", "Middle name"], ["last_name", "Last name"],
     ["age", "Age"], ["sex", "Sex"], ["civil_status", "Civil status"],
     ["citizenship", "Citizenship"], ["address", "Address"], ["purok", "Purok"],
+    ["place_of_birth", "Place of birth"], ["date_of_birth", "Date of birth"],
+    ["object_pronoun", "Object pronoun"], ["subject_pronoun", "Subject pronoun"],
+    ["subject_verb", "Pronoun verb"], ["derogatory_remarks", "Record-check result"],
     ["purpose", "Purpose"], ["date_issued", "Issue date"],
     ["issued_day", "Day"], ["issued_month", "Month"], ["issued_year", "Year"],
   ];
@@ -556,6 +568,12 @@ function WordingEditor({ value, onChange }) {
     ["Civil status", "{{civil_status}}"],
     ["Citizenship", "{{citizenship}}"],
     ["Address", "{{address}}"],
+    ["Place of birth", "{{place_of_birth}}"],
+    ["Date of birth", "{{date_of_birth}}"],
+    ["Object pronoun", "{{object_pronoun}}"],
+    ["Subject pronoun", "{{subject_pronoun}}"],
+    ["Pronoun verb", "{{subject_verb}}"],
+    ["Record-check result", "{{derogatory_remarks}}"],
     ["Purpose", "{{purpose}}"],
     ["Issue date", "{{date_issued}}"],
     ["Day", "{{issued_day}}"],

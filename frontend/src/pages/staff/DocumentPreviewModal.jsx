@@ -30,6 +30,7 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
   const [editing, setEditing] = useState(false);
   const [fields, setFields] = useState(request?.document_content || request?.details?.form_fields || {});
   const [paperDesign, setPaperDesign] = useState("");
+  const [applicantPhoto, setApplicantPhoto] = useState(null);
   const [paperDesignLoading, setPaperDesignLoading] = useState(() => Boolean(
     request?.type?.id && /\.jpe?g$/i.test(request?.type?.uploaded_template_name || ""),
   ));
@@ -81,11 +82,45 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
     };
   }, [request?.id, request?.type?.id, request?.type?.uploaded_template_name, token, user?.role]);
 
+  useEffect(() => {
+    const photoPath = request?.details?.requirements?.applicant_photo?.path;
+    if (!request?.id || !token || !photoPath || request.document_type !== "Barangay Certification") {
+      return undefined;
+    }
+
+    const controller = new AbortController();
+    let photoUrl = "";
+    fetch(`http://127.0.0.1:8000/api/staff/document-requests/${request.id}/requirements/applicant_photo`, {
+      headers: { Accept: "application/json", Authorization: "Bearer " + token },
+      signal: controller.signal,
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error("Unable to load the applicant photo.");
+        return response.blob();
+      })
+      .then((image) => {
+        if (!image.type.startsWith("image/")) throw new Error("The applicant photo is not a supported image.");
+        if (controller.signal.aborted) return;
+        photoUrl = URL.createObjectURL(image);
+        setApplicantPhoto({ path: photoPath, url: photoUrl });
+      })
+      .catch((photoError) => {
+        if (!controller.signal.aborted) setError(photoError.message);
+      });
+
+    return () => {
+      controller.abort();
+      if (photoUrl) URL.revokeObjectURL(photoUrl);
+    };
+  }, [request?.id, request?.document_type, request?.details?.requirements?.applicant_photo?.path, token]);
+
   if (!request) return null;
 
   const documentType = request.document_type;
   const templateType = TEMPLATE_TYPES[documentType] || "generic";
   const label = request.document_type_label || DOCUMENT_LABELS[documentType] || documentType;
+  const photoPath = request.details?.requirements?.applicant_photo?.path;
+  const applicantPhotoUrl = applicantPhoto?.path === photoPath ? applicantPhoto.url : "";
   const paperSize = ["a4", "legal"].includes(request.type?.paper_size) ? request.type.paper_size : "letter";
   const residentName = [fields.first_name, fields.middle_name, fields.last_name]
     .filter(Boolean)
@@ -111,6 +146,28 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleFieldChange = (fieldName, value) => {
+    setFields((current) => {
+      const updated = { ...current, [fieldName]: value };
+      if (
+        request.type?.template &&
+        request.document_type === "Barangay Certification" &&
+        ["sex", "derogatory_status"].includes(fieldName) &&
+        current.document_body
+      ) {
+        updated.document_body = renderDocumentTemplate(
+          request.type.template,
+          updated,
+          request,
+          residentName,
+          label,
+          formattedDate,
+        );
+      }
+      return updated;
+    });
   };
 
   return (
@@ -143,8 +200,14 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
                 onClick={() => {
                   setError("");
                   const initialFields = { ...(request.document_content || request.details?.form_fields || {}) };
-                  if (request.type?.template && !initialFields.document_body) {
-                    initialFields.document_body = renderDocumentTemplate(request.type.template, initialFields, request, residentName, label, formattedDate);
+                  if (request.document_type === "Barangay Certification" && !initialFields.derogatory_status) {
+                    initialFields.derogatory_status = "pending_verification";
+                  }
+                  if (request.type?.template && request.type?.template_enabled !== false) {
+                    const generatedBody = renderDocumentTemplate(request.type.template, initialFields, request, residentName, label, formattedDate);
+                    initialFields.document_body = request.document_type === "Barangay Certification"
+                      ? syncClearanceBody(generatedBody, initialFields, generatedBody)
+                      : initialFields.document_body || generatedBody;
                   }
                   setFields(initialFields);
                   setEditing((current) => !current);
@@ -190,6 +253,26 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
             <p className="mt-1 text-xs text-[#805900]">Save edits to this request before approving the document for release.</p>
           </div>
         )}
+        {editing && request.document_type === "Barangay Certification" && (
+          <div className="border-b border-slate-200 bg-slate-50 px-5 py-4">
+            <label htmlFor="clearance-record-check" className="block text-sm font-bold text-slate-800">
+              Barangay record-check outcome
+              <select
+                id="clearance-record-check"
+                value={fields.derogatory_status || "pending_verification"}
+                onChange={(event) => handleFieldChange("derogatory_status", event.target.value)}
+                className="mt-2 block w-full max-w-lg rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-800"
+              >
+                <option value="pending_verification">PENDING VERIFICATION</option>
+                <option value="no_derogatory_record">NO DEROGATORY RECORD ON FILE</option>
+                <option value="refer_authorized_review">REFER FOR AUTHORIZED REVIEW</option>
+              </select>
+            </label>
+            <p className="mt-2 max-w-3xl text-xs leading-5 text-slate-600">
+              Confirm NO DEROGATORY RECORD ON FILE only after checking barangay records. Pending or in-progress complaints keep this request pending; a complaint alone is not proof of wrongdoing. Use REFER FOR AUTHORIZED REVIEW only for a substantiated adverse finding under approved barangay rules. A referral cannot be released.
+            </p>
+          </div>
+        )}
         {error && <p role="alert" className="border-b border-[#F2D4D0] bg-[#FFF0EE] px-5 py-3 text-xs font-semibold text-[#C74444]">{error}</p>}
 
         <div className="document-preview-scroll overflow-auto bg-slate-100 p-4 sm:p-8">
@@ -201,6 +284,7 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
             <DocumentPaper
               request={request}
               templateType={templateType}
+              applicantPhoto={applicantPhotoUrl}
               label={label}
               residentName={residentName}
               formattedDate={formattedDate}
@@ -211,10 +295,7 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
               paperDesign={paperDesign}
               paperSize={paperSize}
               editing={editing}
-              onFieldChange={(fieldName, value) => setFields((current) => ({
-                ...current,
-                [fieldName]: value,
-              }))}
+              onFieldChange={handleFieldChange}
             />
           )}
         </div>
@@ -226,8 +307,20 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
 function renderDocumentTemplate(template, fields, request, residentName, label, formattedDate) {
   const issuedDate = new Date(request.released_at || request.document_generated_at || request.created_at);
   const issuedDayValue = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", day: "numeric" }).format(issuedDate);
+  const birthDate = fields.date_of_birth ? new Date(`${String(fields.date_of_birth).slice(0, 10)}T00:00:00`) : null;
+  const sex = String(fields.sex || "").trim().toLowerCase();
+  const isFemale = ["female", "f", "woman"].includes(sex);
+  const isMale = ["male", "m", "man"].includes(sex);
+  const recordCheckStatements = {
+    no_derogatory_record: "NO DEROGATORY RECORD ON FILE",
+    pending_verification: "PENDING VERIFICATION",
+    refer_authorized_review: "REFER FOR AUTHORIZED REVIEW",
+  };
   const values = {
     ...fields,
+    date_of_birth: birthDate && !Number.isNaN(birthDate.getTime())
+      ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "long", day: "numeric", year: "numeric" }).format(birthDate)
+      : fields.date_of_birth,
     resident_name: residentName,
     full_name: fields.full_name || [fields.first_name, fields.middle_name, fields.last_name].filter(Boolean).join(" ") || residentName,
     document_title: label,
@@ -236,12 +329,155 @@ function renderDocumentTemplate(template, fields, request, residentName, label, 
     issued_day: `${issuedDayValue}${ordinalSuffix(Number(issuedDayValue))}`,
     issued_month: new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "long" }).format(issuedDate),
     issued_year: new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", year: "numeric" }).format(issuedDate),
+    object_pronoun: isFemale ? "her" : isMale ? "him" : "them",
+    subject_pronoun: isFemale ? "she" : isMale ? "he" : "they",
+    subject_verb: isFemale || isMale ? "is" : "are",
+    derogatory_remarks: recordCheckStatements[fields.derogatory_status] || "PENDING VERIFICATION",
   };
 
   return template.replace(/\{\{([a-z][a-z0-9_]*)\}\}/gi, (placeholder, key) => {
     const value = values[key];
     return value === undefined || value === null ? placeholder : String(value);
   });
+}
+
+function syncClearanceBody(body, fields, generatedBody) {
+  const sex = String(fields.sex || "").trim().toLowerCase();
+  const isFemale = ["female", "f", "woman"].includes(sex);
+  const isMale = ["male", "m", "man"].includes(sex);
+  const objectPronoun = isFemale ? "her" : isMale ? "him" : "them";
+  const subjectPronoun = isFemale ? "she" : isMale ? "he" : "they";
+  const subjectVerb = isFemale || isMale ? "is" : "are";
+  const recordCheckStatements = {
+    no_derogatory_record: "NO DEROGATORY RECORD ON FILE",
+    pending_verification: "PENDING VERIFICATION",
+    refer_authorized_review: "REFER FOR AUTHORIZED REVIEW",
+  };
+  const remark = recordCheckStatements[fields.derogatory_status] || "PENDING VERIFICATION";
+
+  return String(body || generatedBody)
+    .replace(/against\s+(her|him|them)\b/i, `against ${objectPronoun}`)
+    .replace(/as of this date,\s*(she|he|they)\s+(is|are)\s+a law[- ]abiding citizen\.?/i, `as of this date, ${subjectPronoun} ${subjectVerb} a law abiding citizen.`)
+    .replace(/^(REMARKS\s*:\s*).*$/im, `$1${remark}`);
+}
+
+function getPunongBarangayName(template) {
+  const lines = String(template || "").trim().split(/\r?\n/);
+  const titleIndex = lines.findIndex((line) => line.trim().toLowerCase() === "punong barangay");
+  const name = titleIndex > 0 ? lines[titleIndex - 1].trim() : "";
+  return name || "HON. FE Q. CUYOS";
+}
+
+function AdminClearanceTemplate({ template, applicantPhoto }) {
+  const lines = String(template || "").split(/\r?\n/);
+  const content = [];
+  let index = 0;
+  let photoPlaced = false;
+
+  while (index < lines.length) {
+    const line = lines[index].trim();
+    if (!line) {
+      content.push(<div key={`space-${index}`} className="h-2" aria-hidden="true" />);
+      index += 1;
+      continue;
+    }
+
+    if (/left thumb mark/i.test(line) && /right thumb mark/i.test(line)) {
+      content.push(
+        <div key={`thumbs-${index}`} className="mt-2 flex justify-end gap-2 pr-[0.05in]">
+          {["Left Thumb Mark", "Right Thumb Mark"].map((label) => (
+            <div key={label} className="w-[1.15in] text-center">
+              <div className="h-[1.05in] border border-black" />
+              <p className="mt-1 text-[7pt]">{label}</p>
+            </div>
+          ))}
+        </div>,
+      );
+      index += 1;
+      continue;
+    }
+
+    if (/^_+$/.test(line)) {
+      content.push(
+        <div key={`signature-line-${index}`} className="mt-3 flex justify-end pr-[0.05in]">
+          <div className="h-6 w-[2.2in] border-b border-black" />
+        </div>,
+      );
+      index += 1;
+      continue;
+    }
+
+    if (line.includes(":")) {
+      const detailLines = [];
+      while (index < lines.length && lines[index].trim().includes(":")) {
+        const [label, ...valueParts] = lines[index].split(":");
+        detailLines.push({
+          label: label.trim(),
+          value: valueParts.join(":").trim(),
+          key: index,
+        });
+        index += 1;
+      }
+
+      content.push(
+        <div key={`details-${detailLines[0].key}`} className="grid grid-cols-[1fr_1.2in] gap-x-3">
+          <div className="space-y-0.5">
+            {detailLines.map((detail) => (
+              <ClearanceDetail key={detail.key} label={detail.label} value={detail.value} />
+            ))}
+          </div>
+          {!photoPlaced && (
+            <div className="mt-3 flex h-[1.2in] w-[1.2in] items-center justify-center overflow-hidden bg-white">
+              {applicantPhoto
+                ? <img src={applicantPhoto} alt="Applicant photo" className="h-full w-full object-cover" />
+                : <span className="text-center text-[7pt] text-slate-500">Applicant photo</span>}
+            </div>
+          )}
+        </div>,
+      );
+      photoPlaced = true;
+      continue;
+    }
+
+    if (/^applicant['’]s signature$/i.test(line)) {
+      content.push(
+        <p key={`signature-label-${index}`} className="pr-[0.05in] text-right text-[7pt]">
+          {line}
+        </p>,
+      );
+      index += 1;
+      continue;
+    }
+
+    if (
+      lines[index + 1]?.trim().toLowerCase() === "punong barangay"
+    ) {
+      index += 1;
+      continue;
+    }
+
+    if (/^punong barangay$/i.test(line) && index > 0) {
+      content.push(
+        <div key={`signatory-${index}`} className="mt-2 flex justify-end pr-[0.05in] text-center leading-tight">
+          <div className="w-[2.8in]">
+            <p className="text-[10pt] font-bold">{lines[index - 1].trim()}</p>
+            <p className="text-[9pt]">{line}</p>
+          </div>
+        </div>,
+      );
+      index += 1;
+      continue;
+    }
+
+    content.push(
+      <p key={`text-${index}`} className={/^paid under$/i.test(line) ? "mt-2 text-[7pt]" : ""}>
+        {line}
+      </p>,
+    );
+    index += 1;
+  }
+
+  return <div>{content}</div>;
 }
 
 function FormattedTemplateText({ text }) {
@@ -312,7 +548,109 @@ function BarangayCertificateTemplate({ residentName, fields, issuedDay, issuedMo
   );
 }
 
-function DocumentPaper({ request, templateType, label, residentName, formattedDate, fields, issuedDay, issuedMonth, issuedYear, paperDesign, paperSize, editing, onFieldChange }) {
+function ClearanceDetail({ label, value }) {
+  return (
+    <div className="grid grid-cols-[1.05in_0.12in_1fr] gap-x-1 text-[9pt] leading-[1.5] text-black">
+      <span className="font-bold">{label}</span>
+      <span>:</span>
+      <span>{value || ""}</span>
+    </div>
+  );
+}
+
+function BarangayClearanceCertificate({ request, fields, applicantPhoto, signatoryName, narrative }) {
+  const issuedDate = new Date(request.released_at || request.document_generated_at || request.created_at);
+  const dateParts = new Intl.DateTimeFormat("en-PH", {
+    timeZone: "Asia/Manila",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+  }).formatToParts(issuedDate).reduce((parts, item) => ({ ...parts, [item.type]: item.value }), {});
+  const serialYear = dateParts.year.slice(-2);
+  const serialNumber = `BJNO. ${serialYear}-${String(request.id).padStart(4, "0")}`;
+  const shortDate = `${dateParts.month}/${dateParts.day}/${dateParts.year}`;
+  const birthDate = fields.date_of_birth
+    ? new Date(`${String(fields.date_of_birth).slice(0, 10)}T00:00:00`)
+    : null;
+  const formattedBirthDate = birthDate && !Number.isNaN(birthDate.getTime())
+    ? new Intl.DateTimeFormat("en-PH", {
+        timeZone: "Asia/Manila",
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }).format(birthDate)
+    : fields.date_of_birth;
+
+  return (
+    <div className="flex h-full flex-col font-sans text-black">
+      <div className="mb-3 self-end text-right text-[8pt] leading-[1.2]">
+        <p className="font-bold">{serialNumber}</p>
+        <p>{shortDate}</p>
+        <p>(Date)</p>
+      </div>
+
+      <p className="mb-2 text-justify text-[9pt] leading-[1.35] indent-[0.4in]">
+        {narrative}
+      </p>
+
+      <div className="grid grid-cols-[1fr_1.35in] gap-x-3">
+        <div className="space-y-0.5">
+          <ClearanceDetail label="NAME" value={fields.full_name || [fields.first_name, fields.middle_name, fields.last_name].filter(Boolean).join(" ")} />
+          <ClearanceDetail label="HOME ADDRESS" value={fields.address} />
+          <ClearanceDetail label="PLACE OF BIRTH" value={fields.place_of_birth} />
+          <ClearanceDetail label="DATE OF BIRTH" value={formattedBirthDate} />
+          <ClearanceDetail label="REMARKS" value={fields.derogatory_status === "no_derogatory_record" ? "NO DEROGATORY RECORD ON FILE" : fields.derogatory_status === "refer_authorized_review" ? "REFER FOR AUTHORIZED REVIEW" : "PENDING VERIFICATION"} />
+          <ClearanceDetail label="PURPOSE" value={fields.purpose} />
+        </div>
+        <div className="mt-[0.4in] flex h-[1.2in] w-[1.2in] items-center justify-center overflow-hidden bg-white">
+          {applicantPhoto ? (
+            <img src={applicantPhoto} alt="Applicant photo" className="h-full w-full object-cover" />
+          ) : (
+            <span className="text-center text-[7pt] text-slate-500">Applicant photo</span>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-3 flex justify-end">
+        <div className="mr-[0.05in] flex w-[2.2in] flex-col items-center">
+          <div className="h-6 w-full border-b border-black" />
+          <p className="mt-1 text-[7pt]">Applicant&apos;s Signature</p>
+        </div>
+      </div>
+
+      <div className="mt-2 space-y-1 text-[9pt] leading-tight">
+        <ClearanceDetail label="VALID FOR" value="Six (6) Months" />
+        <ClearanceDetail label="Res. Cert. No." value="____________________" />
+        <ClearanceDetail label="Issued at" value="CONSOLACION, CEBU" />
+      </div>
+
+      <div className="mt-1 flex justify-end gap-2 pr-[0.05in]">
+        {["Left Thumb Mark", "Right Thumb Mark"].map((label) => (
+          <div key={label} className="w-[1.15in] text-center">
+            <div className="h-[1.05in] border border-black" />
+            <p className="mt-1 text-[7pt]">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-6 flex justify-end pr-[0.05in] text-center leading-tight">
+        <div className="w-[2.8in]">
+          <p className="text-[10pt] font-bold">{signatoryName}</p>
+          <p className="text-[9pt]">Punong Barangay</p>
+        </div>
+      </div>
+
+      <div className="relative z-20 mt-2 w-fit bg-white px-2 py-1 text-[7pt] leading-[1.2]">
+        <p className="mb-0.5">Paid Under</p>
+        <ClearanceDetail label="O.R. No." value="____________________" />
+        <ClearanceDetail label="Amount Paid" value="₱ 75.00" />
+        <ClearanceDetail label="Doc. Stamp" value="₱ 30.00" />
+      </div>
+    </div>
+  );
+}
+
+function DocumentPaper({ request, templateType, applicantPhoto, label, residentName, formattedDate, fields, issuedDay, issuedMonth, issuedYear, paperDesign, paperSize, editing, onFieldChange }) {
   const dimensions = paperSize === "a4" ? { width: "8.27in", height: "11.69in" } : paperSize === "legal" ? { width: "8.5in", height: "14in" } : { width: "8.5in", height: "11in" };
   const savedLayout = { content_top: 64, content_left: 19, content_right: 19, content_bottom: 19, font_size_pt: 12, text_color: "#1f2937", accent_color: "#123f70", ...(request.type?.document_layout || {}) };
   const layout = {
@@ -323,10 +661,17 @@ function DocumentPaper({ request, templateType, label, residentName, formattedDa
     content_bottom: Math.min(38, Math.max(13, Number(savedLayout.content_bottom))),
     font_size_pt: Math.min(14, Math.max(10, Number(savedLayout.font_size_pt))),
   };
+  const generatedTemplateBody = request.type?.template
+    ? renderDocumentTemplate(request.type.template, fields, request, residentName, label, formattedDate)
+    : "";
+  const templateBody = request.document_type === "Barangay Certification"
+    ? syncClearanceBody(generatedTemplateBody, fields, generatedTemplateBody)
+    : fields.document_body || generatedTemplateBody;
+  const isClearance = request.document_type === "Barangay Certification";
   const paper = (
-    <article data-paper-size={paperSize} className={`document-paper relative mx-auto flex min-h-[11in] w-full flex-col overflow-hidden bg-white shadow-sm ${paperDesign ? "document-paper--designed p-0" : "p-[0.55in]"}`} style={{ "--paper-width": dimensions.width, "--paper-height": dimensions.height, "--document-text-color": layout.text_color, "--document-accent-color": layout.accent_color, width: dimensions.width, height: dimensions.height, minHeight: dimensions.height, color: layout.text_color }}>
+    <article data-paper-size={paperSize} className={`document-paper relative mx-auto flex min-h-[11in] w-full flex-col overflow-hidden bg-white shadow-sm ${isClearance ? "document-paper--clearance" : ""} ${paperDesign ? "document-paper--designed p-0" : isClearance ? "p-[0.3in]" : "p-[0.55in]"}`} style={{ "--paper-width": dimensions.width, "--paper-height": dimensions.height, "--document-text-color": layout.text_color, "--document-accent-color": layout.accent_color, width: dimensions.width, height: dimensions.height, minHeight: dimensions.height, color: layout.text_color }}>
       {paperDesign && <img src={paperDesign} alt="Uploaded document paper design" className="pointer-events-none absolute inset-0 h-full w-full object-fill" style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }} />}
-      {!paperDesign && <header className="relative z-10 border-b border-[#123F70] pb-4">
+      {!paperDesign && !isClearance && <header className="relative z-10 border-b border-[#123F70] pb-4">
         <div className="flex items-center justify-between gap-6">
           <div className="flex items-center gap-4">
             <img src="/images/logo-blue-version.png" alt="TugonBarangay" className="h-14 w-14 object-contain" />
@@ -343,19 +688,40 @@ function DocumentPaper({ request, templateType, label, residentName, formattedDa
         </div>
       </header>}
 
-      <div className="relative z-10 flex-1" style={paperDesign ? { paddingTop: `${layout.content_top}mm`, paddingLeft: `${layout.content_left}mm`, paddingRight: `${layout.content_right}mm`, paddingBottom: `${layout.content_bottom}mm` } : { paddingTop: "20px", paddingBottom: "20px" }}>
-        <h1 className="mb-7 text-center text-[16px] font-bold uppercase tracking-wide" style={{ color: layout.accent_color }}>{label}</h1>
-        {request.type?.template && request.type?.template_enabled !== false ? (
+      <div className="relative z-10 flex-1" style={paperDesign ? { paddingTop: `${layout.content_top}mm`, paddingLeft: `${layout.content_left}mm`, paddingRight: `${layout.content_right}mm`, paddingBottom: `${layout.content_bottom}mm` } : isClearance ? {} : { paddingTop: "20px", paddingBottom: "20px" }}>
+        {!isClearance && <h1 className="mb-7 text-center text-[16px] font-bold uppercase tracking-wide" style={{ color: layout.accent_color }}>{label}</h1>}
+        {templateType === "barangay" && !isClearance && (
+          <div className="mb-4 flex justify-end">
+            <div className="flex h-[1.5in] w-[1.25in] items-center justify-center overflow-hidden border border-slate-500 bg-white text-center text-[9px] text-slate-400">
+              {applicantPhoto
+                ? <img src={applicantPhoto} alt="Applicant photo" className="h-full w-full object-cover" />
+                : "Applicant photo"}
+            </div>
+          </div>
+        )}
+        {isClearance && !editing && request.type?.template && request.type?.template_enabled !== false ? (
+          <div className="document-wording text-[9pt] leading-[1.45] text-black">
+            <AdminClearanceTemplate template={templateBody} applicantPhoto={applicantPhoto} />
+          </div>
+        ) : isClearance && !editing ? (
+          <BarangayClearanceCertificate
+            request={request}
+            fields={fields}
+            applicantPhoto={applicantPhoto}
+            signatoryName={getPunongBarangayName(request.type?.template)}
+            narrative={templateBody.split(/\n\s*\n/)[0]}
+          />
+        ) : request.type?.template && request.type?.template_enabled !== false ? (
           <div className="document-wording whitespace-pre-wrap" style={{ color: layout.text_color, fontSize: `${layout.font_size_pt}pt`, lineHeight: 1.55 }}>
             {editing ? (
               <textarea
                 aria-label="Edit document wording"
-                value={fields.document_body ?? renderDocumentTemplate(request.type.template, fields, request, residentName, label, formattedDate)}
+                value={templateBody}
                 onChange={(event) => onFieldChange("document_body", event.target.value)}
                 className="min-h-[5in] w-full resize-y rounded-lg border border-[#F1D9A8] bg-white p-4 text-inherit outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/20"
               />
             ) : (
-              <FormattedTemplateText text={fields.document_body || renderDocumentTemplate(request.type.template, fields, request, residentName, label, formattedDate)} />
+              <FormattedTemplateText text={templateBody} />
             )}
           </div>
         ) : (
@@ -371,7 +737,7 @@ function DocumentPaper({ request, templateType, label, residentName, formattedDa
         )}
       </div>
 
-      {!paperDesign && <footer className="relative z-10 grid grid-cols-[1fr_auto] gap-8 border-t border-slate-200 pt-4">
+      {!paperDesign && !isClearance && <footer className="relative z-10 grid grid-cols-[1fr_auto] gap-8 border-t border-slate-200 pt-4">
         <div>
           <div className="mb-1 flex items-end gap-2">
             <div className="h-px w-20 bg-slate-300" />

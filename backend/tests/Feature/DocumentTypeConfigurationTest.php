@@ -17,6 +17,104 @@ class DocumentTypeConfigurationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_good_moral_character_has_the_requested_wording_and_resident_form_fields(): void
+    {
+        $type = DocumentType::where('value', 'Certificate of Good Moral Character')->firstOrFail();
+        $applicantFieldKeys = array_column($type->applicant_fields, 'key');
+        $purposeField = collect($type->fields)->firstWhere('key', 'purpose');
+
+        $this->assertStringContainsString('TO WHOM IT MAY CONCERN:', $type->template);
+        $this->assertStringContainsString('{{full_name}}', $type->template);
+        $this->assertStringContainsString('{{purok}}', $type->template);
+        $this->assertStringContainsString('{{purpose}}', $type->template);
+        $this->assertContains('full_name', $applicantFieldKeys);
+        $this->assertContains('purok', $applicantFieldKeys);
+        $this->assertNotNull($purposeField);
+        $this->assertTrue($purposeField['required']);
+
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        Sanctum::actingAs($resident);
+        $response = $this->getJson('/api/resident/document-types')->assertOk();
+        $residentType = collect($response->json('data'))->firstWhere('id', $type->id);
+
+        $this->assertNotNull($residentType);
+        $this->assertSame($type->template, $residentType['template']);
+        $this->assertContains('full_name', array_column($residentType['applicant_fields'], 'key'));
+        $this->assertContains('purok', array_column($residentType['applicant_fields'], 'key'));
+        $this->assertContains('purpose', array_column($residentType['fields'], 'key'));
+    }
+
+    public function test_barangay_clearance_has_requested_wording_and_collects_home_address_birthplace_and_purpose(): void
+    {
+        Storage::fake('local');
+        $type = DocumentType::where('value', 'Barangay Certification')->firstOrFail();
+        $applicantFields = collect($type->applicant_fields)->keyBy('key');
+        $purposeField = collect($type->fields)->firstWhere('key', 'purpose');
+
+        $this->assertStringContainsString('{{full_name}}', $type->template);
+        $this->assertStringContainsString('{{address}}', $type->template);
+        $this->assertStringContainsString('{{place_of_birth}}', $type->template);
+        $this->assertStringContainsString('{{date_of_birth}}', $type->template);
+        $this->assertStringContainsString('{{purpose}}', $type->template);
+        $this->assertStringContainsString('{{object_pronoun}}', $type->template);
+        $this->assertStringContainsString('{{subject_pronoun}} {{subject_verb}}', $type->template);
+        $this->assertStringContainsString('{{derogatory_remarks}}', $type->template);
+        $this->assertStringNotContainsString('NO DEROGATORY RECORD', $type->template);
+        $this->assertStringContainsString('Hon. fe Q. Cuyos', $type->template);
+        $this->assertSame('Home Address', $applicantFields['address']['label']);
+        $this->assertTrue($applicantFields['address']['required']);
+        $this->assertTrue($applicantFields['place_of_birth']['required']);
+        $this->assertSame('text', $purposeField['type']);
+        $this->assertTrue(collect($type->requirements)->firstWhere('key', 'applicant_photo')['required']);
+
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        Sanctum::actingAs($resident);
+
+        $response = $this->post('/api/resident/requests', [
+            'document_type' => 'Barangay Certification',
+            'form_fields' => [
+                'full_name' => 'Arabela Grace Velasco Abella',
+                'address' => 'Purok Crossing, Jugan, Consolacion',
+                'place_of_birth' => 'Cebu City',
+                'date_of_birth' => '2004-07-09',
+                'sex' => 'Female',
+                'purok' => 'Purok Crossing',
+                'purpose' => 'Employment at Gaisano',
+            ],
+            'requirements' => [
+                'purok_certificate' => UploadedFile::fake()->create('purok-certificate.pdf', 10, 'application/pdf'),
+                'valid_id' => UploadedFile::fake()->create('valid-id.pdf', 10, 'application/pdf'),
+                'applicant_photo' => UploadedFile::fake()->create('applicant-photo.png', 10, 'image/png'),
+            ],
+        ]);
+        $response->assertCreated()
+            ->assertJsonPath('request.details.form_fields.place_of_birth', 'Cebu City')
+            ->assertJsonPath('request.details.form_fields.purpose', 'Employment at Gaisano')
+            ->assertJsonPath('request.details.requirements.applicant_photo.label', 'Applicant Photo (JPG or PNG, up to 5 MB)');
+        Storage::disk('local')->assertExists(
+            $response->json('request.details.requirements.applicant_photo.path'),
+        );
+
+        $this->postJson('/api/resident/requests', [
+            'document_type' => 'Barangay Certification',
+            'form_fields' => [
+                'full_name' => 'Arabela Grace Velasco Abella',
+                'address' => 'Purok Crossing, Jugan, Consolacion',
+                'place_of_birth' => 'Cebu City',
+                'date_of_birth' => '2004-07-09',
+                'sex' => 'Female',
+                'purok' => 'Purok Crossing',
+                'purpose' => 'Employment at Gaisano',
+            ],
+            'requirements' => [
+                'purok_certificate' => UploadedFile::fake()->create('purok-certificate.pdf', 10, 'application/pdf'),
+                'valid_id' => UploadedFile::fake()->create('valid-id.pdf', 10, 'application/pdf'),
+                'applicant_photo' => UploadedFile::fake()->create('applicant-photo.pdf', 10, 'application/pdf'),
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('requirements.applicant_photo');
+    }
+
     public function test_admin_can_add_and_update_a_resident_document_type(): void
     {
         $admin = Admin::create([

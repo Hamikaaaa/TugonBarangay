@@ -79,6 +79,10 @@
     -webkit-print-color-adjust: exact;
   }
 
+  .document-paper--clearance {
+    padding: 0.3in !important;
+  }
+
   .document-paper--designed {
     padding: 0 !important;
   }

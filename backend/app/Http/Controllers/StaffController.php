@@ -144,6 +144,14 @@ class StaffController extends Controller
             'document_content' => ['sometimes', 'required', 'array'],
             'staff_remarks' => ['nullable', 'string', 'max:2000'],
         ];
+        $isBarangayClearance = $documentRequest->document_type === 'Barangay Certification';
+        if ($isBarangayClearance) {
+            $rules['document_content.derogatory_status'] = [
+                'sometimes',
+                'string',
+                'in:pending_verification,no_derogatory_record,refer_authorized_review',
+            ];
+        }
         $configuredType = DocumentType::where('value', $documentRequest->document_type)->first();
         $configuredFields = collect($configuredType?->applicant_fields ?? [])
             ->merge($configuredType?->fields ?? []);
@@ -155,6 +163,21 @@ class StaffController extends Controller
         $validated = $request->validate($rules);
         $hadPreview = $documentRequest->document_generated_at !== null;
         $preview = $request->input('document_content', $this->buildDocumentPayload($documentRequest));
+        if ($isBarangayClearance) {
+            $recordCheckStatus = $preview['derogatory_status'] ?? 'pending_verification';
+            $hasUnresolvedComplaint = Complaint::query()
+                ->where('resident_id', $documentRequest->resident_id)
+                ->whereIn('status', ['pending', 'in_progress'])
+                ->exists();
+
+            if ($hasUnresolvedComplaint && $recordCheckStatus !== 'pending_verification') {
+                return response()->json([
+                    'message' => 'A pending or in-progress complaint requires PENDING VERIFICATION. A complaint alone is not a finding of wrongdoing.',
+                ], 409);
+            }
+
+            $preview['derogatory_status'] = $recordCheckStatus;
+        }
         if (
             ($derivesAge || in_array($documentRequest->document_type, ['Barangay Certification', 'Barangay Residency'], true))
             && !empty($preview['date_of_birth'])
@@ -184,6 +207,9 @@ class StaffController extends Controller
             $hadPreview ? 'document_edited' : 'preview_generated',
             $documentRequest->status,
             $documentRequest->status,
+            $isBarangayClearance ? [
+                'record_check_outcome' => $documentRequest->document_content['derogatory_status'] ?? 'pending_verification',
+            ] : [],
         );
 
         return response()->json([
@@ -256,6 +282,24 @@ class StaffController extends Controller
             return response()->json([
                 'message' => 'Generate and review the document before marking it ready for release.',
             ], 409);
+        }
+        if (in_array($status, ['ready_for_release', 'completed'], true)
+            && $documentRequest->document_type === 'Barangay Certification') {
+            if (($documentRequest->document_content['derogatory_status'] ?? null) !== 'no_derogatory_record') {
+                return response()->json([
+                    'message' => 'This Barangay Clearance is not eligible for release while its record-check outcome is pending verification or referred for authorized review. Confirm NO DEROGATORY RECORD ON FILE only when the record check supports that result.',
+                ], 409);
+            }
+
+            $hasUnresolvedComplaint = Complaint::query()
+                ->where('resident_id', $documentRequest->resident_id)
+                ->whereIn('status', ['pending', 'in_progress'])
+                ->exists();
+            if ($hasUnresolvedComplaint) {
+                return response()->json([
+                    'message' => 'A pending or in-progress complaint requires PENDING VERIFICATION. A complaint alone is not a finding of wrongdoing.',
+                ], 409);
+            }
         }
         if ($status === 'ready_for_release' && ($documentRequest->details['fee_mode'] ?? null) === 'assessed'
             && empty($documentRequest->details['fee_assessed'])) {
@@ -601,14 +645,17 @@ class StaffController extends Controller
             ];
         }
 
+        $submitted = $documentRequest->details['form_fields'] ?? [];
         $registryQuery = BarangayRegistry::query()
-            ->whereRaw('LOWER(first_name) = ?', [mb_strtolower(trim((string) $resident->first_name))])
-            ->whereRaw('LOWER(last_name) = ?', [mb_strtolower(trim((string) $resident->last_name))]);
-        $registry = (clone $registryQuery)
+            ->whereRaw('LOWER(TRIM(first_name)) = ?', [mb_strtolower(trim((string) $resident->first_name))])
+            ->whereRaw('LOWER(TRIM(last_name)) = ?', [mb_strtolower(trim((string) $resident->last_name))]);
+        $completeMatches = (clone $registryQuery)
             ->whereDate('date_of_birth', $resident->date_of_birth)
-            ->whereRaw('LOWER(sex) = ?', [mb_strtolower(trim((string) $resident->sex))])
-            ->whereRaw('LOWER(purok) = ?', [mb_strtolower(trim((string) $resident->purok))])
-            ->first();
+            ->whereRaw('LOWER(TRIM(sex)) = ?', [mb_strtolower(trim((string) $resident->sex))])
+            ->whereRaw('LOWER(TRIM(purok)) = ?', [mb_strtolower(trim((string) $resident->purok))])
+            ->limit(2)
+            ->get();
+        $registry = $completeMatches->count() === 1 ? $completeMatches->first() : null;
         if (!$registry) {
             $dateMatches = (clone $registryQuery)
                 ->whereDate('date_of_birth', $resident->date_of_birth)
@@ -616,6 +663,34 @@ class StaffController extends Controller
                 ->get();
             if ($dateMatches->count() === 1) {
                 $registry = $dateMatches->first();
+            }
+        }
+        $submittedDateOfBirth = $submitted['date_of_birth'] ?? $resident->date_of_birth;
+        if (!$registry && !blank($submitted['full_name'] ?? null) && !blank($submittedDateOfBirth)) {
+            $submittedName = trim((string) $submitted['full_name']);
+            $submittedNameMatches = BarangayRegistry::query()
+                ->whereDate('date_of_birth', $submittedDateOfBirth)
+                ->get()
+                ->filter(fn (BarangayRegistry $candidate) => $this->sameIdentityValue(
+                    $submittedName,
+                    $this->registryFullName($candidate),
+                    'full_name',
+                ))
+                ->take(2)
+                ->values();
+            if ($submittedNameMatches->count() === 1) {
+                $registry = $submittedNameMatches->first();
+            }
+        }
+        if (!$registry) {
+            $identityMatches = BarangayRegistry::query()
+                ->whereDate('date_of_birth', $resident->date_of_birth)
+                ->whereRaw('LOWER(TRIM(sex)) = ?', [mb_strtolower(trim((string) $resident->sex))])
+                ->whereRaw('LOWER(TRIM(purok)) = ?', [mb_strtolower(trim((string) $resident->purok))])
+                ->limit(2)
+                ->get();
+            if ($identityMatches->count() === 1) {
+                $registry = $identityMatches->first();
             }
         }
         if (!$registry) {
@@ -640,13 +715,7 @@ class StaffController extends Controller
             $resident->last_name,
             $resident->suffix,
         ])->filter()->implode(' ');
-        $registryFullName = collect([
-            $registry->first_name,
-            $registry->middle_name,
-            $registry->last_name,
-            $registry->suffix,
-        ])->filter()->implode(' ');
-        $submitted = $documentRequest->details['form_fields'] ?? [];
+        $registryFullName = $this->registryFullName($registry);
         $values = [
             'full_name' => ['label' => 'Full name', 'profile' => $profileFullName, 'registry' => $registryFullName],
             'date_of_birth' => ['label' => 'Date of birth', 'profile' => $resident->date_of_birth, 'registry' => $registry->date_of_birth],
@@ -666,7 +735,9 @@ class StaffController extends Controller
             $profileMatches = blank($value['profile']) || ($key === 'full_name'
                 ? $this->profileNameMatchesRegistry($resident, $registry)
                 : $this->sameIdentityValue($value['profile'], $value['registry'], $key));
-            $submissionMatches = blank($submittedValue) || $this->sameIdentityValue($submittedValue, $value['registry'], $key);
+            $submissionMatches = blank($submittedValue) || ($key === 'full_name'
+                ? $this->submittedNameMatchesRegistry($submitted, $submittedValue, $registry)
+                : $this->sameIdentityValue($submittedValue, $value['registry'], $key));
             $fields[] = [
                 'key' => $key,
                 'label' => $value['label'],
@@ -706,6 +777,52 @@ class StaffController extends Controller
         $normalize = fn ($value) => mb_strtolower(preg_replace('/\s+/', ' ', trim((string) $value)));
 
         return $normalize($left) === $normalize($right);
+    }
+
+    private function registryFullName(BarangayRegistry $registry): string
+    {
+        return collect([
+            $registry->first_name,
+            $registry->middle_name,
+            $registry->last_name,
+            $registry->suffix,
+        ])->filter()->implode(' ');
+    }
+
+    private function submittedNameMatchesRegistry(
+        array $submitted,
+        string $submittedFullName,
+        BarangayRegistry $registry,
+    ): bool {
+        $nameFields = [
+            'first_name' => 'first_name',
+            'middle_name' => 'middle_name',
+            'last_name' => 'last_name',
+            'suffix' => 'suffix',
+        ];
+        $hasNameParts = collect(array_keys($nameFields))
+            ->contains(fn (string $field) => !blank($submitted[$field] ?? null));
+
+        if ($hasNameParts) {
+            foreach ($nameFields as $submittedField => $registryField) {
+                if (!blank($submitted[$submittedField] ?? null)
+                    && !$this->sameIdentityValue($submitted[$submittedField], $registry->{$registryField}, $submittedField)) {
+                    return false;
+                }
+            }
+
+            return !blank($submitted['first_name'] ?? null)
+                && !blank($submitted['last_name'] ?? null);
+        }
+
+        $nameWithoutMiddle = collect([
+            $registry->first_name,
+            $registry->last_name,
+            $registry->suffix,
+        ])->filter()->implode(' ');
+
+        return $this->sameIdentityValue($submittedFullName, $this->registryFullName($registry), 'full_name')
+            || $this->sameIdentityValue($submittedFullName, $nameWithoutMiddle, 'full_name');
     }
 
     private function profileNameMatchesRegistry(Resident $resident, BarangayRegistry $registry): bool

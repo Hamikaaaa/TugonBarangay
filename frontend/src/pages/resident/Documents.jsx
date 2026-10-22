@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { Camera, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import {
   inputClass,
   primaryButtonClass,
@@ -82,6 +82,9 @@ function getFriendlyRequestError(error, document) {
     const requirement = document?.requirements.find((item) =>
       normalized.includes(item.key.toLowerCase()),
     );
+    if (normalized.includes("applicant_photo") && normalized.includes("mimes")) {
+      return "Applicant photos must be JPG or PNG images up to 5 MB.";
+    }
     if (normalized.includes("required")) {
       return requirement
         ? `Please upload your ${requirement.label}.`
@@ -358,6 +361,84 @@ function mapConfiguredDocumentType(type) {
   };
 }
 
+function ApplicantCamera({ stream, onCapture, onCancel }) {
+  const videoRef = useRef(null);
+  const [ready, setReady] = useState(false);
+  const [captureError, setCaptureError] = useState("");
+
+  useEffect(() => {
+    if (videoRef.current) videoRef.current.srcObject = stream;
+  }, [stream]);
+
+  const capturePhoto = () => {
+    const video = videoRef.current;
+    if (!video?.videoWidth || !video.videoHeight) {
+      setCaptureError("The camera is not ready yet. Please wait and try again.");
+      return;
+    }
+
+    const scale = Math.min(1, 1280 / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = window.document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setCaptureError("We couldn’t prepare the photo. Please try again or upload an image.");
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        setCaptureError("We couldn’t capture the photo. Please try again or upload an image.");
+        return;
+      }
+      if (blob.size > 5 * 1024 * 1024) {
+        setCaptureError("The captured photo is larger than 5 MB. Please try again or upload a smaller image.");
+        return;
+      }
+
+      const filename = `applicant-photo-${new Date().toISOString().replace(/[:.]/g, "-")}.jpg`;
+      onCapture(new File([blob], filename, { type: "image/jpeg" }));
+    }, "image/jpeg", 0.85);
+  };
+
+  return (
+    <div className="mt-3 space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        onLoadedMetadata={() => setReady(true)}
+        aria-label="Live applicant photo camera preview"
+        className="max-h-80 w-full rounded-lg bg-black object-contain"
+      />
+      {captureError && (
+        <p role="alert" className="text-sm text-red-700">
+          {captureError}
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={capturePhoto}
+          disabled={!ready}
+          className={`${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+        >
+          Capture photo
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-xl border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100"
+        >
+          Close camera
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Documents({ requests, token, onRefresh, user }) {
   const [catalogTypes, setCatalogTypes] = useState(null);
   const [documentType, setDocumentType] = useState("");
@@ -367,6 +448,10 @@ function Documents({ requests, token, onRefresh, user }) {
   const [notes, setNotes] = useState("");
   const [editingRequest, setEditingRequest] = useState(null);
   const [requirementFiles, setRequirementFiles] = useState({});
+  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [cameraError, setCameraError] = useState("");
+  const [applicantPhotoPreview, setApplicantPhotoPreview] = useState("");
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("info");
   const [submitting, setSubmitting] = useState(false);
@@ -382,6 +467,76 @@ function Documents({ requests, token, onRefresh, user }) {
   const [historyError, setHistoryError] = useState("");
   const [reloadHistory, setReloadHistory] = useState(0);
   const formRef = useRef(null);
+  const photoPreviewUrlRef = useRef(null);
+  const cameraRequestRef = useRef(0);
+
+  useEffect(() => () => {
+    cameraStream?.getTracks().forEach((track) => track.stop());
+  }, [cameraStream]);
+
+  useEffect(() => () => {
+    if (photoPreviewUrlRef.current) URL.revokeObjectURL(photoPreviewUrlRef.current);
+  }, []);
+
+  const setRequirementFile = (key, file) => {
+    if (key === "applicant_photo") {
+      if (photoPreviewUrlRef.current) {
+        URL.revokeObjectURL(photoPreviewUrlRef.current);
+      }
+      photoPreviewUrlRef.current = file ? URL.createObjectURL(file) : null;
+      setApplicantPhotoPreview(photoPreviewUrlRef.current || "");
+    }
+    setRequirementFiles((current) => ({ ...current, [key]: file }));
+  };
+
+  const clearRequirementFiles = () => {
+    if (photoPreviewUrlRef.current) {
+      URL.revokeObjectURL(photoPreviewUrlRef.current);
+      photoPreviewUrlRef.current = null;
+    }
+    setApplicantPhotoPreview("");
+    setRequirementFiles({});
+  };
+
+  const closeApplicantCamera = () => {
+    cameraRequestRef.current += 1;
+    setCameraLoading(false);
+    setCameraStream(null);
+  };
+
+  const openApplicantCamera = async () => {
+    setCameraError("");
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera access isn’t available here. It usually requires HTTPS and browser permission. You can still upload a JPG or PNG photo.");
+      return;
+    }
+
+    const requestId = cameraRequestRef.current + 1;
+    cameraRequestRef.current = requestId;
+    setCameraLoading(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: "user" },
+      });
+      if (cameraRequestRef.current !== requestId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      setCameraStream(stream);
+    } catch (error) {
+      if (cameraRequestRef.current !== requestId) return;
+      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+        setCameraError("Camera permission was denied. Allow camera access in your browser settings, or upload a JPG or PNG photo.");
+      } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+        setCameraError("No camera was found. You can upload a JPG or PNG photo instead.");
+      } else {
+        setCameraError("We couldn’t open the camera. Check your camera connection and browser permissions, or upload a JPG or PNG photo.");
+      }
+    } finally {
+      if (cameraRequestRef.current === requestId) setCameraLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!documentType && !editingRequest) {
@@ -473,6 +628,8 @@ function Documents({ requests, token, onRefresh, user }) {
   ) || [];
 
   const startCorrection = (request) => {
+    closeApplicantCamera();
+    setCameraError("");
     const existingFields = request.details?.form_fields || {};
     const requestDocument = availableDocuments.find(
       (document) => (document.value || document.label) === request.document_type,
@@ -505,18 +662,22 @@ function Documents({ requests, token, onRefresh, user }) {
         : {}),
     });
     setNotes(request.details?.notes || "");
-    setRequirementFiles({});
+    clearRequirementFiles();
     setMessage("");
     setMessageTone("info");
     formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const cancelCorrection = () => {
+    closeApplicantCamera();
+    setCameraError("");
     setEditingRequest(null);
     setDocumentType("");
+    closeApplicantCamera();
+    setCameraError("");
     setFormFields(getApplicantDefaults(user));
     setNotes("");
-    setRequirementFiles({});
+    clearRequirementFiles();
     setMessage("");
     setMessageTone("info");
     formRef.current?.reset();
@@ -603,7 +764,7 @@ function Documents({ requests, token, onRefresh, user }) {
       setDocumentType("");
       setFormFields(getApplicantDefaults(user));
       setNotes("");
-      setRequirementFiles({});
+      clearRequirementFiles();
       formRef.current?.reset();
       setHistoryPage(1);
       setHistoryLoading(true);
@@ -709,9 +870,11 @@ function Documents({ requests, token, onRefresh, user }) {
                 value={documentType}
                 disabled={catalogTypes === null || Boolean(editingRequest)}
                 onChange={(event) => {
+                  closeApplicantCamera();
+                  setCameraError("");
                   setDocumentType(event.target.value);
                   setFormFields(getApplicantDefaults(user));
-                  setRequirementFiles({});
+                  clearRequirementFiles();
                 }}
                 className={inputClass}
               >
@@ -911,7 +1074,7 @@ function Documents({ requests, token, onRefresh, user }) {
                     <p className="mt-1 text-xs text-slate-500">
                       Upload PDF, JPG, or PNG files up to 5 MB each. Optional
                       documents can be provided if applicable or requested by
-                      barangay staff.
+                      barangay staff. Applicant photos must be JPG or PNG.
                     </p>
                   </div>
                   <span className="text-xs font-semibold text-[#55708F]">
@@ -943,29 +1106,88 @@ function Documents({ requests, token, onRefresh, user }) {
                         : requirement.label;
                     }
 
+                    const inputId = `requirement-${requirement.key}`;
+                    const isApplicantPhoto = requirement.key === "applicant_photo";
+
                     return (
-                      <label key={requirement.key} className="block">
-                        <span className="text-sm font-bold text-slate-700">
+                      <div key={requirement.key} className="block">
+                        <label htmlFor={inputId} className="text-sm font-bold text-slate-700">
                           {label}
                           {!required && (
                             <span className="ml-1 font-normal text-slate-400">
                               (optional)
                             </span>
                           )}
-                        </span>
+                        </label>
                         <input
-                          required={required && !hasExistingFile}
-                          type="file"
-                          accept=".pdf,.jpg,.jpeg,.png"
-                          onChange={(event) =>
-                            setRequirementFiles((current) => ({
-                              ...current,
-                              [requirement.key]:
-                                event.target.files?.[0] || null,
-                            }))
+                          id={inputId}
+                          required={
+                            required &&
+                            !hasExistingFile &&
+                            !requirementFiles[requirement.key]
                           }
+                          type="file"
+                          accept={isApplicantPhoto
+                            ? ".jpg,.jpeg,.png,image/jpeg,image/png"
+                            : ".pdf,.jpg,.jpeg,.png"}
+                          capture={isApplicantPhoto ? "user" : undefined}
+                          onChange={(event) => {
+                            if (isApplicantPhoto) {
+                              closeApplicantCamera();
+                              setCameraError("");
+                            }
+                            setRequirementFile(
+                              requirement.key,
+                              event.target.files?.[0] || null,
+                            );
+                          }}
                           className={`${inputClass} file:mr-3 file:rounded-lg file:border-0 file:bg-[#2455D6]/10 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#2455D6]`}
                         />
+                        {isApplicantPhoto && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={openApplicantCamera}
+                              disabled={Boolean(cameraStream) || cameraLoading}
+                              className="mt-2 inline-flex items-center gap-2 rounded-lg border border-[#2455D6]/30 px-3 py-2 text-sm font-semibold text-[#2455D6] hover:bg-[#2455D6]/5 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Camera className="h-4 w-4" aria-hidden="true" />
+                              {cameraLoading
+                                ? "Opening camera…"
+                                : cameraStream
+                                  ? "Camera is open"
+                                  : "Take a new photo"}
+                            </button>
+                            {cameraError && (
+                              <p role="alert" className="mt-2 text-sm text-red-700">
+                                {cameraError}
+                              </p>
+                            )}
+                            {cameraStream && (
+                              <ApplicantCamera
+                                stream={cameraStream}
+                                onCapture={(file) => {
+                                  setRequirementFile("applicant_photo", file);
+                                  closeApplicantCamera();
+                                  setCameraError("");
+                                }}
+                                onCancel={closeApplicantCamera}
+                              />
+                            )}
+                            {applicantPhotoPreview && requirementFiles.applicant_photo && (
+                              <div className="mt-3 flex items-center gap-3">
+                                <img
+                                  src={applicantPhotoPreview}
+                                  alt="Applicant photo selected for upload"
+                                  className="h-20 w-20 rounded-lg border border-slate-200 object-cover"
+                                />
+                                <span className="text-sm text-slate-600">
+                                  {requirementFiles.applicant_photo.name}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )}
                         {hasExistingFile &&
                           !requirementFiles[requirement.key] && (
                             <span className="mt-1 block text-xs text-slate-500">
@@ -976,7 +1198,7 @@ function Documents({ requests, token, onRefresh, user }) {
                               . Choose a replacement if requested.
                             </span>
                           )}
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
