@@ -69,6 +69,10 @@ function getApplicantDefaults(user = {}) {
     province: user.province || "Cebu",
     business_contact_number: user.mobile_number || "",
     business_email_address: user.email || "",
+    business_purok: user.purok || "",
+    business_address: user.address || "",
+    tax_year: String(new Date().getFullYear()),
+    taxpayer_signature_name: fullName || user.name || "",
   };
 }
 
@@ -236,94 +240,55 @@ const DOCUMENT_TYPES = [
     ],
   },
   {
-    label: "Business Permit",
+    label: "Business Clearance",
+    value: "Business Permit",
     notice:
-      "This request covers barangay business clearance. The municipal Mayor's/Business Permit is handled separately.",
-    applicantFields: ["full_name", "contact_number", "email_address"],
+      "This is a barangay business clearance application. For new applications, attach a Purok Certification, Cedula, applicant ID, DTI/SEC registration, and a picture of the business. For renewals, attach only the previous business clearance; this online request is your new application form.",
+    applicantFields: ["full_name", "address", "contact_number", "email_address"],
+    applicantFieldConfigs: [
+      { key: "full_name", label: "Name of taxpayer / applicant", type: "text", required: true },
+      { key: "address", label: "Complete owner's address", type: "text", required: true },
+      { key: "contact_number", label: "Contact number", type: "tel", required: true },
+      { key: "email_address", label: "Email address", type: "email", required: true },
+    ],
     fields: [
+      { key: "application_type", label: "Application", type: "select", options: ["New", "Renewal"], required: true },
+      { key: "tax_year", label: "Tax year", type: "number", min: 2020, step: 1, required: true },
       {
         key: "business_ownership",
-        label: "Business ownership",
+        label: "Type of business ownership",
         type: "select",
-        options: [
-          "Sole Proprietorship",
-          "Partnership",
-          "Corporation",
-          "Cooperative",
-          "Other",
-        ],
+        options: ["Sole Proprietorship", "Partnership", "Corporation", "Cooperative"],
+        required: true,
       },
-      { key: "business_name", label: "Business name", type: "text" },
-      { key: "business_type", label: "Business type", type: "text" },
-      { key: "nature_of_business", label: "Nature of business", type: "text" },
       {
-        key: "business_street_number",
-        label: "Business street/house number (if needed)",
-        type: "text",
+        key: "amendment_type",
+        label: "Amendment, if applicable",
+        type: "select",
+        options: ["None", "Single to Partnership", "Single to Corporation", "Partnership to Single", "Partnership to Corporation", "Corporation to Single", "Corporation to Partnership"],
         required: false,
       },
-      { key: "business_purok", label: "Purok", type: "text" },
-      {
-        key: "estimated_investment",
-        label: "Capital/estimated investment (PHP)",
-        type: "number",
-        min: "0",
-        step: "0.01",
-      },
-      {
-        key: "number_of_employees",
-        label: "Number of employees",
-        type: "number",
-        min: "0",
-        step: "1",
-      },
-      {
-        key: "business_start_date",
-        label: "Date business will start",
-        type: "date",
-      },
-      {
-        key: "business_contact_number",
-        label: "Business contact number",
-        type: "tel",
-      },
-      {
-        key: "business_email_address",
-        label: "Business email address",
-        type: "email",
-      },
+      { key: "transfer_type", label: "Transfer, if applicable", type: "select", options: ["None", "Location", "Ownership"], required: false },
+      { key: "business_name", label: "Business name", type: "text", required: true },
+      { key: "tradename_franchise_name", label: "Trade name / franchise name", type: "text", required: false },
+      { key: "nature_of_business", label: "Nature of business", type: "text", required: true },
+      { key: "business_address", label: "Complete business address", type: "text", required: true },
+      { key: "business_purok", label: "Business Purok", type: "text", required: true },
+      { key: "business_area_sqm", label: "Business area (sq. m.)", type: "number", min: 0, step: "0.01", required: true },
+      { key: "place_of_business", label: "Place of business", type: "select", options: ["Owned", "Rented"], required: true },
+      { key: "monthly_rental", label: "Monthly rental (PHP)", type: "number", min: 0, step: "0.01", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
+      { key: "lessor_name", label: "Lessor's name", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
+      { key: "lessor_address", label: "Lessor's address", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
+      { key: "taxpayer_signature_name", label: "Taxpayer / authorized representative name", type: "text", required: true },
+      { key: "taxpayer_position", label: "Position", type: "text", required: false },
     ],
     requirements: [
-      { key: "valid_id", label: "Valid government-issued ID", required: true },
-      {
-        key: "business_registration",
-        label: "Business registration (DTI, SEC, or CDA as applicable)",
-        required: false,
-        requiredWhen: {
-          key: "business_ownership",
-          value: [
-            "Sole Proprietorship",
-            "Partnership",
-            "Corporation",
-            "Cooperative",
-          ],
-        },
-      },
-      {
-        key: "lease_or_proof_of_ownership",
-        label: "Lease contract or proof of ownership",
-        required: false,
-      },
-      {
-        key: "community_tax_certificate",
-        label: "Community Tax Certificate",
-        required: false,
-      },
-      {
-        key: "other_business_permits",
-        label: "Other permits, if applicable",
-        required: false,
-      },
+      { key: "purok_certification", label: "Purok Certification", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "cedula_copy", label: "Cedula (Community Tax Certificate)", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "applicant_id", label: "Applicant's ID", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "dti_sec_registration", label: "DTI / SEC registration", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "business_picture", label: "Picture of the business", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "previous_business_clearance", label: "Previous Business Clearance", required: false, showWhen: { key: "application_type", value: "Renewal" }, requiredWhen: { key: "application_type", value: "Renewal" } },
     ],
   },
   {
@@ -819,8 +784,11 @@ function Documents({ requests, token, onRefresh, user }) {
           formData.append(`form_fields[${key}]`, value.trim());
         }
       });
+      const visibleRequirementKeys = new Set(visibleRequirements.map((requirement) => requirement.key));
       Object.entries(requirementFiles).forEach(([key, file]) => {
-        if (file) formData.append(`requirements[${key}]`, file);
+        if (file && visibleRequirementKeys.has(key)) {
+          formData.append(`requirements[${key}]`, file);
+        }
       });
 
       const endpoint = editingRequest
