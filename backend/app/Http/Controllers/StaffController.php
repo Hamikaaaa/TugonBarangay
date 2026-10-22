@@ -147,16 +147,18 @@ class StaffController extends Controller
         $configuredType = DocumentType::where('value', $documentRequest->document_type)->first();
         $configuredFields = collect($configuredType?->applicant_fields ?? [])
             ->merge($configuredType?->fields ?? []);
-        $derivesAge = $configuredFields->contains('key', 'date_of_birth')
+        $isResidencyCertificate = $documentRequest->document_type === 'Barangay Residency';
+        $derivesAge = !$isResidencyCertificate
+            && $configuredFields->contains('key', 'date_of_birth')
             && $configuredFields->contains('key', 'age');
-        if ($derivesAge || in_array($documentRequest->document_type, ['Barangay Certification', 'Barangay Residency'], true)) {
+        if ($derivesAge || $documentRequest->document_type === 'Barangay Certification') {
             $rules['document_content.date_of_birth'] = ['required', 'date', 'before_or_equal:today'];
         }
         $validated = $request->validate($rules);
         $hadPreview = $documentRequest->document_generated_at !== null;
         $preview = $request->input('document_content', $this->buildDocumentPayload($documentRequest));
         if (
-            ($derivesAge || in_array($documentRequest->document_type, ['Barangay Certification', 'Barangay Residency'], true))
+            ($derivesAge || $documentRequest->document_type === 'Barangay Certification')
             && !empty($preview['date_of_birth'])
         ) {
             $preview['age'] = Carbon::parse($preview['date_of_birth'])->age;
@@ -298,6 +300,11 @@ class StaffController extends Controller
 
         $documentRequest->fill($update);
         $documentRequest->save();
+        if ($status === 'rejected' && $documentRequest->document_type === 'First-Time Jobseeker Certification') {
+            DB::table('first_time_jobseeker_availments')
+                ->where('document_request_id', $documentRequest->id)
+                ->delete();
+        }
         DocumentRequestEvent::record(
             $documentRequest,
             $request->user(),
@@ -666,7 +673,11 @@ class StaffController extends Controller
             $profileMatches = blank($value['profile']) || ($key === 'full_name'
                 ? $this->profileNameMatchesRegistry($resident, $registry)
                 : $this->sameIdentityValue($value['profile'], $value['registry'], $key));
-            $submissionMatches = blank($submittedValue) || $this->sameIdentityValue($submittedValue, $value['registry'], $key);
+            $submissionMatches = blank($submittedValue) || ($key === 'full_name'
+                ? (in_array($documentRequest->document_type, ['Barangay Indigency', 'Barangay Residency', 'Barangay Certificate'], true)
+                    ? $this->requestNameMatchesRegistry($submittedValue, $registry)
+                    : $this->sameIdentityValue($submittedValue, $value['registry'], $key))
+                : $this->sameIdentityValue($submittedValue, $value['registry'], $key));
             $fields[] = [
                 'key' => $key,
                 'label' => $value['label'],
@@ -723,5 +734,49 @@ class StaffController extends Controller
         }
 
         return true;
+    }
+
+    private function requestNameMatchesRegistry(mixed $candidateName, BarangayRegistry $registry): bool
+    {
+        $candidate = $this->normalizedNameParts($candidateName);
+        $registryFirst = $this->normalizedNameParts($registry->first_name);
+        $registryMiddle = $this->normalizedNameParts($registry->middle_name);
+        $registryLast = $this->normalizedNameParts($registry->last_name);
+        $registrySuffix = $this->normalizedNameParts($registry->suffix);
+
+        if (!$candidate || !$registryFirst || !$registryLast || count($candidate) < 2) {
+            return false;
+        }
+
+        $candidateSuffix = [];
+        if ($registrySuffix) {
+            if (array_slice($candidate, -count($registrySuffix)) !== $registrySuffix) {
+                return false;
+            }
+            $candidateSuffix = $registrySuffix;
+            $candidate = array_slice($candidate, 0, -count($registrySuffix));
+        }
+
+        $registryNameLength = count($registryFirst) + count($registryLast);
+        if (count($candidate) < $registryNameLength
+            || array_slice($candidate, 0, count($registryFirst)) !== $registryFirst
+            || array_slice($candidate, -count($registryLast)) !== $registryLast) {
+            return false;
+        }
+
+        $candidateMiddle = array_slice($candidate, count($registryFirst), count($candidate) - $registryNameLength);
+        if (!$candidateMiddle) {
+            return true;
+        }
+
+        return $candidateMiddle === $registryMiddle && $candidateSuffix === $registrySuffix;
+    }
+
+    private function normalizedNameParts(mixed $value): array
+    {
+        $normalized = mb_strtolower(trim((string) $value));
+        $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? '';
+
+        return array_values(array_filter(explode(' ', trim($normalized)), fn (string $part) => $part !== ''));
     }
 }

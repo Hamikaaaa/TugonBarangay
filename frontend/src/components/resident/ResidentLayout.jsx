@@ -25,10 +25,17 @@ function ResidentLayout({ children, view, onNavigate }) {
   useEffect(() => {
     if (!token) return;
 
-    residentApi("/resident/dashboard", token)
-      .then(setDashboard)
-      .catch((error) => setLoadError(error.message))
-      .finally(() => setLoading(false));
+    let active = true;
+    let initialLoad = true;
+    const refresh = () => residentApi("/resident/dashboard", token)
+      .then((data) => { if (active) setDashboard(data); })
+      .catch((error) => { if (active && initialLoad) setLoadError(error.message); })
+      .finally(() => { initialLoad = false; if (active) setLoading(false); });
+    refresh();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 10000);
+    return () => { active = false; window.clearInterval(timer); };
   }, [token]);
 
   return (

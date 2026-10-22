@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import {
   inputClass,
@@ -11,6 +11,9 @@ import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
 
 const APPLICANT_FIELDS = {
   full_name: { label: "Full Name", type: "text" },
+  first_name: { label: "First Name", type: "text" },
+  middle_name: { label: "Middle Name", type: "text", required: false },
+  last_name: { label: "Last Name", type: "text" },
   address: {
     label: "House/Building No., Street, and Subdivision",
     type: "text",
@@ -162,28 +165,14 @@ const DOCUMENT_TYPES = [
     label: "Certificate of Residency",
     value: "Barangay Residency",
     fee: 130,
-    applicantFields: [
-      "full_name",
-      "address",
-      "purok",
-      "date_of_birth",
-      "sex",
-    ],
+    applicantFields: ["first_name", "last_name", "middle_name", "purok"],
     fields: [
       {
         key: "years_of_residency",
         label: "Length of residency (years)",
         type: "number",
+        required: true,
         min: "0",
-        step: "1",
-      },
-      {
-        key: "months_of_residency",
-        label: "Additional months of residency",
-        type: "number",
-        required: false,
-        min: "0",
-        max: "11",
         step: "1",
       },
       {
@@ -208,13 +197,7 @@ const DOCUMENT_TYPES = [
   },
   {
     label: "Barangay Indigency",
-    applicantFields: [
-      "full_name",
-      "address",
-      "date_of_birth",
-      "sex",
-      "purok",
-    ],
+    applicantFields: ["full_name", "purok"],
     fields: [
       {
         key: "purpose",
@@ -389,23 +372,35 @@ function Documents({ requests, token, onRefresh, user }) {
     }
   }, [documentType, editingRequest, user]);
 
-  useEffect(() => {
-    let active = true;
-    residentApi("/resident/document-types", token)
-      .then((result) => {
-        if (active) setCatalogTypes(result.data || []);
-      })
-      .catch((error) => {
-        if (active) {
-          setCatalogTypes([]);
-          setMessage("We couldn't load document types. Refresh the page and try again.");
-          setMessageTone("error");
-        }
-      });
-    return () => {
-      active = false;
-    };
+  const loadCatalogTypes = useCallback(async (silent = false) => {
+    if (!token) return;
+    try {
+      const result = await residentApi("/resident/document-types", token);
+      const nextTypes = result.data || [];
+      setCatalogTypes((current) =>
+        JSON.stringify(current) === JSON.stringify(nextTypes) ? current : nextTypes,
+      );
+    } catch {
+      if (!silent) {
+        setCatalogTypes([]);
+        setMessage("We couldn't load document types. Refresh the page and try again.");
+        setMessageTone("error");
+      }
+    }
   }, [token]);
+
+  useEffect(() => {
+    loadCatalogTypes();
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") loadCatalogTypes(true);
+    };
+    const timer = window.setInterval(refreshWhenVisible, 15000);
+    window.addEventListener("focus", refreshWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refreshWhenVisible);
+    };
+  }, [loadCatalogTypes]);
 
   const changeHistoryPage = (page) => {
     setHistoryLoading(true);
@@ -534,6 +529,11 @@ function Documents({ requests, token, onRefresh, user }) {
       setMessageTone("error");
       return;
     }
+    if (selectedDocument.value === "First-Time Jobseeker Certification" && (formFields.age === undefined || formFields.age === null || formFields.age === "")) {
+      setMessage("Your age could not be calculated. Make sure your date of birth is recorded in your resident profile.");
+      setMessageTone("error");
+      return;
+    }
     setSubmitting(true);
     setMessage("");
     setMessageTone("info");
@@ -588,7 +588,7 @@ function Documents({ requests, token, onRefresh, user }) {
             ? {
                 ...type,
                 available: false,
-                unavailable_reason: "This one-time certificate has already been requested or issued.",
+                unavailable_reason: "You have already availed this one-time certificate. You cannot request it again.",
               }
             : type),
         );
@@ -725,7 +725,7 @@ function Documents({ requests, token, onRefresh, user }) {
                     disabled={!editingRequest && document.one_time && document.available === false}
                   >
                     {document.label}
-                    {document.one_time && document.available === false ? " (Already requested)" : ""}
+                    {document.one_time && document.available === false ? " (Already availed)" : ""}
                   </option>
                 ))}
               </select>

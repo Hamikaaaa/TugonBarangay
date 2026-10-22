@@ -16,10 +16,9 @@ function AdminDocumentRequestsDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (silent = false) => {
     if (!token) return;
-    setLoading(true);
-    setError("");
+    if (!silent) { setLoading(true); setError(""); }
     try {
       const headers = authHeaders(token);
       const [overviewResponse, reportResponse, eventsResponse] = await Promise.all([
@@ -39,9 +38,9 @@ function AdminDocumentRequestsDashboard() {
       setMonthly(reportPayload.monthly || []);
       setEvents(eventsPayload.data || []);
     } catch (loadError) {
-      setError(loadError.message || "Unable to load the document request dashboard.");
+      if (!silent) setError(loadError.message || "Unable to load the document request dashboard.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [token]);
 
@@ -49,6 +48,13 @@ function AdminDocumentRequestsDashboard() {
     // Refresh all document request dashboard panels together.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadDashboard();
+  }, [loadDashboard]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") loadDashboard(true);
+    }, 10000);
+    return () => window.clearInterval(timer);
   }, [loadDashboard]);
 
   const cards = [

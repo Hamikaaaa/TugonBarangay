@@ -1,6 +1,6 @@
 import {
-  Bell,
   Bot,
+  Bell,
   CalendarDays,
   ChartNoAxesColumn,
   ChevronDown,
@@ -14,7 +14,7 @@ import {
   UserCog,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
 
@@ -317,66 +317,38 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
 
 function AdminHeader({ user, token, activePanel, onMenu, onNavigate }) {
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState([]);
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [notificationsLoading, setNotificationsLoading] = useState(true);
-  const [notificationsError, setNotificationsError] = useState("");
-  const notificationsRef = useRef(null);
-
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationCount = notifications.reduce((sum, item) => sum + (Number(item.count) || 0), 0);
   const loadNotifications = useCallback(async () => {
     if (!token) return;
-    setNotificationsError("");
     try {
-      const response = await fetch(
-        "http://127.0.0.1:8000/api/admin/notifications",
-        {
-          headers: {
-            Accept: "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const response = await fetch("http://127.0.0.1:8000/api/admin/notifications", {
+        headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+      });
       const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.message || "Unable to load admin notifications.");
+      if (response.ok) {
+        const items = payload.items || [];
+        setNotifications((current) => JSON.stringify(current) === JSON.stringify(items) ? current : items);
       }
-      setNotifications(payload.items || []);
-      setNotificationCount(Number(payload.total) || 0);
-    } catch (error) {
-      setNotificationsError(error.message);
-    } finally {
-      setNotificationsLoading(false);
+    } catch {
+      // Preserve the last successful counts while the server is temporarily unavailable.
     }
   }, [token]);
 
   useEffect(() => {
     const timer = window.setInterval(
       () => setCurrentDateTime(new Date()),
-      1000,
+      60000,
     );
     return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {
-    const initialRefresh = window.setTimeout(loadNotifications, 0);
-    const refresh = window.setInterval(loadNotifications, 60000);
-    return () => {
-      window.clearTimeout(initialRefresh);
-      window.clearInterval(refresh);
-    };
+    loadNotifications();
+    const refresh = window.setInterval(loadNotifications, 10000);
+    return () => window.clearInterval(refresh);
   }, [loadNotifications]);
-
-  useEffect(() => {
-    if (!notificationsOpen) return undefined;
-    const closeOnOutsideClick = (event) => {
-      if (!notificationsRef.current?.contains(event.target)) {
-        setNotificationsOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
-  }, [notificationsOpen]);
 
   return (
     <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-7 lg:px-9">
@@ -437,128 +409,34 @@ function AdminHeader({ user, token, activePanel, onMenu, onNavigate }) {
                   timeZone: "Asia/Manila",
                   hour: "2-digit",
                   minute: "2-digit",
-                  second: "2-digit",
                 })}{" "}
                 PHT
               </time>
             </div>
           </div>
 
-          <div className="relative" ref={notificationsRef}>
+          <div className="relative">
             <button
               type="button"
-              onClick={() => {
-                const opening = !notificationsOpen;
-                setNotificationsOpen(opening);
-                if (opening) {
-                  setNotificationsLoading(true);
-                  loadNotifications();
-                }
-              }}
-              className={`relative flex h-10 w-10 items-center justify-center rounded-xl border bg-white text-[#2455D6] shadow-sm transition ${
-                notificationsOpen
-                  ? "border-[#2455D6] ring-2 ring-[#2455D6]/10"
-                  : "border-slate-200 hover:border-[#2455D6]"
-              }`}
-              aria-label={
-                notificationCount
-                  ? `Notifications, ${notificationCount} items need attention`
-                  : "Notifications"
-              }
+              onClick={() => setNotificationsOpen((open) => !open)}
+              className="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-[#2455D6] shadow-sm hover:border-[#2455D6]"
+              aria-label={notificationCount ? `Notifications, ${notificationCount} items need attention` : "Notifications"}
               aria-expanded={notificationsOpen}
               aria-controls="admin-notifications-panel"
             >
-              <Bell className="h-4 w-4" aria-hidden="true" />
-              {notificationCount > 0 && (
-                <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white ring-2 ring-white">
-                  {notificationCount > 99 ? "99+" : notificationCount}
-                </span>
-              )}
+              <Bell size={17} aria-hidden="true" />
+              {notificationCount > 0 && <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white ring-2 ring-white">{notificationCount > 99 ? "99+" : notificationCount}</span>}
             </button>
             {notificationsOpen && (
-              <section
-                id="admin-notifications-panel"
-                className="absolute right-0 z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-xl"
-                aria-label="Admin notifications"
-              >
-                <div className="border-b border-slate-100 px-4 py-3">
-                  <h2 className="text-sm font-bold text-[#172B4D]">
-                    Work requiring attention
-                  </h2>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    Open items across admin queues
-                  </p>
-                </div>
-                {notificationsError ? (
-                  <div className="p-4">
-                    <p role="alert" className="text-xs leading-5 text-red-700">
-                      {notificationsError}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNotificationsLoading(true);
-                        loadNotifications();
-                      }}
-                      className="mt-2 text-xs font-bold text-[#2455D6] hover:underline"
-                    >
-                      Try again
-                    </button>
-                  </div>
-                ) : notificationsLoading && !notifications.length ? (
-                  <p className="px-4 py-6 text-center text-xs text-slate-500" role="status">
-                    Checking admin queues...
-                  </p>
-                ) : notifications.length ? (
-                  <ul className="max-h-[min(60vh,24rem)] overflow-y-auto py-1">
-                    {notifications.map((item) => (
-                      <li key={item.type}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setNotificationsOpen(false);
-                            onNavigate(item.path);
-                          }}
-                          className="flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-[#F7F9FC] focus:bg-[#F7F9FC] focus:outline-none"
-                        >
-                          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#EEF4FF] text-[#2455D6]">
-                            <Bell className="h-4 w-4" aria-hidden="true" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex items-center justify-between gap-2">
-                              <span className="text-xs font-bold text-[#172B4D]">
-                                {item.title}
-                              </span>
-                              <span className="rounded-full bg-[#FFF0F0] px-2 py-0.5 text-[10px] font-bold text-[#E45757]">
-                                {item.count}
-                              </span>
-                            </span>
-                            <span className="mt-1 block text-xs leading-5 text-slate-500">
-                              {item.message}
-                            </span>
-                            {item.created_at && (
-                              <time
-                                dateTime={item.created_at}
-                                className="mt-1 block text-[10px] text-slate-400"
-                              >
-                                Latest: {formatNotificationTime(item.created_at)}
-                              </time>
-                            )}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="px-4 py-7 text-center text-xs leading-5 text-slate-500">
-                    No outstanding admin tasks. New items will appear here.
-                  </p>
-                )}
-                <div className="border-t border-slate-100 px-4 py-2">
-                  <p className="text-[10px] text-slate-400">
-                    Updates automatically every minute
-                  </p>
-                </div>
+              <section id="admin-notifications-panel" className="absolute right-0 z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-xl" aria-label="Admin notifications">
+                <div className="border-b border-slate-100 px-4 py-3"><h2 className="text-sm font-bold text-[#172B4D]">Work requiring attention</h2><p className="mt-0.5 text-xs text-slate-500">Open items across admin queues</p></div>
+                {notifications.length ? <ul className="max-h-[min(60vh,24rem)] overflow-y-auto py-1">{notifications.map((item) => (
+                  <li key={item.type}><button type="button" onClick={() => { setNotificationsOpen(false); onNavigate(item.path); }} className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-[#F7F9FC]">
+                    <span><span className="block text-xs font-bold text-[#172B4D]">{item.title}</span><span className="mt-1 block text-xs text-slate-500">{item.message}</span></span>
+                    <span className="rounded-full bg-[#FFF0F0] px-2 py-0.5 text-[10px] font-bold text-[#E45757]">{item.count}</span>
+                  </button></li>
+                ))}</ul> : <p className="px-4 py-7 text-center text-xs text-slate-500">No outstanding admin tasks.</p>}
+                <div className="border-t border-slate-100 px-4 py-2 text-[10px] text-slate-400">Updates automatically</div>
               </section>
             )}
           </div>
@@ -579,14 +457,6 @@ function AdminHeader({ user, token, activePanel, onMenu, onNavigate }) {
       </div>
     </header>
   );
-}
-
-function formatNotificationTime(value) {
-  return new Intl.DateTimeFormat("en-PH", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: "Asia/Manila",
-  }).format(new Date(value));
 }
 
 export default AdminLayout;

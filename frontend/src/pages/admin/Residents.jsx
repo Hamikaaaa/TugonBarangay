@@ -44,10 +44,9 @@ function Residents() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
 
-  const loadDashboardStats = useCallback(async () => {
+  const loadDashboardStats = useCallback(async (silent = false) => {
     if (!token || !isDashboard) return;
-    setLoading(true);
-    setError("");
+    if (!silent) { setLoading(true); setError(""); }
     try {
       const response = await fetch(`${API_URL}/admin/residents/registry-stats`, {
         headers: authHeaders(token),
@@ -58,16 +57,15 @@ function Residents() {
       }
       setDashboardStats(payload);
     } catch (loadError) {
-      setError(loadError.message);
+      if (!silent) setError(loadError.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [isDashboard, token]);
 
-  const loadRegistry = useCallback(async () => {
+  const loadRegistry = useCallback(async (silent = false) => {
     if (!token || isVerification || isDashboard) return;
-    setLoading(true);
-    setError("");
+    if (!silent) { setLoading(true); setError(""); }
     try {
       const query = new URLSearchParams({
         page: String(page),
@@ -86,16 +84,15 @@ function Residents() {
       setLastPage(payload.last_page || 1);
       setTotal(payload.total || 0);
     } catch (loadError) {
-      setError(loadError.message);
+      if (!silent) setError(loadError.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [isDashboard, isVerification, page, search, token]);
 
-  const loadPendingResidents = useCallback(async () => {
+  const loadPendingResidents = useCallback(async (silent = false) => {
     if (!token || isDashboard || !isVerification) return;
-    setLoading(true);
-    setError("");
+    if (!silent) { setLoading(true); setError(""); }
     try {
       const response = await fetch(`${API_URL}/admin/pending-residents`, {
         headers: authHeaders(token),
@@ -106,15 +103,15 @@ function Residents() {
       }
       setPendingResidents(payload);
     } catch (loadError) {
-      setError(loadError.message);
+      if (!silent) setError(loadError.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [isDashboard, isVerification, token]);
 
-  const loadAccounts = useCallback(async () => {
+  const loadAccounts = useCallback(async (silent = false) => {
     if (!token || !isAccounts) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const query = new URLSearchParams({ page: String(page), per_page: "50" });
       if (search) query.set("search", search);
@@ -124,8 +121,8 @@ function Residents() {
       setAccounts(payload.data || []);
       setAccountLastPage(payload.last_page || 1);
       setAccountTotal(payload.total || 0);
-    } catch (loadError) { setError(loadError.message); }
-    finally { setLoading(false); }
+    } catch (loadError) { if (!silent) setError(loadError.message); }
+    finally { if (!silent) setLoading(false); }
   }, [isAccounts, page, search, token]);
 
   useEffect(() => {
@@ -135,6 +132,18 @@ function Residents() {
     else if (isAccounts) loadAccounts();
     else if (isVerification) loadPendingResidents();
     else loadRegistry();
+  }, [isDashboard, isAccounts, isVerification, loadAccounts, loadDashboardStats, loadPendingResidents, loadRegistry]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      if (isDashboard) loadDashboardStats(true);
+      else if (isAccounts) loadAccounts(true);
+      else if (isVerification) loadPendingResidents(true);
+      else loadRegistry(true);
+    };
+    const timer = window.setInterval(refresh, 10000);
+    return () => window.clearInterval(timer);
   }, [isDashboard, isAccounts, isVerification, loadAccounts, loadDashboardStats, loadPendingResidents, loadRegistry]);
 
   const setAccountActive = async (account) => {
