@@ -34,6 +34,9 @@ const DOCUMENT_TYPES = [
   { label: "Business Clearance", value: "Business Permit" },
   { label: "Certificate of Good Moral Character", value: "Certificate of Good Moral Character" },
   { label: "First-Time Jobseeker Certification", value: "First-Time Jobseeker Certification" },
+  { label: "Cedula (Community Tax Certificate)", value: "Cedula" },
+  { label: "Fencing Permit", value: "Fencing Permit" },
+  { label: "Construction Permit", value: "Construction Permit" },
 ];
 const DEFAULT_DOCUMENT_TYPES = DOCUMENT_TYPES.filter((document) => document.value);
 
@@ -62,6 +65,7 @@ Object.assign(DOCUMENT_LABELS, {
   "Barangay Certificate": "Barangay Certificate",
   "Barangay Indigency": "Certificate of Indigency",
   "First-Time Jobseeker Certification": "First-Time Job Seeker Certification",
+  Cedula: "Cedula (Community Tax Certificate)",
 });
 
 const DOCUMENT_TYPE_ICONS = {
@@ -70,6 +74,9 @@ const DOCUMENT_TYPE_ICONS = {
   "Business Permit": BriefcaseBusiness,
   "Certificate of Good Moral Character": BadgeCheck,
   "First-Time Jobseeker Certification": BriefcaseBusiness,
+  Cedula: FileText,
+  "Fencing Permit": FileText,
+  "Construction Permit": FileText,
   "Barangay Certificate": FileCheck2,
   "Barangay Indigency": FileCheck2,
 };

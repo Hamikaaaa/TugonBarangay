@@ -107,10 +107,26 @@ class AdminController extends Controller
             });
         }
 
-        return $query
+        $page = $query
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->paginate($validated['per_page'] ?? 25);
+
+        $registryIdentityHashes = $page->getCollection()
+            ->map(fn (BarangayRegistry $record) => hash('sha256', 'registry:'.$record->id));
+        $availedIdentityHashes = DB::table('first_time_jobseeker_availments')
+            ->whereIn('identity_hash', $registryIdentityHashes)
+            ->pluck('identity_hash')
+            ->flip();
+
+        $page->getCollection()->transform(function (BarangayRegistry $record) use ($availedIdentityHashes) {
+            $identityHash = hash('sha256', 'registry:'.$record->id);
+            $record->setAttribute('first_time_jobseeker_available', !$availedIdentityHashes->has($identityHash));
+
+            return $record;
+        });
+
+        return $page;
     }
 
     public function residentAccounts(Request $request)
