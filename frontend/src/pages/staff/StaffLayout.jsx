@@ -2,16 +2,34 @@ import { useEffect, useState } from "react";
 import { Archive, CalendarDays, CheckCircle2, ChevronDown, Clock3, FileText, LayoutDashboard, LoaderCircle, LogOut, Menu, MessageSquareWarning, X, XCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
-function StaffLayout({ title, navigationItems, activePath, onNavigate, selectedNavigationChild, onNavigationChildSelect, children }) {
-  const { user, logout } = useAuth();
+function StaffLayout({ title, navigationItems, notificationCounts = {}, activePath, onNavigate, selectedNavigationChild, onNavigationChildSelect, children }) {
+  const { user, token, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [expandedNavigation, setExpandedNavigation] = useState(null);
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
+  const [pendingComplaintCount, setPendingComplaintCount] = useState(0);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setCurrentDateTime(new Date()), 1000);
+    const timer = window.setInterval(() => setCurrentDateTime(new Date()), 60000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!token || user?.designation !== "Complaint Management Officer") return undefined;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/staff/complaints?per_page=1", {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        const payload = await response.json();
+        if (active && response.ok) setPendingComplaintCount(Number(payload.counts?.pending || 0));
+      } catch { /* Keep the latest count during a temporary connection issue. */ }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 10000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [token, user?.designation]);
 
   return (
     <div className="min-h-screen bg-[#F5F7FB] text-[#172B4D]">
@@ -80,6 +98,14 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, selectedN
                       <Icon size={15} />
                     </span>
                     <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">{item.label}</span>
+                    {user?.designation === "Document Request Officer" && notificationCounts[item.path] > 0 && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white" aria-label={`${notificationCounts[item.path]} unseen pending requests`}>
+                        {notificationCounts[item.path] > 99 ? "99+" : notificationCounts[item.path]}
+                      </span>
+                    )}
+                    {item.label === "Pending" && pendingComplaintCount > 0 && user?.designation === "Complaint Management Officer" && (
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white" aria-label={`${pendingComplaintCount} pending complaints`}>{pendingComplaintCount > 99 ? "99+" : pendingComplaintCount}</span>
+                    )}
                     {hasChildren ? (
                       <ChevronDown size={15} className={`shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} />
                     ) : active ? (
@@ -169,7 +195,6 @@ function StaffLayout({ title, navigationItems, activePath, onNavigate, selectedN
                       timeZone: "Asia/Manila",
                       hour: "2-digit",
                       minute: "2-digit",
-                      second: "2-digit",
                     })} PHT
                   </time>
                 </div>

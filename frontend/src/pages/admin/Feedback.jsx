@@ -36,10 +36,9 @@ function Feedback() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadFeedback = useCallback(async () => {
+  const loadFeedback = useCallback(async (silent = false) => {
     if (!token) return;
-    setLoading(true);
-    setError("");
+    if (!silent) { setLoading(true); setError(""); }
 
     const query = new URLSearchParams({
       page: String(page),
@@ -65,9 +64,9 @@ function Feedback() {
       setLastPage(payload.last_page || 1);
       setTotal(payload.total || 0);
     } catch (loadError) {
-      setError(loadError.message);
+      if (!silent) setError(loadError.message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [page, rating, search, serviceType, token]);
 
@@ -75,6 +74,13 @@ function Feedback() {
     // Fetch feedback whenever the filters or current page change.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadFeedback();
+  }, [loadFeedback]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") loadFeedback(true);
+    }, 10000);
+    return () => window.clearInterval(timer);
   }, [loadFeedback]);
 
   const applySearch = (event) => {

@@ -175,8 +175,24 @@ return new class extends Migration
                 'fee_mode' => 'fixed',
                 'fee' => 0,
                 'one_time' => true,
-                'applicant_fields' => $commonPersonalFields,
-                'fields' => [$purposeField, $purposeOtherField],
+                'applicant_fields' => array_merge(
+                    array_values(array_filter(
+                        $commonPersonalFields,
+                        fn (array $field) => in_array($field['key'], ['full_name', 'purok'], true),
+                    )), [[
+                        'key' => 'age',
+                        'label' => 'Age',
+                        'type' => 'number',
+                        'required' => true,
+                        'min' => 0,
+                        'max' => 150,
+                        'readOnly' => true,
+                        'section' => 'applicant',
+                    ]],
+                ),
+                'fields' => [
+                    ['key' => 'years_of_residency', 'label' => 'Years of residency', 'type' => 'number', 'required' => true, 'min' => 0, 'max' => 150, 'step' => 1, 'section' => 'details'],
+                ],
                 'requirements' => $requirements,
             ],
         ];

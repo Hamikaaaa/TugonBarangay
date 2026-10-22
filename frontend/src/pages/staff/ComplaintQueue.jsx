@@ -164,6 +164,13 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
   }, [loadComplaints]);
 
   useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible" && !submitting && !selected && !complaintId) loadComplaints();
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [complaintId, loadComplaints, selected, submitting]);
+
+  useEffect(() => {
     if (!isAdmin || !selected) return undefined;
     const closeOnEscape = (event) => {
       if (event.key === "Escape") setSelected(null);
