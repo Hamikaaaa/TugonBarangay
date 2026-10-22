@@ -336,6 +336,32 @@ const DOCUMENT_TYPES = [
       },
     ],
   },
+  {
+    label: "Certificate of Good Moral Character",
+    value: "Certificate of Good Moral Character",
+    fee: 0,
+    applicantFields: ["full_name", "address", "purok", "date_of_birth", "sex"],
+    fields: [
+      {
+        key: "purpose",
+        label: "Purpose of request",
+        type: "select",
+        options: GENERAL_REQUEST_PURPOSES,
+      },
+      {
+        key: "purpose_other",
+        label: "Please specify your purpose",
+        type: "text",
+        submit: false,
+        showWhen: { key: "purpose", value: "Other" },
+        requiredWhen: { key: "purpose", value: "Other" },
+      },
+    ],
+    requirements: [
+      { key: "purok_certificate", label: "Purok Certificate", required: true },
+      { key: "valid_id", label: "Valid government-issued ID", required: true },
+    ],
+  },
 ];
 
 function conditionMatches(condition, values) {

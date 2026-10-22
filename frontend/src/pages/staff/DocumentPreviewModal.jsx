@@ -25,6 +25,23 @@ const TEMPLATE_TYPES = {
   "First-Time Job Seeker Certification": "jobseeker",
 };
 
+function getDocumentDate(request) {
+  const candidate = request?.released_at || request?.document_generated_at || request?.created_at;
+  const date = candidate ? new Date(candidate) : new Date();
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function formatFieldValue(value) {
+  if (value === null || value === undefined || value === "") return "Not provided";
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
 function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
   const { token, user } = useAuth();
   const [editing, setEditing] = useState(false);
@@ -120,12 +137,12 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
   const templateType = TEMPLATE_TYPES[documentType] || "generic";
   const label = request.document_type_label || DOCUMENT_LABELS[documentType] || documentType;
   const photoPath = request.details?.requirements?.applicant_photo?.path;
-  const applicantPhotoUrl = applicantPhoto?.path === photoPath ? applicantPhoto.url : "";
+  const applicantPhotoUrl = applicantPhoto && applicantPhoto.path === photoPath ? applicantPhoto.url : "";
   const paperSize = ["a4", "legal"].includes(request.type?.paper_size) ? request.type.paper_size : "letter";
   const residentName = [fields.first_name, fields.middle_name, fields.last_name]
     .filter(Boolean)
     .join(" ") || fields.full_name || request.resident?.name || "Resident Name";
-  const issueDate = new Date(request.released_at || request.document_generated_at || request.created_at);
+  const issueDate = getDocumentDate(request);
   const issueDateParts = new Intl.DateTimeFormat("en-PH", {
     timeZone: "Asia/Manila",
     year: "numeric",
@@ -305,7 +322,7 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
 }
 
 function renderDocumentTemplate(template, fields, request, residentName, label, formattedDate) {
-  const issuedDate = new Date(request.released_at || request.document_generated_at || request.created_at);
+  const issuedDate = getDocumentDate(request);
   const issuedDayValue = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", day: "numeric" }).format(issuedDate);
   const birthDate = fields.date_of_birth ? new Date(`${String(fields.date_of_birth).slice(0, 10)}T00:00:00`) : null;
   const sex = String(fields.sex || "").trim().toLowerCase();
@@ -559,7 +576,7 @@ function ClearanceDetail({ label, value }) {
 }
 
 function BarangayClearanceCertificate({ request, fields, applicantPhoto, signatoryName, narrative }) {
-  const issuedDate = new Date(request.released_at || request.document_generated_at || request.created_at);
+  const issuedDate = getDocumentDate(request);
   const dateParts = new Intl.DateTimeFormat("en-PH", {
     timeZone: "Asia/Manila",
     year: "numeric",
@@ -792,7 +809,7 @@ function DetailLine({ label, value, fieldName, editing, onFieldChange }) {
             className="w-full rounded border border-[#F1D9A8] bg-white px-2 py-1.5 text-[10px] font-semibold text-slate-700 outline-none focus:border-[#805900] focus:ring-2 focus:ring-[#805900]/15"
           />
         ) : (
-          value || "—"
+          formatFieldValue(value)
         )}
       </dd>
     </div>
