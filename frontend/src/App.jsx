@@ -29,11 +29,7 @@ function App() {
           {/* Public Routes */}
           <Route
             path="/login"
-            element={
-              <PublicOnlyRoute>
-                <Login />
-              </PublicOnlyRoute>
-            }
+            element={<Login />}
           />
           <Route
             path="/register"

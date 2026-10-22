@@ -1,5 +1,10 @@
+fix-document-templates
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+
+ main
 import {
   inputClass,
   primaryButtonClass,
@@ -59,6 +64,9 @@ function getApplicantDefaults(user = {}) {
     province: user.province || "Cebu",
     business_contact_number: user.mobile_number || "",
     business_email_address: user.email || "",
+    business_purok: user.purok || "",
+    business_address: user.address || "",
+    tax_year: String(new Date().getFullYear()),
   };
 }
 
@@ -246,94 +254,53 @@ const DOCUMENT_TYPES = [
     ],
   },
   {
-    label: "Business Permit",
-    notice:
-      "This request covers barangay business clearance. The municipal Mayor's/Business Permit is handled separately.",
-    applicantFields: ["full_name", "contact_number", "email_address"],
+    label: "Business Clearance",
+    value: "Business Permit",
+    notice: "For new applications, attach a Purok Certification, Cedula, applicant ID, DTI/SEC registration, and a picture of the business. If rented, attach the contract of lease. If someone other than the owner is applying, attach the owner's authorization and both required IDs. For renewals, attach the previous Business Clearance.",
+    applicantFields: ["full_name", "address", "contact_number", "email_address", "applicant_is_owner", "authorized_person_name"],
+    applicantFieldConfigs: [
+      { key: "full_name", label: "Name of taxpayer / applicant", type: "text", required: true },
+      { key: "address", label: "Complete owner's address", type: "text", required: true },
+      { key: "contact_number", label: "Contact number", type: "tel", required: true },
+      { key: "email_address", label: "Email address", type: "email", required: true },
+      { key: "applicant_is_owner", label: "Are you the business owner?", type: "select", options: ["Yes", "No"], required: true, group: "Applicant authorization" },
+      { key: "authorized_person_name", label: "Authorized person's name", type: "text", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" }, group: "Applicant authorization" },
+    ],
     fields: [
-      {
-        key: "business_ownership",
-        label: "Business ownership",
-        type: "select",
-        options: [
-          "Sole Proprietorship",
-          "Partnership",
-          "Corporation",
-          "Cooperative",
-          "Other",
-        ],
-      },
-      { key: "business_name", label: "Business name", type: "text" },
-      { key: "business_type", label: "Business type", type: "text" },
-      { key: "nature_of_business", label: "Nature of business", type: "text" },
-      {
-        key: "business_street_number",
-        label: "Business street/house number (if needed)",
-        type: "text",
-        required: false,
-      },
-      { key: "business_purok", label: "Purok", type: "text" },
-      {
-        key: "estimated_investment",
-        label: "Capital/estimated investment (PHP)",
-        type: "number",
-        min: "0",
-        step: "0.01",
-      },
-      {
-        key: "number_of_employees",
-        label: "Number of employees",
-        type: "number",
-        min: "0",
-        step: "1",
-      },
-      {
-        key: "business_start_date",
-        label: "Date business will start",
-        type: "date",
-      },
-      {
-        key: "business_contact_number",
-        label: "Business contact number",
-        type: "tel",
-      },
-      {
-        key: "business_email_address",
-        label: "Business email address",
-        type: "email",
-      },
+      { key: "application_type", label: "Application", type: "select", options: ["New", "Renewal"], required: true, group: "Application" },
+      { key: "tax_year", label: "Tax year", type: "number", min: 2020, step: 1, required: true, group: "Application" },
+      { key: "business_ownership", label: "Type of business ownership", type: "select", options: ["Sole Proprietorship", "Partnership", "Corporation", "Cooperative"], required: true, group: "Business information" },
+      { key: "business_name", label: "Business name", type: "text", required: true, group: "Business information" },
+      { key: "tradename_franchise_name", label: "Trade name / franchise name", type: "text", required: false, group: "Business information" },
+      { key: "nature_of_business", label: "Nature of business", type: "text", required: true, group: "Business information" },
+      { key: "business_address", label: "Complete business address", type: "text", required: true, group: "Business information" },
+      { key: "business_purok", label: "Business Purok", type: "text", required: true, group: "Business information" },
+      { key: "business_area_sqm", label: "Business area (sq. m.)", type: "number", min: 0, step: "0.01", required: true, group: "Business information" },
+      { key: "place_of_business", label: "Place of business", type: "select", options: ["Owned", "Rented"], required: true, group: "Business information" },
+      { key: "monthly_rental", label: "Monthly rental (PHP)", type: "number", min: 0, step: "0.01", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" }, group: "Rental information" },
+      { key: "lessor_name", label: "Lessor's name", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" }, group: "Rental information" },
+      { key: "lessor_address", label: "Lessor's address", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" }, group: "Rental information" },
+      { key: "amendment_type", label: "Ownership amendment", type: "select", options: ["None", "From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"], required: true, group: "Amendments" },
+      { key: "amendment_owner_from", label: "Current owner / business type", type: "text", required: false, showWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, requiredWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, group: "Amendments" },
+      { key: "amendment_owner_to", label: "New owner(s) / business type", type: "text", required: false, showWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, requiredWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, group: "Amendments" },
+      { key: "transfer_type", label: "Transfer type", type: "select", options: ["None", "Location", "Ownership"], required: true, group: "Transfers" },
+      { key: "transfer_location_from", label: "Current business location", type: "text", required: false, showWhen: { key: "transfer_type", value: "Location" }, requiredWhen: { key: "transfer_type", value: "Location" }, group: "Transfers" },
+      { key: "transfer_location_to", label: "Transfer business to this location", type: "text", required: false, showWhen: { key: "transfer_type", value: "Location" }, requiredWhen: { key: "transfer_type", value: "Location" }, group: "Transfers" },
+      { key: "transfer_owner_from", label: "Current owner / ownership", type: "text", required: false, showWhen: { key: "transfer_type", value: "Ownership" }, requiredWhen: { key: "transfer_type", value: "Ownership" }, group: "Transfers" },
+      { key: "transfer_owner_to", label: "Transfer ownership to (person / entity)", type: "text", required: false, showWhen: { key: "transfer_type", value: "Ownership" }, requiredWhen: { key: "transfer_type", value: "Ownership" }, group: "Transfers" },
+      { key: "taxpayer_position", label: "Position", type: "text", required: false, group: "Attestation" },
     ],
     requirements: [
-      { key: "valid_id", label: "Valid government-issued ID", required: true },
-      {
-        key: "business_registration",
-        label: "Business registration (DTI, SEC, or CDA as applicable)",
-        required: false,
-        requiredWhen: {
-          key: "business_ownership",
-          value: [
-            "Sole Proprietorship",
-            "Partnership",
-            "Corporation",
-            "Cooperative",
-          ],
-        },
-      },
-      {
-        key: "lease_or_proof_of_ownership",
-        label: "Lease contract or proof of ownership",
-        required: false,
-      },
-      {
-        key: "community_tax_certificate",
-        label: "Community Tax Certificate",
-        required: false,
-      },
-      {
-        key: "other_business_permits",
-        label: "Other permits, if applicable",
-        required: false,
-      },
+      { key: "purok_certification", label: "Purok Certification", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "cedula_copy", label: "Cedula (Community Tax Certificate)", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "applicant_id", label: "Applicant's ID", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "dti_sec_registration", label: "DTI / SEC registration", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "business_picture", label: "Picture of the business", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "previous_business_clearance", label: "Previous Business Clearance", required: false, showWhen: { key: "application_type", value: "Renewal" }, requiredWhen: { key: "application_type", value: "Renewal" } },
+      { key: "lease_contract", label: "Contract of lease", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
+      { key: "authorization_letter", label: "Photocopy of owner's signed authorization", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" } },
+      { key: "authorized_person_id", label: "Photocopy of authorized person's ID with 3 specimen signatures", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" } },
+      { key: "business_owner_id", label: "Photocopy of business owner's ID with 3 specimen signatures", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" } },
     ],
   },
   {
@@ -482,6 +449,7 @@ function Documents({ requests, token, onRefresh, user }) {
   const [messageTone, setMessageTone] = useState("info");
   const [submitting, setSubmitting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [businessAttestationOpen, setBusinessAttestationOpen] = useState(false);
   const [history, setHistory] = useState(requests);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyMeta, setHistoryMeta] = useState({
@@ -752,8 +720,11 @@ function Documents({ requests, token, onRefresh, user }) {
           formData.append(`form_fields[${key}]`, value.trim());
         }
       });
+      const visibleRequirementKeys = new Set(visibleRequirements.map((requirement) => requirement.key));
       Object.entries(requirementFiles).forEach(([key, file]) => {
-        if (file) formData.append(`requirements[${key}]`, file);
+        if (file && visibleRequirementKeys.has(key)) {
+          formData.append(`requirements[${key}]`, file);
+        }
       });
 
       const endpoint = editingRequest
@@ -896,11 +867,31 @@ function Documents({ requests, token, onRefresh, user }) {
                 value={documentType}
                 disabled={catalogTypes === null || Boolean(editingRequest)}
                 onChange={(event) => {
+fix-document-templates
+                  const nextDocumentType = event.target.value;
+                  setDocumentType(nextDocumentType);
+                  const applicantDefaults = getApplicantDefaults(user);
+                  setFormFields({
+                    ...applicantDefaults,
+                    ...(nextDocumentType === "Business Permit"
+                      ? {
+                          full_name: "",
+                          address: "",
+                          contact_number: "",
+                          email_address: "",
+                          tax_year: "",
+                          business_address: "",
+                          business_purok: "",
+                        }
+                      : {}),
+                  });
+                  setRequirementFiles({});
                   closeApplicantCamera();
                   setCameraError("");
                   setDocumentType(event.target.value);
                   setFormFields(getApplicantDefaults(user));
                   clearRequirementFiles();
+main
                 }}
                 className={inputClass}
               >
@@ -1036,13 +1027,16 @@ function Documents({ requests, token, onRefresh, user }) {
                   Provide the information needed for this document.
                 </p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  {selectedDocument.fields
-                    .filter(
-                      (field) =>
-                        !field.showWhen ||
-                        conditionMatches(field.showWhen, formFields),
-                    )
-                    .map((field) => {
+                  {Object.entries(selectedDocument.fields
+                    .filter((field) => !field.showWhen || conditionMatches(field.showWhen, formFields))
+                    .reduce((groups, field) => {
+                      const group = field.group || "";
+                      (groups[group] ||= []).push(field);
+                      return groups;
+                    }, {}))
+                    .map(([group, fields]) => <Fragment key={group || "ungrouped"}>
+                    {group && <h4 className="-mb-2 border-b border-slate-100 pb-2 text-xs font-bold uppercase tracking-wide text-[#55708F] sm:col-span-2">{group}</h4>}
+                    {fields.map((field) => {
                         const required = field.requiredWhen
                           ? conditionMatches(field.requiredWhen, formFields)
                           : field.required !== false;
@@ -1088,8 +1082,17 @@ function Documents({ requests, token, onRefresh, user }) {
                         </label>
                       );
                     })}
+                    </Fragment>)}
                 </div>
-              </div>
+ fix-document-templates
+                {selectedDocument.value === "Business Permit" && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-slate-600">The attestation is optional to review and is not required to submit this online request.</p>
+                    <button type="button" onClick={() => setBusinessAttestationOpen(true)} className="min-h-9 rounded-lg border border-[#2455D6]/25 bg-white px-3 text-xs font-bold text-[#2455D6] hover:bg-blue-50">View optional attestation</button>
+                  </div>
+                </div>}
+              </div>}
+              </div>main
 
               <div className="mt-6 border-t border-slate-100 pt-5">
                 <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-end">
@@ -1378,6 +1381,24 @@ function Documents({ requests, token, onRefresh, user }) {
           </div>
         )}
       </section>
+      {businessAttestationOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setBusinessAttestationOpen(false); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="business-attestation-title" className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#2455D6]">Optional review</p>
+              <h2 id="business-attestation-title" className="mt-1 text-lg font-bold text-[#172B4D]">Attestation and Undertaking</h2>
+            </div>
+            <button type="button" onClick={() => setBusinessAttestationOpen(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
+          </div>
+          <div className="mt-5 space-y-4 text-sm leading-6 text-slate-700">
+            <p>I undertake to comply with the regulatory requirements and other deficiencies within 30 days from receipt of this application.</p>
+            <p>I understand that misrepresentation or falsification may be grounds for revocation of a business permit and closure of the business establishment, without prejudice to applicable civil or criminal action.</p>
+            <p>I certify that the information entered in this application is true and correct, and that I will comply with applicable laws, ordinances, policies, rules, and regulations.</p>
+            <p>If I am an authorized representative, I confirm that I have authority from the owner to transact and submit this application and receive notices on the owner's behalf.</p>
+          </div>
+          <p className="mt-5 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">This is an optional on-screen reference to the paper form's attestation. Signing the official form may still be required by the barangay.</p>
+        </section>
+      </div>}
       {feedbackOpen && (
         <FeedbackPrompt
           token={token}
