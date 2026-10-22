@@ -301,6 +301,18 @@ function DocumentTypes() {
     });
   };
 
+  const requirementConditionOptions = [...(draft?.applicant_fields || []), ...(draft?.fields || [])]
+    .filter((field) => field.type === "select")
+    .flatMap((field) => (field.options || []).map((value) => ({ key: field.key, value, label: `${field.label}: ${value}` })));
+  const conditionOptionValue = (condition) => condition?.key && condition.value !== undefined
+    ? `${condition.key}::${condition.value}`
+    : "";
+  const parseConditionOption = (value) => {
+    if (!value) return undefined;
+    const [key, ...parts] = value.split("::");
+    return { key, value: parts.join("::") };
+  };
+
   return (
     <AdminLayout title="Document Types">
       <section className="space-y-6 pt-6">
@@ -473,11 +485,25 @@ function DocumentTypes() {
               </div>
               <div className="space-y-2">
                 {draft.requirements.map((requirement, index) => (
-                  <div key={`${requirement.key}-${index}`} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto_auto]">
+                  <div key={`${requirement.key}-${index}`} className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
                     <input required aria-label="Attachment name" placeholder="For example, Government-issued ID" value={requirement.label} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value, key: makeFieldKey(event.target.value, `upload_${index + 1}`) } : item) }))} className={controlClass} />
                     <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={requirement.required} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, required: event.target.checked } : item) }))} />Required</label>
                     <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={requirement.enabled !== false} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: event.target.checked } : item) }))} />Show to residents</label>
                     <button type="button" onClick={() => removeEntry("requirements", index)} className="text-xs font-bold text-red-600">Remove</button>
+                    {requirementConditionOptions.length > 0 && <div className="grid gap-2 sm:col-span-4 sm:grid-cols-2">
+                      <label className="text-xs font-semibold text-slate-600">Show when
+                        <select aria-label={`Show ${requirement.label} when`} value={conditionOptionValue(requirement.showWhen)} onChange={(event) => { const condition = parseConditionOption(event.target.value); setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, showWhen: condition } : item) })); }} className={controlClass}>
+                          <option value="">Always</option>
+                          {requirementConditionOptions.map((option) => <option key={`show-${option.key}-${option.value}`} value={`${option.key}::${option.value}`}>{option.label}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-xs font-semibold text-slate-600">Required when
+                        <select aria-label={`Require ${requirement.label} when`} value={conditionOptionValue(requirement.requiredWhen)} onChange={(event) => { const condition = parseConditionOption(event.target.value); setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, requiredWhen: condition } : item) })); }} className={controlClass}>
+                          <option value="">Use required checkbox</option>
+                          {requirementConditionOptions.map((option) => <option key={`required-${option.key}-${option.value}`} value={`${option.key}::${option.value}`}>{option.label}</option>)}
+                        </select>
+                      </label>
+                    </div>}
                   </div>
                 ))}
                 {draft.requirements.length === 0 && <p className="text-xs text-slate-400">No upload requirements configured.</p>}
@@ -663,6 +689,7 @@ function SchemaEditor({ title, description, section, fields, changeField, addFie
             <select aria-label="Answer format" value={field.type} onChange={(event) => changeField(section, index, { type: event.target.value })} className={controlClass}>
               {fieldTypes.map((type) => <option key={type} value={type}>{fieldTypeLabels[type]}</option>)}
             </select>
+            <input aria-label="Field group" placeholder="Group heading (optional)" value={field.group || ""} onChange={(event) => changeField(section, index, { group: event.target.value || undefined })} className={controlClass} />
             {field.type === "number" && (
               <div className="grid grid-cols-3 gap-2 sm:col-span-2 lg:col-span-4">
                 <input type="number" aria-label="Minimum value" placeholder="Minimum" value={field.min ?? ""} onChange={(event) => changeField(section, index, { min: event.target.value === "" ? undefined : Number(event.target.value) })} className={controlClass} />
