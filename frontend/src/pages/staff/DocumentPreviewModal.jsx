@@ -661,13 +661,17 @@ function DocumentPaper({ request, templateType, applicantPhoto, label, residentN
     content_bottom: Math.min(38, Math.max(13, Number(savedLayout.content_bottom))),
     font_size_pt: Math.min(14, Math.max(10, Number(savedLayout.font_size_pt))),
   };
-  const generatedTemplateBody = request.type?.template
-    ? renderDocumentTemplate(request.type.template, fields, request, residentName, label, formattedDate)
+  const configuredTemplate = typeof request.type?.template === "string" ? request.type.template : "";
+  const hasConfiguredTemplate = request.type?.template_enabled !== false && Boolean(configuredTemplate.trim());
+  const generatedTemplateBody = hasConfiguredTemplate
+    ? renderDocumentTemplate(configuredTemplate, fields, request, residentName, label, formattedDate)
     : "";
+  const savedDocumentBody = typeof fields.document_body === "string" ? fields.document_body.trim() : "";
   const templateBody = request.document_type === "Barangay Certification"
     ? syncClearanceBody(generatedTemplateBody, fields, generatedTemplateBody)
-    : fields.document_body || generatedTemplateBody;
+    : savedDocumentBody || generatedTemplateBody;
   const isClearance = request.document_type === "Barangay Certification";
+  const useConfiguredTemplate = hasConfiguredTemplate && Boolean(templateBody.trim());
   const paper = (
     <article data-paper-size={paperSize} className={`document-paper relative mx-auto flex min-h-[11in] w-full flex-col overflow-hidden bg-white shadow-sm ${isClearance ? "document-paper--clearance" : ""} ${paperDesign ? "document-paper--designed p-0" : isClearance ? "p-[0.3in]" : "p-[0.55in]"}`} style={{ "--paper-width": dimensions.width, "--paper-height": dimensions.height, "--document-text-color": layout.text_color, "--document-accent-color": layout.accent_color, width: dimensions.width, height: dimensions.height, minHeight: dimensions.height, color: layout.text_color }}>
       {paperDesign && <img src={paperDesign} alt="Uploaded document paper design" className="pointer-events-none absolute inset-0 h-full w-full object-fill" style={{ printColorAdjust: "exact", WebkitPrintColorAdjust: "exact" }} />}
@@ -699,7 +703,7 @@ function DocumentPaper({ request, templateType, applicantPhoto, label, residentN
             </div>
           </div>
         )}
-        {isClearance && !editing && request.type?.template && request.type?.template_enabled !== false ? (
+        {isClearance && !editing && useConfiguredTemplate ? (
           <div className="document-wording text-[9pt] leading-[1.45] text-black">
             <AdminClearanceTemplate template={templateBody} applicantPhoto={applicantPhoto} />
           </div>
@@ -711,7 +715,7 @@ function DocumentPaper({ request, templateType, applicantPhoto, label, residentN
             signatoryName={getPunongBarangayName(request.type?.template)}
             narrative={templateBody.split(/\n\s*\n/)[0]}
           />
-        ) : request.type?.template && request.type?.template_enabled !== false ? (
+        ) : useConfiguredTemplate ? (
           <div className="document-wording whitespace-pre-wrap" style={{ color: layout.text_color, fontSize: `${layout.font_size_pt}pt`, lineHeight: 1.55 }}>
             {editing ? (
               <textarea
