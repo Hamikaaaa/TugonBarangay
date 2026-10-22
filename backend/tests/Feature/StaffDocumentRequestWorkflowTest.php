@@ -2,7 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\BarangayRegistry;
+use App\Models\Complaint;
 use App\Models\DocumentRequest;
+use App\Models\DocumentRequestEvent;
 use App\Models\Resident;
 use App\Models\Staff;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -31,11 +34,13 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'name' => 'Document Officer',
             'email' => 'document-officer@example.com',
             'designation' => Staff::DOCUMENT_REQUEST_OFFICER,
+            'is_active' => true,
         ]);
         $this->complaintOfficer = Staff::factory()->create([
             'name' => 'Complaint Officer',
             'email' => 'complaint-officer@example.com',
             'designation' => Staff::COMPLAINT_MANAGEMENT_OFFICER,
+            'is_active' => true,
         ]);
         $this->resident = Resident::factory()->create([
             'name' => 'Resident User',
@@ -102,6 +107,192 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_job_seeker_request_uses_the_same_identity_verification_as_barangay_certificate(): void
+    {
+        $this->resident->update([
+            'name' => 'Jane A Doe',
+            'first_name' => 'Jane',
+            'middle_name' => 'A',
+            'last_name' => 'Doe',
+            'date_of_birth' => '1990-01-15',
+            'sex' => 'Female',
+            'purok' => 'Purok 1',
+            'address' => '123 Main Street',
+            'mobile_number' => '09171234567',
+        ]);
+        $fields = [
+            'full_name' => 'Jane A Doe',
+            'date_of_birth' => '1990-01-15',
+            'sex' => 'Female',
+            'purok' => 'Purok 1',
+            'address' => '123 Main Street',
+        ];
+        BarangayRegistry::create([
+            'first_name' => ' Jane ',
+            'middle_name' => 'A',
+            'last_name' => ' Doe ',
+            'date_of_birth' => '1990-01-15',
+            'sex' => 'Female',
+            'purok' => ' Purok 1 ',
+            'address' => '123 Main Street',
+            'mobile_number' => '09171234567',
+        ]);
+        $this->request->update([
+            'document_type' => 'Barangay Certificate',
+            'details' => ['form_fields' => $fields],
+        ]);
+        DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'document_type' => 'First-Time Jobseeker Certification',
+            'status' => 'pending',
+            'details' => ['form_fields' => $fields],
+        ]);
+        $this->documentOfficer->update(['is_active' => true]);
+        Sanctum::actingAs($this->documentOfficer);
+
+        $requests = collect(
+            $this->getJson('/api/staff/document-requests')
+                ->assertOk()
+                ->json('data'),
+        )->keyBy('document_type');
+
+        $certificateReview = $requests['Barangay Certificate']['identity_review'];
+        $jobSeekerReview = $requests['First-Time Jobseeker Certification']['identity_review'];
+
+        $this->assertTrue($certificateReview['ok']);
+        $this->assertSame($certificateReview, $jobSeekerReview);
+    }
+
+    public function test_job_seeker_identity_review_shows_differences_for_a_unique_registry_match(): void
+    {
+        $this->resident->update([
+            'first_name' => 'Jane',
+            'last_name' => 'Doe',
+            'date_of_birth' => '1990-01-15',
+            'sex' => 'Female',
+            'purok' => 'Purok 1',
+        ]);
+        BarangayRegistry::create([
+            'first_name' => 'Janet',
+            'last_name' => 'Doe',
+            'date_of_birth' => '1990-01-15',
+            'sex' => 'Female',
+            'purok' => 'Purok 1',
+            'mobile_number' => '09171234567',
+        ]);
+        $this->request->update([
+            'document_type' => 'First-Time Jobseeker Certification',
+            'details' => [
+                'form_fields' => [
+                    'full_name' => 'Jane Doe',
+                    'sex' => 'Female',
+                    'purok' => 'Purok 1',
+                ],
+            ],
+        ]);
+        $this->documentOfficer->update(['is_active' => true]);
+        Sanctum::actingAs($this->documentOfficer);
+
+        $review = $this->getJson('/api/staff/document-requests')
+            ->assertOk()
+            ->json('data.0.identity_review');
+
+        $this->assertTrue($review['registry_found']);
+        $this->assertFalse($review['ok']);
+        $this->assertFalse(collect($review['fields'])->firstWhere('key', 'full_name')['ok']);
+    }
+
+    public function test_job_seeker_identity_lookup_can_match_the_submitted_name_to_the_registry(): void
+    {
+        $this->resident->update([
+            'first_name' => 'Jane',
+            'last_name' => 'Smith',
+            'date_of_birth' => '1990-01-15',
+            'sex' => 'Female',
+            'purok' => 'Purok 1',
+        ]);
+        BarangayRegistry::create([
+            'first_name' => 'Jane',
+            'last_name' => 'Doe',
+            'date_of_birth' => '1990-01-15',
+            'sex' => 'Female',
+            'purok' => 'Purok 1',
+            'mobile_number' => '09171234567',
+        ]);
+        $this->request->update([
+            'document_type' => 'First-Time Jobseeker Certification',
+            'details' => [
+                'form_fields' => [
+                    'full_name' => 'Jane Doe',
+                    'date_of_birth' => '1990-01-15',
+                    'sex' => 'Female',
+                    'purok' => 'Purok 1',
+                ],
+            ],
+        ]);
+        $this->documentOfficer->update(['is_active' => true]);
+        Sanctum::actingAs($this->documentOfficer);
+
+        $review = $this->getJson('/api/staff/document-requests')
+            ->assertOk()
+            ->json('data.0.identity_review');
+
+        $this->assertTrue($review['registry_found']);
+        $this->assertFalse($review['ok']);
+        $this->assertSame(
+            'Jane Doe',
+            collect($review['fields'])->firstWhere('key', 'full_name')['registry'],
+        );
+    }
+
+    public function test_job_seeker_identity_confirms_when_only_the_registry_has_a_middle_name(): void
+    {
+        $this->resident->update([
+            'name' => 'Jamaica Sohon',
+            'first_name' => 'Jamaica',
+            'middle_name' => null,
+            'last_name' => 'Sohon',
+            'date_of_birth' => '2005-08-03',
+            'sex' => 'Female',
+            'purok' => 'Sunflower',
+            'address' => null,
+        ]);
+        BarangayRegistry::create([
+            'first_name' => 'Jamaica',
+            'middle_name' => 'Montillen',
+            'last_name' => 'Sohon',
+            'date_of_birth' => '2005-08-03',
+            'sex' => 'Female',
+            'purok' => 'Sunflower',
+            'address' => 'Pamela Street',
+            'mobile_number' => '09171234567',
+        ]);
+        $this->request->update([
+            'document_type' => 'First-Time Jobseeker Certification',
+            'details' => [
+                'form_fields' => [
+                    'full_name' => 'Jamaica Sohon',
+                    'purok' => 'Sunflower',
+                    'age' => \Carbon\Carbon::parse('2005-08-03')->age,
+                ],
+            ],
+        ]);
+        $this->documentOfficer->update(['is_active' => true]);
+        Sanctum::actingAs($this->documentOfficer);
+
+        $review = $this->getJson('/api/staff/document-requests')
+            ->assertOk()
+            ->json('data.0.identity_review');
+
+        $this->assertTrue($review['registry_found']);
+        $this->assertTrue($review['ok']);
+        $this->assertSame(
+            'Jamaica Montillen Sohon',
+            collect($review['fields'])->firstWhere('key', 'full_name')['registry'],
+        );
+        $this->assertTrue(collect($review['fields'])->firstWhere('key', 'full_name')['ok']);
+    }
+
     public function test_document_officer_can_generate_a_preview_for_a_document_request(): void
     {
         Sanctum::actingAs($this->documentOfficer);
@@ -113,6 +304,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
                 'title' => 'Barangay Residency',
                 'resident_name' => 'Resident User',
                 'date_of_birth' => '1990-01-15',
+                'derogatory_status' => 'no_derogatory_record',
             ],
             'staff_remarks' => 'Preview created for review.',
         ])->assertOk()
@@ -135,6 +327,103 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'staff_remarks' => 'Document reviewed, signed, and sealed.',
         ])->assertOk()
             ->assertJsonPath('data.status', 'ready_for_release');
+    }
+
+    public function test_clearance_preview_defaults_to_pending_and_cannot_be_released_without_a_confirmed_record_check(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $this->request->update(['status' => 'processing']);
+
+        $this->postJson('/api/staff/document-requests/'.$this->request->id.'/generate', [
+            'document_content' => ['date_of_birth' => '1990-01-15'],
+        ])->assertOk()
+            ->assertJsonPath('data.document_content.derogatory_status', 'pending_verification');
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'ready_for_release',
+        ])->assertStatus(409)
+            ->assertJsonPath('message', 'This Barangay Clearance is not eligible for release while its record-check outcome is pending verification or referred for authorized review. Confirm NO DEROGATORY RECORD ON FILE only when the record check supports that result.');
+    }
+
+    public function test_pending_or_in_progress_complaints_keep_clearance_record_check_pending(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $this->request->update(['status' => 'processing']);
+        Complaint::create([
+            'resident_id' => $this->resident->id,
+            'category' => 'Road and Public',
+            'subject' => 'Unresolved concern',
+            'description' => 'This complaint is still being reviewed.',
+            'status' => 'in_progress',
+        ]);
+
+        $this->postJson('/api/staff/document-requests/'.$this->request->id.'/generate', [
+            'document_content' => [
+                'date_of_birth' => '1990-01-15',
+                'derogatory_status' => 'no_derogatory_record',
+            ],
+        ])->assertStatus(409)
+            ->assertJsonPath('message', 'A pending or in-progress complaint requires PENDING VERIFICATION. A complaint alone is not a finding of wrongdoing.');
+
+        $this->postJson('/api/staff/document-requests/'.$this->request->id.'/generate', [
+            'document_content' => [
+                'date_of_birth' => '1990-01-15',
+                'derogatory_status' => 'pending_verification',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.document_content.derogatory_status', 'pending_verification');
+    }
+
+    public function test_resolved_complaint_is_not_automatically_treated_as_an_adverse_finding(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $this->request->update(['status' => 'processing']);
+        Complaint::create([
+            'resident_id' => $this->resident->id,
+            'category' => 'Road and Public',
+            'subject' => 'Resolved concern',
+            'description' => 'The complaint was reviewed and resolved.',
+            'status' => 'resolved',
+            'resolution_details' => 'No adverse finding.',
+        ]);
+
+        $this->postJson('/api/staff/document-requests/'.$this->request->id.'/generate', [
+            'document_content' => [
+                'date_of_birth' => '1990-01-15',
+                'derogatory_status' => 'no_derogatory_record',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.document_content.derogatory_status', 'no_derogatory_record')
+            ->assertJsonMissingPath('data.document_content.record_check_reviewed_by');
+
+        $recordCheckEvent = DocumentRequestEvent::where('document_request_id', $this->request->id)
+            ->latest('id')
+            ->firstOrFail();
+        $this->assertSame($this->documentOfficer->id, $recordCheckEvent->actor_id);
+        $this->assertSame('no_derogatory_record', $recordCheckEvent->metadata['record_check_outcome']);
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'ready_for_release',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'ready_for_release');
+    }
+
+    public function test_clearance_referred_for_authorized_review_cannot_be_released(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $this->request->update(['status' => 'processing']);
+
+        $this->postJson('/api/staff/document-requests/'.$this->request->id.'/generate', [
+            'document_content' => [
+                'date_of_birth' => '1990-01-15',
+                'derogatory_status' => 'refer_authorized_review',
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.document_content.derogatory_status', 'refer_authorized_review');
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'ready_for_release',
+        ])->assertStatus(409);
     }
 
     public function test_residency_preview_includes_request_details_and_recalculates_age_from_birth_date(): void
@@ -278,7 +567,11 @@ class StaffDocumentRequestWorkflowTest extends TestCase
     {
         Sanctum::actingAs($this->documentOfficer);
 
-        $this->request->update(['status' => 'ready_for_release']);
+        $this->request->update([
+            'status' => 'ready_for_release',
+            'document_content' => ['derogatory_status' => 'no_derogatory_record'],
+            'document_generated_at' => now(),
+        ]);
 
         $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
             'status' => 'completed',

@@ -154,6 +154,10 @@
     -webkit-print-color-adjust: exact;
   }
 
+ staff-document-request-moduleThree
+  .document-paper--clearance {
+    padding: 0.3in !important;
+
   .document-paper--barangay-certificate .barangay-certificate-wording,
   .document-paper--indigency-certificate .indigency-certificate-wording,
   .document-paper--residency-certificate .document-wording {
@@ -180,6 +184,7 @@
     page-break-after: avoid !important;
     break-inside: avoid-page !important;
     page-break-inside: avoid !important;
+ main
   }
 
   .document-paper--designed {

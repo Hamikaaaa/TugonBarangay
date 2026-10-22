@@ -1085,7 +1085,9 @@ class ResidentController extends Controller
                     ? 'required'
                     : 'sometimes',
                 'file',
-                'mimes:pdf,jpg,jpeg,png',
+                ...($key === 'applicant_photo'
+                    ? ['image', 'mimes:jpg,jpeg,png']
+                    : ['mimes:pdf,jpg,jpeg,png']),
                 'max:5120',
             ];
         }
