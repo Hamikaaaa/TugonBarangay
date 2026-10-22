@@ -367,15 +367,12 @@ function StaffDashboardProfessional({ documentType = "" }) {
   const openPreview = async (request) => {
     if (!request || !token) return;
     if (request.status !== "processing") {
-      if (request.document_content) {
-        setSelectedRequest(request);
-        setStaffRemarks(request.staff_remarks || "");
-        setRejectionReason(request.rejection_reason || "");
-        setPreviewRequest(request);
-      }
+      setSelectedRequest(request);
+      setStaffRemarks(request.staff_remarks || "");
+      setRejectionReason(request.rejection_reason || "");
+      setPreviewRequest(request);
       return;
     }
-
     setSubmitting(true);
     setError("");
     setStaffRemarks(request.staff_remarks || "");
@@ -659,7 +656,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting || (selectedRequest.status !== "processing" && !selectedRequest.document_content)} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-40"><Eye size={14} /> Preview document</button>
+                  <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-40"><Eye size={14} /> {selectedRequest.document_content ? "Preview document" : selectedRequest.status === "processing" ? "Generate and preview" : "Preview template"}</button>
                 </div>
               </div>
 
