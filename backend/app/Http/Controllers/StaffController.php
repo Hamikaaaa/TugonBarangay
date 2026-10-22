@@ -563,6 +563,7 @@ class StaffController extends Controller
 
         DB::transaction(function () use ($complaint, $validated): void {
             $complaint->status = $validated['status'];
+            $complaint->status_updated_at = now();
             $complaint->staff_remarks = $validated['staff_remarks'] ?? null;
             $complaint->resolution_details = $validated['resolution_details'] ?? null;
             $complaint->resolved_at = in_array($validated['status'], ['resolved', 'closed'], true)

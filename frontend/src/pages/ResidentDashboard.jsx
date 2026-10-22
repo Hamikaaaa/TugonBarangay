@@ -39,6 +39,18 @@ function ResidentDashboard() {
               onRefresh={refreshDashboard}
               verified={verified}
               userId={user.id}
+              onNavigate={setView}
+            />
+          )}
+          {view === "complaint-history" && (
+            <Complaints
+              token={token}
+              complaints={dashboard.complaints}
+              onRefresh={refreshDashboard}
+              verified={verified}
+              userId={user.id}
+              historyOnly
+              onNavigate={setView}
             />
           )}
           {view === "bantaybot" && (

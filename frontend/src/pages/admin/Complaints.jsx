@@ -28,7 +28,9 @@ function Complaints() {
     ? "categories"
     : location.pathname.endsWith("/resident-complaints")
       ? "resident-complaints"
-      : "dashboard";
+      : location.pathname.endsWith("/blotter-history")
+        ? "blotter-history"
+        : "dashboard";
 
   const loadCategories = useCallback(async () => {
     if (!token) return;
@@ -172,6 +174,10 @@ function Complaints() {
       title: "Complaint categories",
       description: "Manage the complaint categories available to residents when filing a report.",
     },
+    "blotter-history": {
+      title: "Blotter history",
+      description: "Review blotter entries recorded by barangay staff, including complainants, respondents, incident types, and status.",
+    },
   }[activeSection];
 
   return (
@@ -206,6 +212,9 @@ function Complaints() {
           </ComplaintTab>
           <ComplaintTab to="/admin/complaints/categories" active={activeSection === "categories"}>
             Category management
+          </ComplaintTab>
+          <ComplaintTab to="/admin/complaints/blotter-history" active={activeSection === "blotter-history"}>
+            Blotter history
           </ComplaintTab>
         </nav>
 
@@ -419,6 +428,10 @@ function Complaints() {
                 </div>
               )}
             </>
+          )}
+
+          {activeSection === "blotter-history" && (
+            <ComplaintQueue isAdmin blotterHistory hideAdminHeader />
           )}
         </main>
       </section>
