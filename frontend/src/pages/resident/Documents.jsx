@@ -1,9 +1,5 @@
- staff-document-request-moduleThree
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, ChevronLeft, ChevronRight, FileText } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
- main
 import {
   inputClass,
   primaryButtonClass,
@@ -15,9 +11,6 @@ import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
 
 const APPLICANT_FIELDS = {
   full_name: { label: "Full Name", type: "text" },
-  first_name: { label: "First Name", type: "text" },
-  middle_name: { label: "Middle Name", type: "text", required: false },
-  last_name: { label: "Last Name", type: "text" },
   address: {
     label: "House/Building No., Street, and Subdivision",
     type: "text",
@@ -26,9 +19,6 @@ const APPLICANT_FIELDS = {
   purok: { label: "Purok", type: "text" },
   date_of_birth: { label: "Date of Birth", type: "date" },
   sex: { label: "Sex", type: "select", options: ["Female", "Male", "Other"] },
-  civil_status: { label: "Civil status", type: "select", options: ["Single", "Married", "Widowed", "Separated"] },
-  citizenship: { label: "Citizenship", type: "text" },
-  occupation: { label: "Occupation or profession", type: "text" },
   contact_number: { label: "Contact Number", type: "tel" },
   email_address: { label: "Email Address", type: "email" },
 };
@@ -175,14 +165,28 @@ const DOCUMENT_TYPES = [
     label: "Certificate of Residency",
     value: "Barangay Residency",
     fee: 130,
-    applicantFields: ["first_name", "last_name", "middle_name", "purok"],
+    applicantFields: [
+      "full_name",
+      "address",
+      "purok",
+      "date_of_birth",
+      "sex",
+    ],
     fields: [
       {
         key: "years_of_residency",
         label: "Length of residency (years)",
         type: "number",
-        required: true,
         min: "0",
+        step: "1",
+      },
+      {
+        key: "months_of_residency",
+        label: "Additional months of residency",
+        type: "number",
+        required: false,
+        min: "0",
+        max: "11",
         step: "1",
       },
       {
@@ -207,7 +211,13 @@ const DOCUMENT_TYPES = [
   },
   {
     label: "Barangay Indigency",
-    applicantFields: ["full_name", "purok"],
+    applicantFields: [
+      "full_name",
+      "address",
+      "date_of_birth",
+      "sex",
+      "purok",
+    ],
     fields: [
       {
         key: "purpose",
@@ -327,89 +337,29 @@ const DOCUMENT_TYPES = [
     ],
   },
   {
-    label: "Cedula (Community Tax Certificate)",
-    value: "Cedula",
+    label: "Certificate of Good Moral Character",
+    value: "Certificate of Good Moral Character",
     fee: 0,
-    fee_mode: "assessed",
-    applicantFields: ["first_name", "last_name", "middle_name", "purok"],
-    applicantFieldConfigs: [
-      { key: "first_name", label: "First Name", type: "text", required: true },
-      { key: "last_name", label: "Last Name", type: "text", required: true },
-      { key: "middle_name", label: "Middle Name", type: "text", required: true },
-      { key: "purok", label: "Purok", type: "text", required: true },
-    ],
+    applicantFields: ["full_name", "address", "purok", "date_of_birth", "sex"],
     fields: [
       {
-        key: "taxable_amount",
-        label: "Annual Gross Salary (PHP)",
-        type: "number",
-        required: true,
-        min: 0,
-        step: 1,
+        key: "purpose",
+        label: "Purpose of request",
+        type: "select",
+        options: GENERAL_REQUEST_PURPOSES,
+      },
+      {
+        key: "purpose_other",
+        label: "Please specify your purpose",
+        type: "text",
+        submit: false,
+        showWhen: { key: "purpose", value: "Other" },
+        requiredWhen: { key: "purpose", value: "Other" },
       },
     ],
     requirements: [
-      { key: "national_government_id", label: "National Government ID", required: true },
-    ],
-  },
-  {
-    label: "Fencing Permit",
-    value: "Fencing Permit",
-    fee: 0,
-    fee_mode: "assessed",
-    applicantFields: ["full_name", "contact_number", "email_address"],
-    fields: [
-      { key: "property_owner_name", label: "Property owner's name", type: "text", required: true },
-      { key: "property_address", label: "Property address", type: "text", required: true },
-      { key: "property_purok", label: "Property Purok", type: "text", required: true },
-      { key: "property_ownership", label: "Applicant's relationship to property", type: "select", required: true, options: ["Owner", "Authorized Representative"] },
-      { key: "fence_material", label: "Fence material", type: "text", required: true },
-      { key: "fence_height", label: "Fence height (meters)", type: "number", required: true, min: 0, step: "0.01" },
-      { key: "fence_length", label: "Fence length (meters)", type: "number", required: true, min: 0, step: "0.01" },
-      { key: "proposed_construction_date", label: "Proposed construction date", type: "date", required: true },
-      { key: "project_description", label: "Additional project details", type: "textarea", required: false },
-    ],
-    requirements: [
+      { key: "purok_certificate", label: "Purok Certificate", required: true },
       { key: "valid_id", label: "Valid government-issued ID", required: true },
-      { key: "proof_of_ownership", label: "Proof of ownership", required: false },
-      { key: "lease_or_authorization", label: "Owner authorization or lease", required: false, requiredWhen: { key: "property_ownership", value: "Authorized Representative" } },
-      { key: "site_plan", label: "Property sketch or site plan", required: false },
-    ],
-  },
-  {
-    label: "Construction Permit",
-    value: "Construction Permit",
-    fee: 0,
-    fee_mode: "assessed",
-    applicantFields: ["full_name", "contact_number", "email_address"],
-    fields: [
-      { key: "valid_id_type", label: "Valid ID type", type: "text", required: true },
-      { key: "valid_id_number", label: "Valid ID number", type: "text", required: true },
-      { key: "property_owner_name", label: "Property owner's name", type: "text", required: true },
-      { key: "property_street_number", label: "Property street/house number", type: "text", required: false },
-      { key: "property_purok", label: "Property Purok", type: "text", required: true },
-      { key: "lot_number", label: "Lot number", type: "text", required: false },
-      { key: "tax_declaration_number", label: "Tax Declaration number", type: "text", required: false },
-      { key: "title_number", label: "TCT/OCT number", type: "text", required: false },
-      { key: "property_ownership", label: "Applicant's relationship to property", type: "select", required: true, options: ["Owner", "Authorized Representative"] },
-      { key: "construction_type", label: "Type of construction", type: "select", required: true, options: ["New construction", "Renovation", "Repair", "Extension", "Fencing"] },
-      { key: "structure_type", label: "Type of structure", type: "select", required: true, options: ["Residential", "Commercial", "Other"] },
-      { key: "structure_details", label: "Specify structure", type: "text", required: true, requiredWhen: { key: "structure_type", value: "Other" }, showWhen: { key: "structure_type", value: "Other" } },
-      { key: "number_of_floors", label: "Number of floors", type: "number", required: true, min: 1 },
-      { key: "estimated_project_cost", label: "Estimated project cost (PHP)", type: "number", required: true, min: 0 },
-      { key: "proposed_construction_date", label: "Proposed construction date", type: "date", required: true },
-      { key: "project_description", label: "Brief construction description", type: "textarea", required: true },
-    ],
-    requirements: [
-      { key: "valid_id", label: "Valid ID", required: true },
-      { key: "proof_of_ownership", label: "Proof of ownership", required: false },
-      { key: "title_or_tax_declaration", label: "TCT/OCT or Tax Declaration", required: false },
-      { key: "lease_or_authorization", label: "Lease or owner authorization", required: false, requiredWhen: { key: "property_ownership", value: "Authorized Representative" } },
-      { key: "architectural_plans", label: "Building/architectural plans", required: false },
-      { key: "structural_plans", label: "Structural plans", required: false },
-      { key: "electrical_plans", label: "Electrical plans", required: false },
-      { key: "plumbing_plans", label: "Plumbing/sanitary plans", required: false },
-      { key: "other_plans", label: "Other plans required by the Building Official", required: false },
     ],
   },
 ];
@@ -620,35 +570,23 @@ function Documents({ requests, token, onRefresh, user }) {
     }
   }, [documentType, editingRequest, user]);
 
-  const loadCatalogTypes = useCallback(async (silent = false) => {
-    if (!token) return;
-    try {
-      const result = await residentApi("/resident/document-types", token);
-      const nextTypes = result.data || [];
-      setCatalogTypes((current) =>
-        JSON.stringify(current) === JSON.stringify(nextTypes) ? current : nextTypes,
-      );
-    } catch {
-      if (!silent) {
-        setCatalogTypes([]);
-        setMessage("We couldn't load document types. Refresh the page and try again.");
-        setMessageTone("error");
-      }
-    }
-  }, [token]);
-
   useEffect(() => {
-    loadCatalogTypes();
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") loadCatalogTypes(true);
-    };
-    const timer = window.setInterval(refreshWhenVisible, 15000);
-    window.addEventListener("focus", refreshWhenVisible);
+    let active = true;
+    residentApi("/resident/document-types", token)
+      .then((result) => {
+        if (active) setCatalogTypes(result.data || []);
+      })
+      .catch((error) => {
+        if (active) {
+          setCatalogTypes([]);
+          setMessage("We couldn't load document types. Refresh the page and try again.");
+          setMessageTone("error");
+        }
+      });
     return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", refreshWhenVisible);
+      active = false;
     };
-  }, [loadCatalogTypes]);
+  }, [token]);
 
   const changeHistoryPage = (page) => {
     setHistoryLoading(true);
@@ -783,11 +721,6 @@ function Documents({ requests, token, onRefresh, user }) {
       setMessageTone("error");
       return;
     }
-    if (selectedDocument.value === "First-Time Jobseeker Certification" && (formFields.age === undefined || formFields.age === null || formFields.age === "")) {
-      setMessage("Your age could not be calculated. Make sure your date of birth is recorded in your resident profile.");
-      setMessageTone("error");
-      return;
-    }
     setSubmitting(true);
     setMessage("");
     setMessageTone("info");
@@ -842,7 +775,7 @@ function Documents({ requests, token, onRefresh, user }) {
             ? {
                 ...type,
                 available: false,
-                unavailable_reason: "You have already availed this one-time certificate. You cannot request it again.",
+                unavailable_reason: "This one-time certificate has already been requested or issued.",
               }
             : type),
         );
@@ -981,7 +914,7 @@ function Documents({ requests, token, onRefresh, user }) {
                     disabled={!editingRequest && document.one_time && document.available === false}
                   >
                     {document.label}
-                    {document.one_time && document.available === false ? " (Already availed)" : ""}
+                    {document.one_time && document.available === false ? " (Already requested)" : ""}
                   </option>
                 ))}
               </select>
@@ -1016,10 +949,8 @@ function Documents({ requests, token, onRefresh, user }) {
                 </p>
                 {selectedDocument.fee_mode === "assessed" ? (
                   <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
-                    {selectedDocument.value === "Cedula"
-                      ? "Community tax will be assessed by barangay staff."
-                      : "Fee will be assessed by barangay staff based on your business information."}
-                  </p>
+                              Fee will be assessed by barangay staff based on your business information.
+                            </p>
                 ) : selectedDocument.fee !== undefined && (
                             <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
                               {Number(selectedDocument.fee) === 0
@@ -1097,7 +1028,7 @@ function Documents({ requests, token, onRefresh, user }) {
                 </div>
               </div>
 
-              {selectedDocument.fields.length > 0 && <div className="mt-6 border-t border-slate-100 pt-5">
+              <div className="mt-6 border-t border-slate-100 pt-5">
                 <h3 className="text-sm font-bold text-[#172B4D]">
                   Request details
                 </h3>
@@ -1158,9 +1089,9 @@ function Documents({ requests, token, onRefresh, user }) {
                       );
                     })}
                 </div>
-              </div>}
+              </div>
 
-              {visibleRequirements.length > 0 && <div className="mt-6 border-t border-slate-100 pt-5">
+              <div className="mt-6 border-t border-slate-100 pt-5">
                 <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-end">
                   <div>
                     <h3 className="text-sm font-bold text-[#172B4D]">
@@ -1297,11 +1228,11 @@ function Documents({ requests, token, onRefresh, user }) {
                     );
                   })}
                 </div>
-              </div>}
+              </div>
             </>
           )}
 
-          {selectedDocument && selectedDocument.value !== "Cedula" && (
+          {selectedDocument && (
             <label className="mt-5 block">
               <span className="text-sm font-bold text-slate-700">
                 Note to staff{" "}
