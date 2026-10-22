@@ -445,7 +445,7 @@ function Residents() {
             ) : registry.length ? (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[850px] text-left">
+                  <table className="w-full min-w-[1000px] text-left">
                     <thead className="bg-[#F7F9FC] text-[10px] uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-5 py-3 font-bold">Resident name</th>
@@ -453,6 +453,7 @@ function Residents() {
                         <th className="px-5 py-3 font-bold">Purok</th>
                         <th className="px-5 py-3 font-bold">Address</th>
                         <th className="px-5 py-3 font-bold">Mobile</th>
+                        <th className="px-5 py-3 font-bold">First-time job seeker</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -473,6 +474,11 @@ function Residents() {
                           </td>
                           <td className="px-5 py-4 text-sm text-slate-600">
                             {record.mobile_number || "—"}
+                          </td>
+                          <td className="px-5 py-4">
+                            <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold ${record.first_time_jobseeker_available ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+                              {record.first_time_jobseeker_available ? "Available" : "Already availed"}
+                            </span>
                           </td>
                         </tr>
                       ))}

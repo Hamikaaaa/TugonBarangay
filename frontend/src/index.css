@@ -41,6 +41,21 @@
   z-index: 1;
 }
 
+.jobseeker-page p {
+  margin: 0 0 0.08in;
+  text-align: justify;
+}
+
+.jobseeker-page .document-title--formal-certificate {
+  margin-bottom: 0.55in;
+  line-height: 1.15;
+}
+
+.jobseeker-page .jobseeker-list-item {
+  padding-left: 0.25in;
+  text-indent: -0.25in;
+}
+
 .jobseeker-page:last-child {
   break-after: auto;
   page-break-after: auto;
@@ -171,6 +186,10 @@
     padding: 0 !important;
   }
 
+  .document-paper--cedula {
+    padding: 0 !important;
+  }
+
   .document-paper--multi-page {
     display: block !important;
     height: auto !important;
@@ -184,7 +203,6 @@
     height: var(--paper-height, 11in) !important;
     min-height: var(--paper-height, 11in) !important;
     margin: 0 !important;
-    padding: 0.55in !important;
     box-shadow: none !important;
     break-after: page !important;
     page-break-after: always !important;

@@ -674,7 +674,12 @@ class StaffController extends Controller
                 ? $this->profileNameMatchesRegistry($resident, $registry)
                 : $this->sameIdentityValue($value['profile'], $value['registry'], $key));
             $submissionMatches = blank($submittedValue) || ($key === 'full_name'
-                ? (in_array($documentRequest->document_type, ['Barangay Indigency', 'Barangay Residency', 'Barangay Certificate'], true)
+                ? (in_array($documentRequest->document_type, [
+                    'Barangay Indigency',
+                    'Barangay Residency',
+                    'Barangay Certificate',
+                    'First-Time Jobseeker Certification',
+                ], true)
                     ? $this->requestNameMatchesRegistry($submittedValue, $registry)
                     : $this->sameIdentityValue($submittedValue, $value['registry'], $key))
                 : $this->sameIdentityValue($submittedValue, $value['registry'], $key));

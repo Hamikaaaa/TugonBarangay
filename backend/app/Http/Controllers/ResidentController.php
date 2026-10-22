@@ -1032,7 +1032,7 @@ class ResidentController extends Controller
             }
             switch ($field['type']) {
                 case 'number':
-                    $fieldRules[] = 'numeric';
+                    $fieldRules[] = (float) ($field['step'] ?? 0) === 1.0 ? 'integer' : 'numeric';
                     if (isset($field['min'])) {
                         $fieldRules[] = 'min:'.$field['min'];
                     }
