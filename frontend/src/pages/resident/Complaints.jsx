@@ -33,6 +33,15 @@ const EMPTY_FORM = {
   relevant_information: "",
 };
 
+const HISTORY_STATUS_FILTERS = [
+  { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "resolved", label: "Resolved" },
+  { value: "rejected", label: "Rejected" },
+  { value: "closed", label: "Closed" },
+];
+
 function formatDate(value) {
   if (!value) return "Not provided";
   const date = new Date(`${value.slice(0, 10)}T00:00:00`);
@@ -232,7 +241,15 @@ function ComplaintRow({ complaint, token }) {
   );
 }
 
-function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
+function Complaints({
+  token,
+  complaints = [],
+  onRefresh,
+  verified,
+  userId,
+  historyOnly = false,
+  onNavigate,
+}) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [complaintCategories, setComplaintCategories] = useState(COMPLAINT_CATEGORIES);
   const [evidence, setEvidence] = useState(null);
@@ -248,8 +265,14 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
   });
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
+  const [historyStatus, setHistoryStatus] = useState("all");
+  const [historyStatusCounts, setHistoryStatusCounts] = useState({ all: 0 });
   const [reloadHistory, setReloadHistory] = useState(0);
   const fileInput = useRef(null);
+
+  const activeHistoryStatusLabel =
+    HISTORY_STATUS_FILTERS.find((filter) => filter.value === historyStatus)
+      ?.label ?? "All";
 
   useEffect(() => {
     let active = true;
@@ -277,7 +300,12 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
   useEffect(() => {
     let active = true;
 
-    residentApi(`/resident/complaints?page=${historyPage}`, token)
+    const query =
+      historyStatus === "all"
+        ? `page=${historyPage}`
+        : `page=${historyPage}&status=${historyStatus}`;
+
+    residentApi(`/resident/complaints?${query}`, token)
       .then((result) => {
         if (!active) return;
         setHistoryError("");
@@ -287,6 +315,9 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
           last_page: result.last_page || 1,
           total: result.total || 0,
         });
+        if (result.status_counts) {
+          setHistoryStatusCounts(result.status_counts);
+        }
       })
       .catch((error) => {
         if (active) setHistoryError(error.message);
@@ -298,7 +329,7 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
     return () => {
       active = false;
     };
-  }, [historyPage, reloadHistory, token]);
+  }, [historyPage, historyStatus, reloadHistory, token]);
 
   const updateField = (event) => {
     const { name, value } = event.target;
@@ -375,6 +406,13 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
     setHistoryPage(page);
   };
 
+  const changeHistoryStatus = (status) => {
+    if (status === historyStatus) return;
+    setHistoryLoading(true);
+    setHistoryStatus(status);
+    setHistoryPage(1);
+  };
+
   const retryHistory = () => {
     setHistoryLoading(true);
     setReloadHistory((current) => current + 1);
@@ -382,6 +420,7 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
 
   return (
     <div className="space-y-6 pb-8">
+      {!historyOnly && (
       <header className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/70 px-6 py-7 shadow-[0_8px_28px_rgba(18,63,112,0.05)] backdrop-blur-sm sm:px-8">
         <div className="pointer-events-none absolute -right-20 -top-24 h-56 w-56 rounded-full bg-[#2455D6]/5 blur-2xl" />
         <div className="pointer-events-none absolute -bottom-24 right-32 h-48 w-48 rounded-full bg-[#E52B32]/5 blur-2xl" />
@@ -407,21 +446,32 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() =>
-              document
-                .getElementById("new-complaint")
-                ?.scrollIntoView({ behavior: "smooth" })
-            }
-            className={primaryButtonClass}
-          >
-            <CircleAlert className="h-4 w-4" aria-hidden="true" />
-            Start a complaint
-          </button>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <button
+              type="button"
+              onClick={() =>
+                document
+                  .getElementById("new-complaint")
+                  ?.scrollIntoView({ behavior: "smooth" })
+              }
+              className={primaryButtonClass}
+            >
+              <CircleAlert className="h-4 w-4" aria-hidden="true" />
+              Start a complaint
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigate?.("complaint-history")}
+              className="text-sm font-bold text-[#2455D6] underline decoration-[#2455D6]/40 underline-offset-4 transition hover:decoration-[#2455D6] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30"
+            >
+              Complaints history
+            </button>
+          </div>
         </div>
       </header>
+      )}
 
+      {!historyOnly && (
       <section className="rounded-[26px] border border-slate-200/80 bg-white/90 p-6 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm sm:p-8">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-[#172B4D]">
@@ -664,7 +714,9 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
           </button>
         </form>
       </section>
+      )}
 
+      {historyOnly && (
       <section className="overflow-hidden rounded-[26px] border border-slate-200/80 bg-white/90 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm">
         <div className="border-b border-slate-100 px-6 py-5 sm:px-8">
           <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
@@ -673,13 +725,64 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
                 Complaint history
               </h2>
               <p className="mt-1 text-xs text-slate-400">
-                {historyMeta.total}{" "}
-                {historyMeta.total === 1 ? "complaint" : "complaints"} submitted
+                {historyStatus === "all" ? (
+                  <>
+                    {historyMeta.total}{" "}
+                    {historyMeta.total === 1 ? "complaint" : "complaints"}{" "}
+                    submitted
+                  </>
+                ) : (
+                  <>
+                    {historyMeta.total}{" "}
+                    {historyMeta.total === 1 ? "complaint" : "complaints"} with
+                    status{" "}
+                    <span className="font-semibold text-slate-600">
+                      {activeHistoryStatusLabel}
+                    </span>
+                  </>
+                )}
               </p>
             </div>
             <p className="text-xs text-slate-400">
               Select a complaint to view its details and staff updates
             </p>
+          </div>
+
+          <div
+            className="mt-4 flex gap-2 overflow-x-auto pb-1"
+            role="tablist"
+            aria-label="Filter complaints by status"
+          >
+            {HISTORY_STATUS_FILTERS.map((filter) => {
+              const isActive = historyStatus === filter.value;
+              const count = historyStatusCounts[filter.value] ?? 0;
+
+              return (
+                <button
+                  key={filter.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  onClick={() => changeHistoryStatus(filter.value)}
+                  className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs font-bold transition focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 ${
+                    isActive
+                      ? "border-[#2455D6] bg-[#2455D6] text-white"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-[#2455D6]/40 hover:bg-[#2455D6]/5 hover:text-[#2455D6]"
+                  }`}
+                >
+                  {filter.label}
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                      isActive
+                        ? "bg-white/20 text-white"
+                        : "bg-slate-100 text-slate-500"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -714,10 +817,14 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
               />
             </div>
             <h3 className="mt-4 text-sm font-bold text-[#172B4D]">
-              No complaints yet
+              {historyStatus === "all"
+                ? "No complaints yet"
+                : `No ${activeHistoryStatusLabel.toLowerCase()} complaints`}
             </h3>
             <p className="mx-auto mt-1 max-w-xs text-sm text-slate-500">
-              Complaints you submit will appear here with their current status.
+              {historyStatus === "all"
+                ? "Complaints you submit will appear here with their current status."
+                : "Try another status filter to see the rest of your complaints."}
             </p>
           </div>
         ) : (
@@ -767,6 +874,7 @@ function Complaints({ token, complaints = [], onRefresh, verified, userId }) {
           </>
         )}
       </section>
+      )}
       {feedbackOpen && (
         <FeedbackPrompt
           token={token}

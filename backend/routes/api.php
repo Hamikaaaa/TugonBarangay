@@ -84,6 +84,17 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/complaints', [\App\Http\Controllers\StaffController::class, 'complaints']);
     Route::patch('/complaints/{complaint}/status', [\App\Http\Controllers\StaffController::class, 'updateComplaintStatus']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);
+    Route::get('/blotter/entries', [\App\Http\Controllers\BlotterController::class, 'index']);
+});
+
+Route::middleware(['auth:sanctum', 'role:staff'])->prefix('staff')->group(function () {
+    Route::get('/blotter/incident-types', [\App\Http\Controllers\BlotterController::class, 'incidentTypes']);
+    Route::get('/blotter/entries', [\App\Http\Controllers\BlotterController::class, 'index']);
+    Route::get('/blotter/residents', [\App\Http\Controllers\BlotterController::class, 'residents']);
+    Route::get('/blotter/registered-residents', [\App\Http\Controllers\BlotterController::class, 'registeredResidents']);
+    Route::post('/blotter/entries', [\App\Http\Controllers\BlotterController::class, 'store']);
+    Route::patch('/blotter/entries/{blotter}', [\App\Http\Controllers\BlotterController::class, 'update']);
+    Route::post('/blotter/summon', [\App\Http\Controllers\BlotterController::class, 'summon']);
 });
 
 Route::middleware(['auth:sanctum', 'role:staff', 'designation:Document Request Officer'])->prefix('staff')->group(function () {

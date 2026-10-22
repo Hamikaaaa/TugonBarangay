@@ -51,5 +51,6 @@ class DatabaseSeeder extends Seeder
 
     $this->call(ComplaintCategorySeeder::class);
         $this->call(ChatbotFaqSeeder::class);
+        $this->call(BlotterEntrySeeder::class);
     }
 }

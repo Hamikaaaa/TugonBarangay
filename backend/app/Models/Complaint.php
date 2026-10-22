@@ -25,6 +25,7 @@ class Complaint extends Model
         'staff_remarks',
         'resolution_details',
         'resolved_at',
+        'status_updated_at',
     ];
 
     protected function casts(): array
@@ -32,6 +33,7 @@ class Complaint extends Model
         return [
             'incident_date' => 'date',
             'resolved_at' => 'datetime',
+            'status_updated_at' => 'datetime',
         ];
     }
 

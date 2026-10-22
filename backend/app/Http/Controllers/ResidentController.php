@@ -33,6 +33,14 @@ class ResidentController extends Controller
 
     ];
 
+    private const COMPLAINT_STATUSES = [
+        'pending',
+        'in_progress',
+        'resolved',
+        'rejected',
+        'closed',
+    ];
+
     private const DOCUMENT_FEES = [
         'Barangay Certification' => 80,
         'Barangay Residency' => 130,
@@ -531,7 +539,33 @@ class ResidentController extends Controller
 
     public function complaints(Request $request)
     {
-        return Complaint::where('resident_id', $request->user()->id)->latest()->paginate(10);
+        $validated = $request->validate([
+            'status' => ['sometimes', 'string', 'in:all,pending,in_progress,resolved,rejected,closed'],
+        ]);
+
+        $query = Complaint::where('resident_id', $request->user()->id);
+
+        $status = $validated['status'] ?? 'all';
+        if ($status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $complaints = $query->latest()->paginate(10)->withQueryString();
+
+        $statusCounts = Complaint::where('resident_id', $request->user()->id)
+            ->selectRaw('status, COUNT(*) as count')
+            ->groupBy('status')
+            ->pluck('count', 'status');
+
+        $counts = [];
+        foreach (self::COMPLAINT_STATUSES as $complaintStatus) {
+            $counts[$complaintStatus] = (int) ($statusCounts[$complaintStatus] ?? 0);
+        }
+        $counts['all'] = array_sum($counts);
+
+        return response()->json(array_merge($complaints->toArray(), [
+            'status_counts' => $counts,
+        ]));
     }
 
     public function storeComplaint(Request $request)

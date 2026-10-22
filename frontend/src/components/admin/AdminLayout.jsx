@@ -5,6 +5,7 @@ import {
   ChartNoAxesColumn,
   ChevronDown,
   ClipboardList,
+  FileText,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -49,6 +50,7 @@ const navigation = [
       { label: "Dashboard", path: "/admin/complaints" },
       { label: "Resident Complaints", path: "/admin/complaints/resident-complaints" },
       { label: "Category Management", path: "/admin/complaints/categories" },
+      { label: "Blotter", path: "/admin/complaints/blotter-history", icon: FileText },
     ],
   },
   {
@@ -128,16 +130,11 @@ function AdminLayout({ children, title }) {
 }
 
 function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
-  const [openMenu, setOpenMenu] = useState("");
+  const [openMenuOverride, setOpenMenuOverride] = useState(null);
   const activeNavigationItem = navigation.find((item) =>
     isActiveNavigationItem(item, activePath),
   );
-
-  useEffect(() => {
-    if (activeNavigationItem?.children) {
-      setOpenMenu(activeNavigationItem.label);
-    }
-  }, [activeNavigationItem?.label]);
+  const openMenu = openMenuOverride ?? activeNavigationItem?.label ?? "";
 
   const isActiveItem = (item) => isActiveNavigationItem(item, activePath);
 
@@ -203,8 +200,10 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
                     aria-expanded={openMenu === item.label}
                     onClick={() => {
                       if (openMenu !== item.label) onSelect(item.path);
-                      setOpenMenu((current) =>
-                        current === item.label ? "" : item.label,
+                      setOpenMenuOverride((current) =>
+                        (current ?? activeNavigationItem?.label) === item.label
+                          ? ""
+                          : item.label,
                       );
                     }}
                     className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium ${
@@ -220,7 +219,10 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
                           : "bg-white/10 text-blue-100"
                       }`}
                     >
-                      <item.icon size={15} aria-hidden="true" />
+                      {(() => {
+                        const Icon = item.icon;
+                        return <Icon size={15} aria-hidden="true" />;
+                      })()}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
                     <ChevronDown
@@ -268,7 +270,10 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
                         : "bg-white/10 text-blue-100"
                     }`}
                   >
-                    <item.icon size={15} aria-hidden="true" />
+                    {(() => {
+                      const Icon = item.icon;
+                      return <Icon size={15} aria-hidden="true" />;
+                    })()}
                   </span>
                   <span className="truncate">{item.label}</span>
                   {activePath === item.path && (
@@ -345,9 +350,12 @@ function AdminHeader({ user, token, activePanel, onMenu, onNavigate }) {
   }, []);
 
   useEffect(() => {
-    loadNotifications();
+    const initialLoad = window.setTimeout(loadNotifications, 0);
     const refresh = window.setInterval(loadNotifications, 10000);
-    return () => window.clearInterval(refresh);
+    return () => {
+      window.clearTimeout(initialLoad);
+      window.clearInterval(refresh);
+    };
   }, [loadNotifications]);
 
   return (

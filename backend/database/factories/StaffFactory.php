@@ -18,6 +18,7 @@ class StaffFactory extends Factory
             'password' => Hash::make('password123'),
             'designation' => Staff::DOCUMENT_REQUEST_OFFICER,
             'email_verified_at' => now(),
+            'is_active' => true,
         ];
     }
 }
