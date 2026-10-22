@@ -73,6 +73,16 @@ function DocumentTypes() {
   const [notice, setNotice] = useState("");
   const [deletingTypeId, setDeletingTypeId] = useState(null);
   const [downloadingTemplateId, setDownloadingTemplateId] = useState(null);
+  const [editorOpenCount, setEditorOpenCount] = useState(0);
+  const editorRef = useRef(null);
+
+  useEffect(() => {
+    if (!editorOpenCount) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [editorOpenCount]);
 
   const loadTypes = useCallback(async () => {
     setLoading(true);
@@ -174,8 +184,34 @@ function DocumentTypes() {
         headers: authHeaders(token),
       });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.message || "Unable to delete document type.");
-      setNotice(result.message);
+      if (response.status === 409) {
+        const archiveResponse = await fetch(`${API_URL}/admin/document-types/${type.id}`, {
+          method: "PUT",
+          headers: { ...authHeaders(token), "Content-Type": "application/json" },
+          body: JSON.stringify({
+            value: type.value,
+            label: type.label,
+            description: type.description || "",
+            fee_mode: type.fee_mode,
+            fee: String(type.fee || "0"),
+            one_time: Boolean(type.one_time),
+            active: false,
+            template_enabled: type.template_enabled !== false,
+            template: type.template || "",
+            paper_size: type.paper_size || "letter",
+            document_layout: type.document_layout || {},
+            applicant_fields: type.applicant_fields || [],
+            fields: type.fields || [],
+            requirements: type.requirements || [],
+          }),
+        });
+        const archiveResult = await archiveResponse.json();
+        if (!archiveResponse.ok) throw new Error(archiveResult.message || "Unable to disable document type.");
+        setNotice(`${type.label} has request history, so it was disabled instead of deleted.`);
+      } else {
+        if (!response.ok) throw new Error(result.message || "Unable to delete document type.");
+        setNotice(result.message || "Document type deleted.");
+      }
       await loadTypes();
     } catch (deleteError) {
       setError(deleteError.message);
@@ -252,6 +288,7 @@ function DocumentTypes() {
       fields: (type.fields || []).map((field) => ({ enabled: true, ...field })),
       requirements: (type.requirements || []).map((requirement) => ({ enabled: true, ...requirement })),
     });
+    setEditorOpenCount((count) => count + 1);
     if (!type.uploaded_template_name || !/\.jpe?g$/i.test(type.uploaded_template_name)) return;
     try {
       const response = await fetch(`${API_URL}/admin/document-types/${type.id}/template`, {
@@ -321,7 +358,10 @@ function DocumentTypes() {
         >
           <button
             type="button"
-            onClick={() => setDraft(blankType())}
+            onClick={() => {
+              setDraft(blankType());
+              setEditorOpenCount((count) => count + 1);
+            }}
             className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#2455D6] shadow-lg transition hover:-translate-y-0.5 hover:bg-[#EEF4FF] hover:shadow-xl active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
           >
             Add document type
@@ -334,7 +374,7 @@ function DocumentTypes() {
         {notice && <p role="status" className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
 
         {draft && (
-          <form onSubmit={saveType} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+          <form ref={editorRef} onSubmit={saveType} className="scroll-mt-6 space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center justify-between">
               <div><h3 className="text-lg font-bold text-[#172B4D]">{draft.id ? "Edit document" : "Add a document"}</h3><p className="mt-1 text-sm text-slate-500">Set what residents see and what they need to submit.</p></div>
               <button type="button" onClick={closeEditor} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800">Close</button>
@@ -684,6 +724,7 @@ function SchemaEditor({ title, description, section, fields, changeField, addFie
               <div className="flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={field.required} onChange={(event) => changeField(section, index, { required: event.target.checked })} />Required</label>
                 <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={field.enabled !== false} onChange={(event) => changeField(section, index, { enabled: event.target.checked })} />Show this question</label>
+                <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={Boolean(field.readOnly)} onChange={(event) => changeField(section, index, { readOnly: event.target.checked })} />Prefilled/read-only</label>
               </div>
               <button type="button" onClick={() => removeEntry(section, index)} className="text-xs font-bold text-red-600">Remove</button>
             </div>

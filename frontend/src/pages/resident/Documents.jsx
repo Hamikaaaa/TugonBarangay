@@ -1,10 +1,5 @@
-fix-document-templates
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, ChevronLeft, ChevronRight, FileText } from "lucide-react";
-
- main
 import {
   inputClass,
   primaryButtonClass,
@@ -60,6 +55,9 @@ function getApplicantDefaults(user = {}) {
     purok: user.purok || "",
     contact_number: user.mobile_number || "",
     email_address: user.email || "",
+    project_owner_name: fullName || user.name || "",
+    project_address: user.address || "",
+    construction_type: "",
     municipality_city: user.municipality_city || "Consolacion",
     province: user.province || "Cebu",
     business_contact_number: user.mobile_number || "",
@@ -450,6 +448,8 @@ function Documents({ requests, token, onRefresh, user }) {
   const [submitting, setSubmitting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [businessAttestationOpen, setBusinessAttestationOpen] = useState(false);
+  const [permitCertificationOpen, setPermitCertificationOpen] = useState(false);
+  const [permitCertificationAccepted, setPermitCertificationAccepted] = useState(false);
   const [history, setHistory] = useState(requests);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyMeta, setHistoryMeta] = useState({
@@ -684,6 +684,13 @@ function Documents({ requests, token, onRefresh, user }) {
       setMessageTone("error");
       return;
     }
+    const hasPermitCertification = ["Construction Permit", "Fencing Permit"].includes(selectedDocument.value);
+    if (hasPermitCertification && !permitCertificationAccepted) {
+      setPermitCertificationOpen(true);
+      setMessage("Review and accept the applicant certification before submitting.");
+      setMessageTone("error");
+      return;
+    }
     if (!formFields.date_of_birth && selectedDocument.applicantFields.includes("date_of_birth")) {
       setMessage("Your date of birth is missing. Add it to your profile before requesting this document.");
       setMessageTone("error");
@@ -759,6 +766,8 @@ function Documents({ requests, token, onRefresh, user }) {
       }
       setEditingRequest(null);
       setDocumentType("");
+      setPermitCertificationAccepted(false);
+      setPermitCertificationOpen(false);
       setFormFields(getApplicantDefaults(user));
       setNotes("");
       clearRequirementFiles();
@@ -867,12 +876,16 @@ function Documents({ requests, token, onRefresh, user }) {
                 value={documentType}
                 disabled={catalogTypes === null || Boolean(editingRequest)}
                 onChange={(event) => {
-fix-document-templates
                   const nextDocumentType = event.target.value;
                   setDocumentType(nextDocumentType);
+                  setPermitCertificationAccepted(false);
+                  setPermitCertificationOpen(false);
                   const applicantDefaults = getApplicantDefaults(user);
                   setFormFields({
                     ...applicantDefaults,
+                    project_owner_name: applicantDefaults.full_name,
+                    project_address: applicantDefaults.address,
+                    construction_type: nextDocumentType === "Fencing Permit" ? "Fencing" : "",
                     ...(nextDocumentType === "Business Permit"
                       ? {
                           full_name: "",
@@ -885,13 +898,9 @@ fix-document-templates
                         }
                       : {}),
                   });
-                  setRequirementFiles({});
+                  clearRequirementFiles();
                   closeApplicantCamera();
                   setCameraError("");
-                  setDocumentType(event.target.value);
-                  setFormFields(getApplicantDefaults(user));
-                  clearRequirementFiles();
-main
                 }}
                 className={inputClass}
               >
@@ -935,8 +944,8 @@ main
                   Applicant information
                 </h3>
                 <p className="mt-1 text-xs text-slate-500">
-                  Profile details are filled in when available. You can complete
-                  any missing information.
+                  Your profile details are filled in automatically. Complete any
+                  missing details in your profile.
                 </p>
                 {selectedDocument.fee_mode === "assessed" ? (
                   <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
@@ -995,12 +1004,12 @@ main
                           </select>
                         ) : (
                           <input
-                            required={!field.readOnly && (field.requiredWhen
+                            required={field.readOnly && formFields[key] ? false : (field.requiredWhen
                               ? conditionMatches(field.requiredWhen, formFields)
                               : field.required !== false)}
                             type={field.type}
                             value={formFields[key] || ""}
-                            readOnly={field.readOnly}
+                            readOnly={field.readOnly && Boolean(formFields[key])}
                             onChange={(event) =>
                               setFormFields((current) => ({
                                 ...current,
@@ -1017,6 +1026,18 @@ main
                     );
                   })}
                 </div>
+                { ["Construction Permit", "Fencing Permit"].includes(selectedDocument.value) && (
+                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 sm:col-span-2">
+                    <span className="font-semibold text-slate-700">Application details:</span>{" "}
+                    Date filed {new Intl.DateTimeFormat("en-PH", { dateStyle: "long" }).format(new Date())}; Barangay Tayud, Consolacion, Cebu.
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <button type="button" onClick={() => setPermitCertificationOpen(true)} className="min-h-9 rounded-lg border border-[#2455D6]/25 bg-white px-3 text-xs font-bold text-[#2455D6] hover:bg-blue-50">
+                        {permitCertificationAccepted ? "Certification accepted" : "Review applicant certification"}
+                      </button>
+                      {permitCertificationAccepted && <span className="text-xs font-semibold text-emerald-700">You accepted the certification.</span>}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 border-t border-slate-100 pt-5">
@@ -1041,7 +1062,7 @@ main
                           ? conditionMatches(field.requiredWhen, formFields)
                           : field.required !== false;
                       const controlProps = {
-                        required,
+                        required: field.readOnly && formFields[field.key] ? false : required,
                         value: formFields[field.key] || "",
                         onChange: (event) =>
                           setFormFields((current) => ({
@@ -1062,7 +1083,7 @@ main
                             )}
                           </span>
                           {field.type === "select" ? (
-                            <select {...controlProps}>
+                            <select {...controlProps} disabled={field.readOnly && Boolean(formFields[field.key])}>
                               <option value="">Select an option</option>
                               {(field.options || []).map((option) => (
                                 <option key={option}>{option}</option>
@@ -1076,7 +1097,9 @@ main
                               min={field.min}
                               max={field.max}
                               step={field.step}
+                              readOnly={field.readOnly && Boolean(formFields[field.key])}
                               {...controlProps}
+                              className={`${inputClass} ${field.readOnly && formFields[field.key] ? "bg-slate-100 text-slate-500" : ""}`}
                             />
                           )}
                         </label>
@@ -1084,15 +1107,13 @@ main
                     })}
                     </Fragment>)}
                 </div>
- fix-document-templates
                 {selectedDocument.value === "Business Permit" && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-xs text-slate-600">The attestation is optional to review and is not required to submit this online request.</p>
                     <button type="button" onClick={() => setBusinessAttestationOpen(true)} className="min-h-9 rounded-lg border border-[#2455D6]/25 bg-white px-3 text-xs font-bold text-[#2455D6] hover:bg-blue-50">View optional attestation</button>
                   </div>
                 </div>}
-              </div>}
-              </div>main
+              </div>
 
               <div className="mt-6 border-t border-slate-100 pt-5">
                 <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-end">
@@ -1381,6 +1402,26 @@ main
           </div>
         )}
       </section>
+      {permitCertificationOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPermitCertificationOpen(false); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="permit-certification-title" className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#2455D6]">Applicant certification</p>
+              <h2 id="permit-certification-title" className="mt-1 text-lg font-bold text-[#172B4D]">Certification and undertaking</h2>
+            </div>
+            <button type="button" onClick={() => setPermitCertificationOpen(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
+          </div>
+          <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">I hereby certify that all information provided in this application is true and correct. I further agree to comply with all applicable laws, ordinances, and regulations governing construction activities within the barangay.</p>
+          <label className="mt-5 flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-700">
+            <input type="checkbox" checked={permitCertificationAccepted} onChange={(event) => setPermitCertificationAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#2455D6]" />
+            <span>I have read and agree to this certification.</span>
+          </label>
+          <div className="mt-6 flex justify-end gap-3">
+            <button type="button" onClick={() => setPermitCertificationOpen(false)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+            <button type="button" disabled={!permitCertificationAccepted} onClick={() => { setPermitCertificationOpen(false); setMessage(""); setMessageTone("info"); }} className="rounded-lg bg-[#2455D6] px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">Agree and continue</button>
+          </div>
+        </section>
+      </div>}
       {businessAttestationOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setBusinessAttestationOpen(false); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="business-attestation-title" className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
