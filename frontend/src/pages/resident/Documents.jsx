@@ -1,9 +1,6 @@
- staff-document-request-moduleThree
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Camera, ChevronLeft, ChevronRight, FileText } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, FileText } from "lucide-react";
- main
+
 import {
   inputClass,
   primaryButtonClass,
@@ -15,9 +12,6 @@ import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
 
 const APPLICANT_FIELDS = {
   full_name: { label: "Full Name", type: "text" },
-  first_name: { label: "First Name", type: "text" },
-  middle_name: { label: "Middle Name", type: "text", required: false },
-  last_name: { label: "Last Name", type: "text" },
   address: {
     label: "House/Building No., Street, and Subdivision",
     type: "text",
@@ -26,9 +20,6 @@ const APPLICANT_FIELDS = {
   purok: { label: "Purok", type: "text" },
   date_of_birth: { label: "Date of Birth", type: "date" },
   sex: { label: "Sex", type: "select", options: ["Female", "Male", "Other"] },
-  civil_status: { label: "Civil status", type: "select", options: ["Single", "Married", "Widowed", "Separated"] },
-  citizenship: { label: "Citizenship", type: "text" },
-  occupation: { label: "Occupation or profession", type: "text" },
   contact_number: { label: "Contact Number", type: "tel" },
   email_address: { label: "Email Address", type: "email" },
 };
@@ -72,7 +63,6 @@ function getApplicantDefaults(user = {}) {
     business_purok: user.purok || "",
     business_address: user.address || "",
     tax_year: String(new Date().getFullYear()),
-    taxpayer_signature_name: fullName || user.name || "",
   };
 }
 
@@ -179,14 +169,28 @@ const DOCUMENT_TYPES = [
     label: "Certificate of Residency",
     value: "Barangay Residency",
     fee: 130,
-    applicantFields: ["first_name", "last_name", "middle_name", "purok"],
+    applicantFields: [
+      "full_name",
+      "address",
+      "purok",
+      "date_of_birth",
+      "sex",
+    ],
     fields: [
       {
         key: "years_of_residency",
         label: "Length of residency (years)",
         type: "number",
-        required: true,
         min: "0",
+        step: "1",
+      },
+      {
+        key: "months_of_residency",
+        label: "Additional months of residency",
+        type: "number",
+        required: false,
+        min: "0",
+        max: "11",
         step: "1",
       },
       {
@@ -211,7 +215,13 @@ const DOCUMENT_TYPES = [
   },
   {
     label: "Barangay Indigency",
-    applicantFields: ["full_name", "purok"],
+    applicantFields: [
+      "full_name",
+      "address",
+      "date_of_birth",
+      "sex",
+      "purok",
+    ],
     fields: [
       {
         key: "purpose",
@@ -242,45 +252,39 @@ const DOCUMENT_TYPES = [
   {
     label: "Business Clearance",
     value: "Business Permit",
-    notice:
-      "This is a barangay business clearance application. For new applications, attach a Purok Certification, Cedula, applicant ID, DTI/SEC registration, and a picture of the business. For renewals, attach only the previous business clearance; this online request is your new application form.",
-    applicantFields: ["full_name", "address", "contact_number", "email_address"],
+    notice: "For new applications, attach a Purok Certification, Cedula, applicant ID, DTI/SEC registration, and a picture of the business. If rented, attach the contract of lease. If someone other than the owner is applying, attach the owner's authorization and both required IDs. For renewals, attach the previous Business Clearance.",
+    applicantFields: ["full_name", "address", "contact_number", "email_address", "applicant_is_owner", "authorized_person_name"],
     applicantFieldConfigs: [
       { key: "full_name", label: "Name of taxpayer / applicant", type: "text", required: true },
       { key: "address", label: "Complete owner's address", type: "text", required: true },
       { key: "contact_number", label: "Contact number", type: "tel", required: true },
       { key: "email_address", label: "Email address", type: "email", required: true },
+      { key: "applicant_is_owner", label: "Are you the business owner?", type: "select", options: ["Yes", "No"], required: true, group: "Applicant authorization" },
+      { key: "authorized_person_name", label: "Authorized person's name", type: "text", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" }, group: "Applicant authorization" },
     ],
     fields: [
-      { key: "application_type", label: "Application", type: "select", options: ["New", "Renewal"], required: true },
-      { key: "tax_year", label: "Tax year", type: "number", min: 2020, step: 1, required: true },
-      {
-        key: "business_ownership",
-        label: "Type of business ownership",
-        type: "select",
-        options: ["Sole Proprietorship", "Partnership", "Corporation", "Cooperative"],
-        required: true,
-      },
-      {
-        key: "amendment_type",
-        label: "Amendment, if applicable",
-        type: "select",
-        options: ["None", "Single to Partnership", "Single to Corporation", "Partnership to Single", "Partnership to Corporation", "Corporation to Single", "Corporation to Partnership"],
-        required: false,
-      },
-      { key: "transfer_type", label: "Transfer, if applicable", type: "select", options: ["None", "Location", "Ownership"], required: false },
-      { key: "business_name", label: "Business name", type: "text", required: true },
-      { key: "tradename_franchise_name", label: "Trade name / franchise name", type: "text", required: false },
-      { key: "nature_of_business", label: "Nature of business", type: "text", required: true },
-      { key: "business_address", label: "Complete business address", type: "text", required: true },
-      { key: "business_purok", label: "Business Purok", type: "text", required: true },
-      { key: "business_area_sqm", label: "Business area (sq. m.)", type: "number", min: 0, step: "0.01", required: true },
-      { key: "place_of_business", label: "Place of business", type: "select", options: ["Owned", "Rented"], required: true },
-      { key: "monthly_rental", label: "Monthly rental (PHP)", type: "number", min: 0, step: "0.01", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
-      { key: "lessor_name", label: "Lessor's name", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
-      { key: "lessor_address", label: "Lessor's address", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
-      { key: "taxpayer_signature_name", label: "Taxpayer / authorized representative name", type: "text", required: true },
-      { key: "taxpayer_position", label: "Position", type: "text", required: false },
+      { key: "application_type", label: "Application", type: "select", options: ["New", "Renewal"], required: true, group: "Application" },
+      { key: "tax_year", label: "Tax year", type: "number", min: 2020, step: 1, required: true, group: "Application" },
+      { key: "business_ownership", label: "Type of business ownership", type: "select", options: ["Sole Proprietorship", "Partnership", "Corporation", "Cooperative"], required: true, group: "Business information" },
+      { key: "business_name", label: "Business name", type: "text", required: true, group: "Business information" },
+      { key: "tradename_franchise_name", label: "Trade name / franchise name", type: "text", required: false, group: "Business information" },
+      { key: "nature_of_business", label: "Nature of business", type: "text", required: true, group: "Business information" },
+      { key: "business_address", label: "Complete business address", type: "text", required: true, group: "Business information" },
+      { key: "business_purok", label: "Business Purok", type: "text", required: true, group: "Business information" },
+      { key: "business_area_sqm", label: "Business area (sq. m.)", type: "number", min: 0, step: "0.01", required: true, group: "Business information" },
+      { key: "place_of_business", label: "Place of business", type: "select", options: ["Owned", "Rented"], required: true, group: "Business information" },
+      { key: "monthly_rental", label: "Monthly rental (PHP)", type: "number", min: 0, step: "0.01", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" }, group: "Rental information" },
+      { key: "lessor_name", label: "Lessor's name", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" }, group: "Rental information" },
+      { key: "lessor_address", label: "Lessor's address", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" }, group: "Rental information" },
+      { key: "amendment_type", label: "Ownership amendment", type: "select", options: ["None", "From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"], required: true, group: "Amendments" },
+      { key: "amendment_owner_from", label: "Current owner / business type", type: "text", required: false, showWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, requiredWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, group: "Amendments" },
+      { key: "amendment_owner_to", label: "New owner(s) / business type", type: "text", required: false, showWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, requiredWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, group: "Amendments" },
+      { key: "transfer_type", label: "Transfer type", type: "select", options: ["None", "Location", "Ownership"], required: true, group: "Transfers" },
+      { key: "transfer_location_from", label: "Current business location", type: "text", required: false, showWhen: { key: "transfer_type", value: "Location" }, requiredWhen: { key: "transfer_type", value: "Location" }, group: "Transfers" },
+      { key: "transfer_location_to", label: "Transfer business to this location", type: "text", required: false, showWhen: { key: "transfer_type", value: "Location" }, requiredWhen: { key: "transfer_type", value: "Location" }, group: "Transfers" },
+      { key: "transfer_owner_from", label: "Current owner / ownership", type: "text", required: false, showWhen: { key: "transfer_type", value: "Ownership" }, requiredWhen: { key: "transfer_type", value: "Ownership" }, group: "Transfers" },
+      { key: "transfer_owner_to", label: "Transfer ownership to (person / entity)", type: "text", required: false, showWhen: { key: "transfer_type", value: "Ownership" }, requiredWhen: { key: "transfer_type", value: "Ownership" }, group: "Transfers" },
+      { key: "taxpayer_position", label: "Position", type: "text", required: false, group: "Attestation" },
     ],
     requirements: [
       { key: "purok_certification", label: "Purok Certification", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
@@ -289,92 +293,36 @@ const DOCUMENT_TYPES = [
       { key: "dti_sec_registration", label: "DTI / SEC registration", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
       { key: "business_picture", label: "Picture of the business", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
       { key: "previous_business_clearance", label: "Previous Business Clearance", required: false, showWhen: { key: "application_type", value: "Renewal" }, requiredWhen: { key: "application_type", value: "Renewal" } },
+      { key: "lease_contract", label: "Contract of lease", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
+      { key: "authorization_letter", label: "Photocopy of owner's signed authorization", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" } },
+      { key: "authorized_person_id", label: "Photocopy of authorized person's ID with 3 specimen signatures", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" } },
+      { key: "business_owner_id", label: "Photocopy of business owner's ID with 3 specimen signatures", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" } },
     ],
   },
   {
-    label: "Cedula (Community Tax Certificate)",
-    value: "Cedula",
+    label: "Certificate of Good Moral Character",
+    value: "Certificate of Good Moral Character",
     fee: 0,
-    fee_mode: "assessed",
-    applicantFields: ["first_name", "last_name", "middle_name", "purok"],
-    applicantFieldConfigs: [
-      { key: "first_name", label: "First Name", type: "text", required: true },
-      { key: "last_name", label: "Last Name", type: "text", required: true },
-      { key: "middle_name", label: "Middle Name", type: "text", required: true },
-      { key: "purok", label: "Purok", type: "text", required: true },
-    ],
+    applicantFields: ["full_name", "address", "purok", "date_of_birth", "sex"],
     fields: [
       {
-        key: "taxable_amount",
-        label: "Annual Gross Salary (PHP)",
-        type: "number",
-        required: true,
-        min: 0,
-        step: 1,
+        key: "purpose",
+        label: "Purpose of request",
+        type: "select",
+        options: GENERAL_REQUEST_PURPOSES,
+      },
+      {
+        key: "purpose_other",
+        label: "Please specify your purpose",
+        type: "text",
+        submit: false,
+        showWhen: { key: "purpose", value: "Other" },
+        requiredWhen: { key: "purpose", value: "Other" },
       },
     ],
     requirements: [
-      { key: "national_government_id", label: "National Government ID", required: true },
-    ],
-  },
-  {
-    label: "Fencing Permit",
-    value: "Fencing Permit",
-    fee: 0,
-    fee_mode: "assessed",
-    applicantFields: ["full_name", "contact_number", "email_address"],
-    fields: [
-      { key: "property_owner_name", label: "Property owner's name", type: "text", required: true },
-      { key: "property_address", label: "Property address", type: "text", required: true },
-      { key: "property_purok", label: "Property Purok", type: "text", required: true },
-      { key: "property_ownership", label: "Applicant's relationship to property", type: "select", required: true, options: ["Owner", "Authorized Representative"] },
-      { key: "fence_material", label: "Fence material", type: "text", required: true },
-      { key: "fence_height", label: "Fence height (meters)", type: "number", required: true, min: 0, step: "0.01" },
-      { key: "fence_length", label: "Fence length (meters)", type: "number", required: true, min: 0, step: "0.01" },
-      { key: "proposed_construction_date", label: "Proposed construction date", type: "date", required: true },
-      { key: "project_description", label: "Additional project details", type: "textarea", required: false },
-    ],
-    requirements: [
+      { key: "purok_certificate", label: "Purok Certificate", required: true },
       { key: "valid_id", label: "Valid government-issued ID", required: true },
-      { key: "proof_of_ownership", label: "Proof of ownership", required: false },
-      { key: "lease_or_authorization", label: "Owner authorization or lease", required: false, requiredWhen: { key: "property_ownership", value: "Authorized Representative" } },
-      { key: "site_plan", label: "Property sketch or site plan", required: false },
-    ],
-  },
-  {
-    label: "Construction Permit",
-    value: "Construction Permit",
-    fee: 0,
-    fee_mode: "assessed",
-    applicantFields: ["full_name", "contact_number", "email_address"],
-    fields: [
-      { key: "valid_id_type", label: "Valid ID type", type: "text", required: true },
-      { key: "valid_id_number", label: "Valid ID number", type: "text", required: true },
-      { key: "property_owner_name", label: "Property owner's name", type: "text", required: true },
-      { key: "property_street_number", label: "Property street/house number", type: "text", required: false },
-      { key: "property_purok", label: "Property Purok", type: "text", required: true },
-      { key: "lot_number", label: "Lot number", type: "text", required: false },
-      { key: "tax_declaration_number", label: "Tax Declaration number", type: "text", required: false },
-      { key: "title_number", label: "TCT/OCT number", type: "text", required: false },
-      { key: "property_ownership", label: "Applicant's relationship to property", type: "select", required: true, options: ["Owner", "Authorized Representative"] },
-      { key: "construction_type", label: "Type of construction", type: "select", required: true, options: ["New construction", "Renovation", "Repair", "Extension", "Fencing"] },
-      { key: "structure_type", label: "Type of structure", type: "select", required: true, options: ["Residential", "Commercial", "Other"] },
-      { key: "structure_details", label: "Specify structure", type: "text", required: true, requiredWhen: { key: "structure_type", value: "Other" }, showWhen: { key: "structure_type", value: "Other" } },
-      { key: "number_of_floors", label: "Number of floors", type: "number", required: true, min: 1 },
-      { key: "estimated_project_cost", label: "Estimated project cost (PHP)", type: "number", required: true, min: 0 },
-      { key: "proposed_construction_date", label: "Proposed construction date", type: "date", required: true },
-      { key: "project_description", label: "Brief construction description", type: "textarea", required: true },
-    ],
-    requirements: [
-      { key: "valid_id", label: "Valid ID", required: true },
-      { key: "proof_of_ownership", label: "Proof of ownership", required: false },
-      { key: "title_or_tax_declaration", label: "TCT/OCT or Tax Declaration", required: false },
-      { key: "lease_or_authorization", label: "Lease or owner authorization", required: false, requiredWhen: { key: "property_ownership", value: "Authorized Representative" } },
-      { key: "architectural_plans", label: "Building/architectural plans", required: false },
-      { key: "structural_plans", label: "Structural plans", required: false },
-      { key: "electrical_plans", label: "Electrical plans", required: false },
-      { key: "plumbing_plans", label: "Plumbing/sanitary plans", required: false },
-      { key: "other_plans", label: "Other plans required by the Building Official", required: false },
     ],
   },
 ];
@@ -497,6 +445,7 @@ function Documents({ requests, token, onRefresh, user }) {
   const [messageTone, setMessageTone] = useState("info");
   const [submitting, setSubmitting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [businessAttestationOpen, setBusinessAttestationOpen] = useState(false);
   const [history, setHistory] = useState(requests);
   const [historyPage, setHistoryPage] = useState(1);
   const [historyMeta, setHistoryMeta] = useState({
@@ -585,35 +534,23 @@ function Documents({ requests, token, onRefresh, user }) {
     }
   }, [documentType, editingRequest, user]);
 
-  const loadCatalogTypes = useCallback(async (silent = false) => {
-    if (!token) return;
-    try {
-      const result = await residentApi("/resident/document-types", token);
-      const nextTypes = result.data || [];
-      setCatalogTypes((current) =>
-        JSON.stringify(current) === JSON.stringify(nextTypes) ? current : nextTypes,
-      );
-    } catch {
-      if (!silent) {
-        setCatalogTypes([]);
-        setMessage("We couldn't load document types. Refresh the page and try again.");
-        setMessageTone("error");
-      }
-    }
-  }, [token]);
-
   useEffect(() => {
-    loadCatalogTypes();
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") loadCatalogTypes(true);
-    };
-    const timer = window.setInterval(refreshWhenVisible, 15000);
-    window.addEventListener("focus", refreshWhenVisible);
+    let active = true;
+    residentApi("/resident/document-types", token)
+      .then((result) => {
+        if (active) setCatalogTypes(result.data || []);
+      })
+      .catch((error) => {
+        if (active) {
+          setCatalogTypes([]);
+          setMessage("We couldn't load document types. Refresh the page and try again.");
+          setMessageTone("error");
+        }
+      });
     return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("focus", refreshWhenVisible);
+      active = false;
     };
-  }, [loadCatalogTypes]);
+  }, [token]);
 
   const changeHistoryPage = (page) => {
     setHistoryLoading(true);
@@ -748,11 +685,6 @@ function Documents({ requests, token, onRefresh, user }) {
       setMessageTone("error");
       return;
     }
-    if (selectedDocument.value === "First-Time Jobseeker Certification" && (formFields.age === undefined || formFields.age === null || formFields.age === "")) {
-      setMessage("Your age could not be calculated. Make sure your date of birth is recorded in your resident profile.");
-      setMessageTone("error");
-      return;
-    }
     setSubmitting(true);
     setMessage("");
     setMessageTone("info");
@@ -810,7 +742,7 @@ function Documents({ requests, token, onRefresh, user }) {
             ? {
                 ...type,
                 available: false,
-                unavailable_reason: "You have already availed this one-time certificate. You cannot request it again.",
+                unavailable_reason: "This one-time certificate has already been requested or issued.",
               }
             : type),
         );
@@ -931,11 +863,30 @@ function Documents({ requests, token, onRefresh, user }) {
                 value={documentType}
                 disabled={catalogTypes === null || Boolean(editingRequest)}
                 onChange={(event) => {
+                  const nextDocumentType = event.target.value;
+                  setDocumentType(nextDocumentType);
+                  const applicantDefaults = getApplicantDefaults(user);
+                  setFormFields({
+                    ...applicantDefaults,
+                    ...(nextDocumentType === "Business Permit"
+                      ? {
+                          full_name: "",
+                          address: "",
+                          contact_number: "",
+                          email_address: "",
+                          tax_year: "",
+                          business_address: "",
+                          business_purok: "",
+                        }
+                      : {}),
+                  });
+                  setRequirementFiles({});
                   closeApplicantCamera();
                   setCameraError("");
                   setDocumentType(event.target.value);
                   setFormFields(getApplicantDefaults(user));
                   clearRequirementFiles();
+main
                 }}
                 className={inputClass}
               >
@@ -949,7 +900,7 @@ function Documents({ requests, token, onRefresh, user }) {
                     disabled={!editingRequest && document.one_time && document.available === false}
                   >
                     {document.label}
-                    {document.one_time && document.available === false ? " (Already availed)" : ""}
+                    {document.one_time && document.available === false ? " (Already requested)" : ""}
                   </option>
                 ))}
               </select>
@@ -984,10 +935,8 @@ function Documents({ requests, token, onRefresh, user }) {
                 </p>
                 {selectedDocument.fee_mode === "assessed" ? (
                   <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
-                    {selectedDocument.value === "Cedula"
-                      ? "Community tax will be assessed by barangay staff."
-                      : "Fee will be assessed by barangay staff based on your business information."}
-                  </p>
+                              Fee will be assessed by barangay staff based on your business information.
+                            </p>
                 ) : selectedDocument.fee !== undefined && (
                             <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
                               {Number(selectedDocument.fee) === 0
@@ -1065,7 +1014,7 @@ function Documents({ requests, token, onRefresh, user }) {
                 </div>
               </div>
 
-              {selectedDocument.fields.length > 0 && <div className="mt-6 border-t border-slate-100 pt-5">
+              <div className="mt-6 border-t border-slate-100 pt-5">
                 <h3 className="text-sm font-bold text-[#172B4D]">
                   Request details
                 </h3>
@@ -1073,13 +1022,16 @@ function Documents({ requests, token, onRefresh, user }) {
                   Provide the information needed for this document.
                 </p>
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  {selectedDocument.fields
-                    .filter(
-                      (field) =>
-                        !field.showWhen ||
-                        conditionMatches(field.showWhen, formFields),
-                    )
-                    .map((field) => {
+                  {Object.entries(selectedDocument.fields
+                    .filter((field) => !field.showWhen || conditionMatches(field.showWhen, formFields))
+                    .reduce((groups, field) => {
+                      const group = field.group || "";
+                      (groups[group] ||= []).push(field);
+                      return groups;
+                    }, {}))
+                    .map(([group, fields]) => <Fragment key={group || "ungrouped"}>
+                    {group && <h4 className="-mb-2 border-b border-slate-100 pb-2 text-xs font-bold uppercase tracking-wide text-[#55708F] sm:col-span-2">{group}</h4>}
+                    {fields.map((field) => {
                         const required = field.requiredWhen
                           ? conditionMatches(field.requiredWhen, formFields)
                           : field.required !== false;
@@ -1125,10 +1077,18 @@ function Documents({ requests, token, onRefresh, user }) {
                         </label>
                       );
                     })}
+                    </Fragment>)}
                 </div>
+                {selectedDocument.value === "Business Permit" && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-slate-600">The attestation is optional to review and is not required to submit this online request.</p>
+                    <button type="button" onClick={() => setBusinessAttestationOpen(true)} className="min-h-9 rounded-lg border border-[#2455D6]/25 bg-white px-3 text-xs font-bold text-[#2455D6] hover:bg-blue-50">View optional attestation</button>
+                  </div>
+                </div>}
               </div>}
+              </div>main
 
-              {visibleRequirements.length > 0 && <div className="mt-6 border-t border-slate-100 pt-5">
+              <div className="mt-6 border-t border-slate-100 pt-5">
                 <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-end">
                   <div>
                     <h3 className="text-sm font-bold text-[#172B4D]">
@@ -1265,11 +1225,11 @@ function Documents({ requests, token, onRefresh, user }) {
                     );
                   })}
                 </div>
-              </div>}
+              </div>
             </>
           )}
 
-          {selectedDocument && selectedDocument.value !== "Cedula" && (
+          {selectedDocument && (
             <label className="mt-5 block">
               <span className="text-sm font-bold text-slate-700">
                 Note to staff{" "}
@@ -1415,6 +1375,24 @@ function Documents({ requests, token, onRefresh, user }) {
           </div>
         )}
       </section>
+      {businessAttestationOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setBusinessAttestationOpen(false); }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="business-attestation-title" className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#2455D6]">Optional review</p>
+              <h2 id="business-attestation-title" className="mt-1 text-lg font-bold text-[#172B4D]">Attestation and Undertaking</h2>
+            </div>
+            <button type="button" onClick={() => setBusinessAttestationOpen(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
+          </div>
+          <div className="mt-5 space-y-4 text-sm leading-6 text-slate-700">
+            <p>I undertake to comply with the regulatory requirements and other deficiencies within 30 days from receipt of this application.</p>
+            <p>I understand that misrepresentation or falsification may be grounds for revocation of a business permit and closure of the business establishment, without prejudice to applicable civil or criminal action.</p>
+            <p>I certify that the information entered in this application is true and correct, and that I will comply with applicable laws, ordinances, policies, rules, and regulations.</p>
+            <p>If I am an authorized representative, I confirm that I have authority from the owner to transact and submit this application and receive notices on the owner's behalf.</p>
+          </div>
+          <p className="mt-5 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">This is an optional on-screen reference to the paper form's attestation. Signing the official form may still be required by the barangay.</p>
+        </section>
+      </div>}
       {feedbackOpen && (
         <FeedbackPrompt
           token={token}

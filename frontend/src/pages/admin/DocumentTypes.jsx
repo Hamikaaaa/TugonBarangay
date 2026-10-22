@@ -5,7 +5,6 @@ import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
 import { useAuth } from "../../context/AuthContext";
 import { primaryButtonClass } from "../../utils/buttonStyles";
-import FIRST_TIME_JOBSEEKER_WORDING from "../../constants/firstTimeJobseekerWording";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const fieldTypes = ["text", "textarea", "number", "date", "email", "tel", "select"];
@@ -20,7 +19,6 @@ const fieldTypeLabels = {
 };
 
 const BARANGAY_CERTIFICATE_WORDING = `This is to certify that {{first_name}} {{middle_name}} {{last_name}}, {{age}} years old, {{sex}}, {{civil_status}}, {{citizenship}} citizen, and a bona fide resident of Purok {{purok}}, Barangay Tayud, Consolacion, Cebu, is an indigent member of this barangay.\n\nThis certification is issued at the request of the above-named person for {{purpose}} and for whatever legal purpose it may serve.\n\nIssued and given this {{issued_day}} day of {{issued_month}}, {{issued_year}}, at Barangay Tayud, Consolacion, Cebu, Philippines.`;
- staff-document-request-moduleThree
 const GOOD_MORAL_CHARACTER_WORDING = `TO WHOM IT MAY CONCERN:\n\nThis is to certify that {{full_name}}, of legal age, a resident of {{purok}}, Barangay Tayud, Municipality of Consolacion, Province of Cebu, Philippines, has been known to this office and is, to the best of our knowledge and based on available barangay records, a person of good moral character and reputation in the community.\n\nThis certification is issued upon the request of the above-named person for {{purpose}} and for whatever lawful purpose it may serve.\n\nIssued this {{issued_day}} day of {{issued_month}}, {{issued_year}}, at Barangay Tayud, Municipality of Consolacion, Cebu, Philippines.\nRespectfully yours,\n\n[NAME OF PUNONG BARANGAY]\nPunong Barangay`;
 const BARANGAY_CLEARANCE_WORDING = `This is to certify that the applicant whose name, picture, signature and thumb marks appearing hereto has not been brought before the Lupon/Pangkat of this Barangay for any complaint against {{object_pronoun}}, nor has committed any infraction of laws/ordinances as of this date, {{subject_pronoun}} {{subject_verb}} a law abiding citizen.\n\nNAME                 : {{full_name}}\nHOME ADDRESS         : {{address}}\nPLACE OF BIRTH       : {{place_of_birth}}\nDATE OF BIRTH        : {{date_of_birth}}\nREMARKS              : {{derogatory_remarks}}\n\nPURPOSE              : {{purpose}}\n\n______________________________\nApplicant's Signature\n\nVALID FOR            : Six (6) Months\n\nRes. Cert. No.        : ____________________\nIssued at             : CONSOLACION, CEBU\n\nLeft Thumb Mark                       Right Thumb Mark\n\nHon. fe Q. Cuyos\nPunong Barangay\n\nPaid Under\nO.R. No.              : ____________________\nAmount Paid           : ₱75.00\nDoc. Stamp            : ₱30.00`;
 
@@ -30,10 +28,6 @@ function defaultDocumentWording(type) {
   if (type.value === "Certificate of Good Moral Character") return GOOD_MORAL_CHARACTER_WORDING;
   return "";
 }
-
-const INDIGENCY_CERTIFICATE_WORDING = `To whom it may concern:\n\nThis is to certify that {{full_name}} is a resident of Purok {{purok}}, Barangay Tayud, Municipality of Consolacion and Province of Cebu.\n\nIt is further certified that the aforementioned person is without formal employment and without income.\n\nThis certification is issued upon the request of the above-mentioned person for {{purpose}} and for whatever legal purpose it may serve.\n\nIssued and given this {{issued_day}} day of {{issued_month}}, {{issued_year}}, at Barangay Tayud, Consolacion, Cebu, Philippines.`;
-const RESIDENCY_CERTIFICATE_WORDING = `To whom it may concern:\n\nThis is to certify that based on Record of Barangay Inhabitants (RBI), {{full_name}} is a bonafide resident of Purok {{purok}}, Barangay Tayud, Municipality of Consolacion and Province of Cebu, for {{years_of_residency}} years.\n\nThis certification is issued upon the request of the abovementioned name.\n\n\tIssued this {{issued_day}} of {{issued_month}} {{issued_year}} at the Office of the Punong Barangay, Barangay Tayud, Municipality of Consolacion, Province of Cebu, Philippines.`;
- main
 
 function makeFieldKey(label, fallback = "answer") {
   const key = String(label || "").toLowerCase().trim().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
@@ -249,19 +243,7 @@ function DocumentTypes() {
     setDraft({
       ...type,
       fee: String(type.fee),
- staff-document-request-moduleThree
       template: type.template || defaultDocumentWording(type),
-
-      template: type.template || (type.value === "Barangay Certificate"
-        ? BARANGAY_CERTIFICATE_WORDING
-        : type.value === "Barangay Indigency"
-          ? INDIGENCY_CERTIFICATE_WORDING
-        : type.value === "Barangay Residency"
-          ? RESIDENCY_CERTIFICATE_WORDING
-        : type.value === "First-Time Jobseeker Certification"
-          ? FIRST_TIME_JOBSEEKER_WORDING
-          : ""),
- main
       document_layout: clampLayout(type.document_layout),
       templateFile: null,
       templatePreviewUrl: "",
@@ -378,8 +360,8 @@ function DocumentTypes() {
                 Available to residents
               </label>
               <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-                <input type="checkbox" checked={draft.value === "First-Time Jobseeker Certification" || draft.one_time} disabled={draft.value === "First-Time Jobseeker Certification"} onChange={(event) => setDraft({ ...draft, one_time: event.target.checked })} />
-                {draft.value === "First-Time Jobseeker Certification" ? "One-time certificate (required)" : "Allow one request per resident"}
+                <input type="checkbox" checked={draft.one_time} onChange={(event) => setDraft({ ...draft, one_time: event.target.checked })} />
+                Allow one request per resident
               </label>
             </div>
 
@@ -447,8 +429,8 @@ function DocumentTypes() {
 
             <section className="block border-t border-slate-100 pt-4">
               <span className="text-sm font-bold text-[#172B4D]">Document wording</span>
-              <span className="mt-1 block text-xs leading-5 text-slate-500">Write the document as you want it to read. Use the buttons below to add request details automatically. The First-Time Jobseeker wording includes a page break between its two pages.</span>
-              <WordingEditor value={draft.template || ""} fields={[...draft.applicant_fields, ...draft.fields]} onChange={(template) => setDraft({ ...draft, template })} />
+              <span className="mt-1 block text-xs leading-5 text-slate-500">Write the document as you want it to read. Use the buttons below to add request details automatically. Leave this blank to use the standard wording.</span>
+              <WordingEditor value={draft.template || ""} onChange={(template) => setDraft({ ...draft, template })} />
               <label className="mt-3 flex items-center gap-2 text-sm font-medium text-slate-600">
                 <input type="checkbox" checked={draft.template_enabled !== false} onChange={(event) => setDraft({ ...draft, template_enabled: event.target.checked })} />
                 Use my wording on the generated document
@@ -508,13 +490,13 @@ function DocumentTypes() {
                     <button type="button" onClick={() => removeEntry("requirements", index)} className="text-xs font-bold text-red-600">Remove</button>
                     {requirementConditionOptions.length > 0 && <div className="grid gap-2 sm:col-span-4 sm:grid-cols-2">
                       <label className="text-xs font-semibold text-slate-600">Show when
-                        <select aria-label={`Show ${requirement.label} when`} value={conditionOptionValue(requirement.showWhen)} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, showWhen: parseConditionOption(event.target.value) } : item) }))} className={controlClass}>
+                        <select aria-label={`Show ${requirement.label} when`} value={conditionOptionValue(requirement.showWhen)} onChange={(event) => { const condition = parseConditionOption(event.target.value); setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, showWhen: condition } : item) })); }} className={controlClass}>
                           <option value="">Always</option>
                           {requirementConditionOptions.map((option) => <option key={`show-${option.key}-${option.value}`} value={`${option.key}::${option.value}`}>{option.label}</option>)}
                         </select>
                       </label>
                       <label className="text-xs font-semibold text-slate-600">Required when
-                        <select aria-label={`Require ${requirement.label} when`} value={conditionOptionValue(requirement.requiredWhen)} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, requiredWhen: parseConditionOption(event.target.value) } : item) }))} className={controlClass}>
+                        <select aria-label={`Require ${requirement.label} when`} value={conditionOptionValue(requirement.requiredWhen)} onChange={(event) => { const condition = parseConditionOption(event.target.value); setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, requiredWhen: condition } : item) })); }} className={controlClass}>
                           <option value="">Use required checkbox</option>
                           {requirementConditionOptions.map((option) => <option key={`required-${option.key}-${option.value}`} value={`${option.key}::${option.value}`}>{option.label}</option>)}
                         </select>
@@ -573,10 +555,10 @@ function DocumentTypes() {
   );
 }
 
-function WordingEditor({ value, fields = [], onChange }) {
+function WordingEditor({ value, onChange }) {
   const inputRef = useRef(null);
   const selectionRef = useRef(null);
-  const standardTokenLabels = [
+  const tokenLabels = [
     ["full_name", "Resident's name"], ["resident_name", "Resident's name"],
     ["first_name", "First name"], ["middle_name", "Middle name"], ["last_name", "Last name"],
     ["age", "Age"], ["sex", "Sex"], ["civil_status", "Civil status"],
@@ -586,17 +568,6 @@ function WordingEditor({ value, fields = [], onChange }) {
     ["subject_verb", "Pronoun verb"], ["derogatory_remarks", "Record-check result"],
     ["purpose", "Purpose"], ["date_issued", "Issue date"],
     ["issued_day", "Day"], ["issued_month", "Month"], ["issued_year", "Year"],
-    ["years_of_residency", "Years of residency"], ["pronoun", "Pronoun"],
-    ["pronoun_verb", "Pronoun verb"], ["pronoun_possessive", "Pronoun possessive"],
-    ["punong_barangay_name", "Punong Barangay name"],
-    ["page_break", "Page break"],
-  ];
-  const knownTokenKeys = new Set(standardTokenLabels.map(([key]) => key));
-  const tokenLabels = [
-    ...standardTokenLabels,
-    ...fields
-      .filter((field) => field.key && !knownTokenKeys.has(field.key))
-      .map((field) => [field.key, field.label || field.key.replaceAll("_", " ")]),
   ];
   const toEditorText = (source) => tokenLabels.reduce((text, [key, label]) => text.replaceAll(`{{${key}}}`, `[${label}]`), source).replaceAll("**", "");
   const toTemplateText = (text) => tokenLabels.reduce((source, [key, label]) => source.replaceAll(`[${label}]`, `{{${key}}}`), text);
@@ -616,7 +587,7 @@ function WordingEditor({ value, fields = [], onChange }) {
       inputRef.current?.setSelectionRange(selectionRef.current, selectionRef.current);
     });
   };
-  const standardInsertOptions = [
+  const insertOptions = [
     ["Resident's name", "{{full_name}}"],
     ["Age", "{{age}}"],
     ["Sex", "{{sex}}"],
@@ -634,19 +605,6 @@ function WordingEditor({ value, fields = [], onChange }) {
     ["Day", "{{issued_day}}"],
     ["Month", "{{issued_month}}"],
     ["Year", "{{issued_year}}"],
-    ["Years of residency", "{{years_of_residency}}"],
-    ["Pronoun", "{{pronoun}}"],
-    ["Pronoun verb", "{{pronoun_verb}}"],
-    ["Pronoun possessive", "{{pronoun_possessive}}"],
-    ["Punong Barangay name", "{{punong_barangay_name}}"],
-    ["Page break", "{{page_break}}"],
-  ];
-  const standardInsertKeys = new Set(standardInsertOptions.map(([, token]) => token.slice(2, -2)));
-  const insertOptions = [
-    ...standardInsertOptions,
-    ...fields
-      .filter((field) => field.key && !standardInsertKeys.has(field.key))
-      .map((field) => [field.label || field.key.replaceAll("_", " "), `{{${field.key}}}`]),
   ];
 
   return (
@@ -710,10 +668,11 @@ function SchemaEditor({ title, description, section, fields, changeField, addFie
               <button type="button" onClick={() => reorderEntry(section, index, index - 1)} disabled={index === 0} aria-label={`Move ${field.label || "question"} up`} className="rounded p-1.5 text-slate-500 hover:bg-slate-200 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button>
               <button type="button" onClick={() => reorderEntry(section, index, index + 1)} disabled={index === fields.length - 1} aria-label={`Move ${field.label || "question"} down`} className="rounded p-1.5 text-slate-500 hover:bg-slate-200 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button>
             </div>
-            <input required aria-label="Question" placeholder="Question residents will answer" value={field.label} onChange={(event) => changeField(section, index, { label: event.target.value })} className={controlClass} />
+            <input required aria-label="Question" placeholder="Question residents will answer" value={field.label} onChange={(event) => changeField(section, index, { label: event.target.value, key: makeFieldKey(event.target.value, field.key) })} className={controlClass} />
             <select aria-label="Answer format" value={field.type} onChange={(event) => changeField(section, index, { type: event.target.value })} className={controlClass}>
               {fieldTypes.map((type) => <option key={type} value={type}>{fieldTypeLabels[type]}</option>)}
             </select>
+            <input aria-label="Field group" placeholder="Group heading (optional)" value={field.group || ""} onChange={(event) => changeField(section, index, { group: event.target.value || undefined })} className={controlClass} />
             {field.type === "number" && (
               <div className="grid grid-cols-3 gap-2 sm:col-span-2 lg:col-span-4">
                 <input type="number" aria-label="Minimum value" placeholder="Minimum" value={field.min ?? ""} onChange={(event) => changeField(section, index, { min: event.target.value === "" ? undefined : Number(event.target.value) })} className={controlClass} />
