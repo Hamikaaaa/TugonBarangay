@@ -38,6 +38,7 @@ return new class extends Migration
             ['key' => 'transfer_location_to', 'label' => 'Transfer business to this location', 'type' => 'text', 'required' => false, 'showWhen' => ['key' => 'transfer_type', 'value' => 'Location'], 'requiredWhen' => ['key' => 'transfer_type', 'value' => 'Location'], 'group' => 'Transfers'],
             ['key' => 'transfer_owner_from', 'label' => 'Current owner / ownership', 'type' => 'text', 'required' => false, 'showWhen' => ['key' => 'transfer_type', 'value' => 'Ownership'], 'requiredWhen' => ['key' => 'transfer_type', 'value' => 'Ownership'], 'group' => 'Transfers'],
             ['key' => 'transfer_owner_to', 'label' => 'Transfer ownership to (person / entity)', 'type' => 'text', 'required' => false, 'showWhen' => ['key' => 'transfer_type', 'value' => 'Ownership'], 'requiredWhen' => ['key' => 'transfer_type', 'value' => 'Ownership'], 'group' => 'Transfers'],
+            ['key' => 'taxpayer_signature_name', 'label' => 'Taxpayer / authorized representative name', 'type' => 'text', 'required' => true, 'group' => 'Attestation'],
             ['key' => 'taxpayer_position', 'label' => 'Position', 'type' => 'text', 'required' => false, 'group' => 'Attestation'],
         ];
 
@@ -61,7 +62,10 @@ return new class extends Migration
             'name' => 'Business Clearance',
             'description' => "New applications require a Purok Certification, Cedula, applicant ID, DTI/SEC registration, and business photo. If rented, attach the contract of lease. If someone other than the owner is applying, attach the owner's authorization and both required IDs. Renewals require the previous Business Clearance.",
             'applicant_fields' => json_encode([
-                ['key' => 'full_name', 'label' => 'Name of taxpayer / applicant', 'type' => 'text', 'required' => true, 'section' => 'applicant'],
+                ['key' => 'full_name', 'label' => 'Name of taxpayer', 'type' => 'text', 'required' => true, 'section' => 'applicant'],
+                ['key' => 'first_name', 'label' => 'First name', 'type' => 'text', 'required' => true, 'section' => 'applicant'],
+                ['key' => 'last_name', 'label' => 'Last name', 'type' => 'text', 'required' => true, 'section' => 'applicant'],
+                ['key' => 'middle_name', 'label' => 'Middle name', 'type' => 'text', 'required' => false, 'section' => 'applicant'],
                 ['key' => 'address', 'label' => "Complete owner's address", 'type' => 'text', 'required' => true, 'section' => 'applicant'],
                 ['key' => 'contact_number', 'label' => 'Contact number', 'type' => 'tel', 'required' => true, 'section' => 'applicant'],
                 ['key' => 'email_address', 'label' => 'Email address', 'type' => 'email', 'required' => true, 'section' => 'applicant'],
