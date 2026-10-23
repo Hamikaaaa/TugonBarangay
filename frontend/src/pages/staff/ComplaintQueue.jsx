@@ -40,6 +40,13 @@ const STATUS_COLORS = {
   rejected: "#C44F5B",
   closed: "#7A8290",
 };
+const TIMELINE_TONES = {
+  pending: "#D89A35",
+  in_progress: "#3976C5",
+  resolved: "#258A72",
+  rejected: "#C44F5B",
+  closed: "#7A8290",
+};
 const TRANSITIONS = {
   pending: ["in_progress", "resolved", "rejected"],
   in_progress: ["resolved", "rejected"],
@@ -54,7 +61,7 @@ const TRANSITION_ICONS = {
   closed: Archive,
 };
 
-function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = false, complaintId = null, analyticsOnly = false, listOnly = false, hideAdminHeader = false }) {
+function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = false, complaintId = null, analyticsOnly = false, listOnly = false, hideAdminHeader = false, blotterHistory = false }) {
   const { token } = useAuth();
   const navigate = useNavigate();
   const [complaints, setComplaints] = useState([]);
@@ -80,6 +87,8 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
 
   const endpoint = isAdmin ? "/admin/complaints" : "/staff/complaints";
   const statusLocked = Object.hasOwn(STATUS_LABELS, initialStatus);
+  // The blotter view keeps its own layout and does not show the summary cards.
+  const isBlotterView = blotterHistory || statusFilter === "blotter";
   const filterGridColumns = isAdmin
     ? "xl:grid-cols-[minmax(0,1fr)_minmax(145px,170px)_minmax(145px,190px)_minmax(145px,170px)]"
     : statusLocked
@@ -120,6 +129,43 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
       if (statusFilter !== "all") query.set("status", statusFilter);
       if (priorityFilter !== "all") query.set("priority", priorityFilter);
       if (categoryFilter) query.set("category", categoryFilter);
+
+      if (isBlotterView) {
+        const blotterEndpoint = isAdmin
+          ? "/admin/blotter/entries"
+          : "/staff/blotter/entries";
+        const url = `${API_URL}${blotterEndpoint}?${query}`;
+        const response = await fetch(url, { headers: authHeaders(token) });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || "Unable to load blotter entries.");
+        setError("");
+        setComplaints(
+          (payload.data || []).map((entry) => ({
+            id: entry.id,
+            subject: entry.incident_type,
+            user: { name: entry.resident_name },
+            category: entry.incident_type,
+            priority: "normal",
+            status: entry.status,
+            created_at: entry.incident_date,
+            _blotter: true,
+            _reference: entry.reference_code,
+            _complainant: entry.complainant_name,
+            _incidentDate: entry.incident_date,
+            _incidentTime: entry.incident_time,
+            _location: entry.location,
+            _narrative: entry.narrative,
+            _remarks: entry.remarks,
+          }))
+        );
+        setPagination({
+          current_page: payload.current_page || 1,
+          last_page: payload.last_page || 1,
+          total: payload.total || 0,
+        });
+        return;
+      }
+
       const url = complaintId
         ? `${API_URL}${endpoint}/${complaintId}`
         : `${API_URL}${endpoint}?${query}`;
@@ -155,7 +201,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
     } finally {
       setLoading(false);
     }
-  }, [categoryFilter, complaintId, endpoint, page, priorityFilter, search, statusFilter, token]);
+  }, [categoryFilter, complaintId, endpoint, isAdmin, isBlotterView, page, priorityFilter, search, statusFilter, token]);
 
   useEffect(() => {
     // Load the selected server page and update the queue when its filters change.
@@ -241,6 +287,19 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
     }
   };
 
+  const complaintTimeline = useMemo(() => {
+    if (!selected) return [];
+    const entries = [];
+    if (selected.created_at) {
+      entries.push({ key: "filed", label: "Filed", at: selected.created_at });
+    }
+    const statusAt = selected.status_updated_at || selected.updated_at;
+    if (statusAt) {
+      entries.push({ key: "status", label: STATUS_LABELS[selected.status] || selected.status, at: statusAt });
+    }
+    return entries;
+  }, [selected]);
+
   const totalComplaints = Object.values(counts).reduce((sum, count) => sum + Number(count), 0);
   const visibleStatus = useMemo(() => {
     const stats = [
@@ -306,7 +365,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
         </AdminPageHeader>
       ) : null}
 
-      {!listOnly && (
+      {!listOnly && !complaintId && !isBlotterView && (
         <section className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label="Complaint summary">
           {visibleStatus.map(({ label, value, icon: Icon, color }) => (
             <article key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -322,7 +381,8 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
         </section>
       )}
 
-      {isAdmin && !listOnly && <section className="mb-7 grid gap-5 xl:grid-cols-[1.35fr_1fr]" aria-label="Complaint analytics">
+      {isAdmin && !listOnly && !blotterHistory && (
+        <section className="mb-7 grid gap-5 xl:grid-cols-[1.35fr_1fr]" aria-label="Complaint analytics">
         <article className="rounded-xl border border-slate-200 bg-white p-5">
           <div className="mb-5 flex items-start justify-between gap-4">
             <div>
@@ -410,7 +470,8 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
             })}
           </div>
         </article>
-      </section>}
+      </section>
+      )}
 
       {notice && (
         <div className="mb-5 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
@@ -429,28 +490,31 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
       {!complaintId && !analyticsOnly && <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-base font-bold text-[#132A4A]">Resident complaints</h3>
-            <p className="mt-1 text-xs text-slate-500">{statusLocked ? `Showing ${STATUS_LABELS[statusFilter]} complaints only. ` : ""}{categoryFilter ? `Showing ${categoryFilter} complaints. ` : ""}Search, filter, review evidence, and update case status.</p>
+            <h3 className="text-base font-bold text-[#132A4A]">{isBlotterView ? "Blotter history" : "Resident complaints"}</h3>
+            <p className="mt-1 text-xs text-slate-500">{isBlotterView ? "Search and review barangay blotter entries recorded by staff." : statusLocked ? `Showing ${STATUS_LABELS[statusFilter]} complaints only. ` : ""}{categoryFilter ? `Showing ${categoryFilter} complaints. ` : ""}Search, filter, review evidence, and update case status.</p>
           </div>
           <span className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">{pagination.total} complaints</span>
         </div>
         <div className={`grid gap-3 border-b border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2 ${filterGridColumns}`}>
           <label className="relative block">
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input value={search} onChange={(event) => { setLoading(true); setSearch(event.target.value); setPage(1); }} placeholder="Search case, resident, or category..." className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-medium text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" />
+            <input value={search} onChange={(event) => { setLoading(true); setSearch(event.target.value); setPage(1); }} placeholder={isBlotterView ? "Search reference, resident, or incident..." : "Search case, resident, or category..."} className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-medium text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" />
           </label>
-          {!statusLocked && (
+          {!blotterHistory && !statusLocked && (
             <select value={statusFilter} onChange={(event) => { setLoading(true); setStatusFilter(event.target.value); setPage(1); }} aria-label="Filter by complaint status" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]">
               <option value="all">All statuses</option>
+              <option value="blotter">Blotter history</option>
               {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           )}
-          <CategoryFilterDropdown
-            value={categoryFilter}
-            categories={availableCategories}
-            onChange={(value) => { setLoading(true); setCategoryFilter(value); setPage(1); }}
-          />
-          {isAdmin && (
+          {!isBlotterView && (
+            <CategoryFilterDropdown
+              value={categoryFilter}
+              categories={availableCategories}
+              onChange={(value) => { setLoading(true); setCategoryFilter(value); setPage(1); }}
+            />
+          )}
+          {isAdmin && !isBlotterView && (
             <select value={priorityFilter} onChange={(event) => { setLoading(true); setPriorityFilter(event.target.value); setPage(1); }} aria-label="Filter by complaint priority" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]">
               <option value="all">All priorities</option>
               <option value="normal">Normal priority</option>
@@ -464,63 +528,119 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
           ) : complaints.length === 0 ? (
             <div className="p-14 text-center">
               <FileText className="mx-auto text-slate-400" size={24} />
-              <p className="mt-4 text-sm font-bold text-slate-700">No complaints found</p>
-              <p className="mt-1 text-xs text-slate-500">Try changing your search or status filter.</p>
+              <p className="mt-4 text-sm font-bold text-slate-700">{isBlotterView ? "No blotter entries found" : "No complaints found"}</p>
+              <p className="mt-1 text-xs text-slate-500">{isBlotterView ? "Record a new blotter entry from the blotter page or adjust the current filters." : "Try changing your search or status filter."}</p>
             </div>
           ) : (
             <table className="w-full min-w-[820px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
-                  <th className="px-5 py-3.5">Case</th><th className="px-5 py-3.5">Resident</th><th className="px-5 py-3.5">Category</th><th className="px-5 py-3.5">Priority</th><th className="px-5 py-3.5">Status</th><th className="px-5 py-3.5 text-right">Review</th>
+                  <th className="px-5 py-3.5">Case</th>
+                  <th className="px-5 py-3.5">Resident</th>
+                  {isBlotterView && <th className="px-5 py-3.5">Filed by</th>}
+                  {isBlotterView && <th className="px-5 py-3.5">Filed at</th>}
+                  <th className="px-5 py-3.5">Category</th>
+                  {!isBlotterView && <th className="px-5 py-3.5">Priority</th>}
+                  <th className="px-5 py-3.5">Status</th>
+                  {!isBlotterView ? (
+                    <th className="px-5 py-3.5 text-right">Review</th>
+                  ) : (
+                    <th className="px-5 py-3.5 text-right">View</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {complaints.map((complaint) => (
-                  <tr key={complaint.id} className={`transition hover:bg-blue-50/30 ${selected?.id === complaint.id ? "bg-blue-50/40" : ""}`}>
-                    <td className="px-5 py-4">
-                      <p className="text-xs font-bold text-[#2455D6]">CMP-{String(complaint.id).padStart(5, "0")}</p>
-                      <p className="mt-1 max-w-56 truncate text-xs font-semibold text-slate-700">{complaint.subject}</p>
-                    </td>
-                    <td className="px-5 py-4 text-xs font-semibold text-slate-700">{complaint.user?.name || "Unknown resident"}</td>
-                    <td className="px-5 py-4 text-xs text-slate-600">{complaint.category}</td>
-                    <td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${complaint.priority === "urgent" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>{complaint.priority === "urgent" ? "Urgent" : "Normal"}</span></td>
-                    <td className="px-5 py-4"><StatusBadge status={complaint.status} /></td>
-                    <td className="px-5 py-4 text-right">
-                      {isAdmin ? (
-                        <button
-                          type="button"
-                          onClick={() => selectComplaint(complaint)}
-                          aria-expanded={selected?.id === complaint.id}
-                          className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-[#2455D6] hover:bg-[#EEF4FF] hover:text-[#2455D6] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
-                        >
-                          {selected?.id === complaint.id ? (
-                            <X size={14} aria-hidden="true" />
-                          ) : (
-                            <Eye size={14} aria-hidden="true" />
-                          )}
-                          {selected?.id === complaint.id ? "Close" : "Review"}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (isDashboard) {
-                              navigate(`/staff/complaints?status=${encodeURIComponent(complaint.status)}`);
-                            } else {
-                              navigate(`/staff/complaints/${complaint.id}`, {
-                                state: { status: complaint.status },
-                              });
-                            }
-                          }}
-                          className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]"
-                        >
-                          <Eye size={14} className="mr-1.5 inline-block" aria-hidden="true" />
-                          Review
-                        </button>
+                {complaints.map((complaint) => {
+                  const isBlotterEntry = complaint._blotter;
+                  return (
+                    <tr key={complaint.id} className={`transition hover:bg-blue-50/30 ${selected?.id === complaint.id ? "bg-blue-50/40" : ""}`}>
+                      <td className="px-5 py-4">
+                        <p className="text-xs font-bold text-[#2455D6]">
+                          {isBlotterEntry
+                            ? complaint._reference
+                            : `CMP-${String(complaint.id).padStart(5, "0")}`}
+                        </p>
+                        <p className="mt-1 max-w-56 truncate text-xs font-semibold text-slate-700">
+                          {complaint.subject}
+                        </p>
+                      </td>
+                      <td className="px-5 py-4 text-xs font-semibold text-slate-700">
+                        {complaint.user?.name || "Unknown resident"}
+                      </td>
+                      {isBlotterView && (
+                        <td className="px-5 py-4 text-xs text-slate-600">
+                          {complaint._complainant || "—"}
+                        </td>
                       )}
-                    </td>
-                  </tr>
-                ))}
+                      {isBlotterView && (
+                        <td className="px-5 py-4 text-xs text-slate-600">
+                          {complaint._incidentDate || complaint._incidentTime
+                            ? `${formatDate(complaint._incidentDate)}${
+                                complaint._incidentTime ? ` · ${formatTime(complaint._incidentTime)}` : ""
+                              }`
+                            : "—"}
+                        </td>
+                      )}
+                      <td className="px-5 py-4 text-xs text-slate-600">{complaint.category}</td>
+                      {!isBlotterView && (
+                        <td className="px-5 py-4">
+                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${complaint.priority === "urgent" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+                            {complaint.priority === "urgent" ? "Urgent" : "Normal"}
+                          </span>
+                        </td>
+                      )}
+                      <td className="px-5 py-4"><StatusBadge status={complaint.status} /></td>
+                      {!isBlotterView ? (
+                        <td className="px-5 py-4 text-right">
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => selectComplaint(complaint)}
+                              aria-expanded={selected?.id === complaint.id}
+                              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-[#2455D6] hover:bg-[#EEF4FF] hover:text-[#2455D6] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
+                            >
+                              {selected?.id === complaint.id ? (
+                                <X size={14} aria-hidden="true" />
+                              ) : (
+                                <Eye size={14} aria-hidden="true" />
+                              )}
+                              {selected?.id === complaint.id ? "Close" : "Review"}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isDashboard) {
+                                  navigate(`/staff/complaints?status=${encodeURIComponent(complaint.status)}`);
+                                } else {
+                                  navigate(`/staff/complaints/${complaint.id}`, {
+                                    state: { status: complaint.status },
+                                  });
+                                }
+                              }}
+                              className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]"
+                            >
+                              <Eye size={14} className="mr-1.5 inline-block" aria-hidden="true" />
+                              Review
+                            </button>
+                          )}
+                        </td>
+                      ) : (
+                        <td className="px-5 py-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => selectComplaint(complaint)}
+                            aria-label="View blotter details"
+                            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-[#2455D6] hover:bg-[#EEF4FF] hover:text-[#2455D6] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
+                          >
+                            <Eye size={14} className="mr-1.5 inline-block" aria-hidden="true" />
+                            View details
+                          </button>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -551,16 +671,16 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
             <div className="col-span-full flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#2455D6]">
-                  CMP-{String(selected.id).padStart(5, "0")}
+                  {selected._blotter ? selected._reference : `CMP-${String(selected.id).padStart(5, "0")}`}
                 </p>
                 <h2 id="admin-complaint-review-title" className="mt-1 text-lg font-bold text-[#132A4A]">
-                  Complaint review
+                  {selected._blotter ? "Blotter entry" : "Complaint review"}
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={() => setSelected(null)}
-                aria-label="Close complaint review"
+                aria-label="Close review"
                 className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition hover:border-[#2455D6] hover:bg-[#EEF4FF] hover:text-[#2455D6] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
               >
                 <X size={16} aria-hidden="true" />
@@ -570,22 +690,64 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
           <div>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#2455D6]">CMP-{String(selected.id).padStart(5, "0")}</p>
+                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#2455D6]">
+                  {selected._blotter ? selected._reference : `CMP-${String(selected.id).padStart(5, "0")}`}
+                </p>
                 <h3 className="mt-1 text-lg font-bold text-[#132A4A]">{selected.subject}</h3>
-                <p className="mt-1 text-xs text-slate-500">{selected.user?.name || "Unknown resident"} · {formatDate(selected.created_at)}</p>
+                {selected._blotter ? (
+                  <p className="mt-1 text-xs text-slate-500">
+                    Filed by {selected._complainant || "—"} · Resident: {selected.user?.name || "Unknown resident"} · {formatDate(selected.created_at)}
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs text-slate-500">{selected.user?.name || "Unknown resident"} · {formatDate(selected.created_at)}</p>
+                )}
               </div>
               <StatusBadge status={selected.status} />
             </div>
             <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-              <Detail label="Category" value={selected.category} />
-              <Detail label="Priority" value={selected.priority === "urgent" ? "Urgent review" : "Normal"} />
-              <Detail label="Incident date" value={formatDate(selected.incident_date)} />
-              <Detail label="Incident location" value={selected.location} />
-              <Detail label="Person(s) involved" value={selected.involved_persons} />
-              <Detail label="Description" value={selected.description} wide />
-              <Detail label="Additional information" value={selected.relevant_information} wide />
-              {selected.evidence_path && <EvidenceDownload complaint={selected} token={token} isAdmin={isAdmin} />}
+              {selected._blotter ? (
+                <>
+                  <Detail label="Reference" value={selected._reference} />
+                  <Detail label="Complainant (filed by)" value={selected._complainant} />
+                  <Detail label="Resident (blottered)" value={selected.user?.name} />
+                  <Detail label="Incident type" value={selected.category} />
+                  <Detail label="Incident date" value={formatDate(selected._incidentDate)} />
+                  <Detail label="Incident time" value={formatTime(selected._incidentTime)} />
+                  <Detail label="Location" value={selected._location} />
+                  <Detail label="Narrative" value={selected._narrative} wide />
+                  {selected._remarks && <Detail label="Remarks" value={selected._remarks} wide />}
+                </>
+              ) : (
+                <>
+                  <Detail label="Category" value={selected.category} />
+                  <Detail label="Priority" value={selected.priority === "urgent" ? "Urgent review" : "Normal"} />
+                  <Detail label="Incident date" value={formatDate(selected.incident_date)} />
+                  <Detail label="Incident location" value={selected.location} />
+                  <Detail label="Person(s) involved" value={selected.involved_persons} />
+                  <Detail label="Description" value={selected.description} wide />
+                  <Detail label="Additional information" value={selected.relevant_information} wide />
+                  {selected.evidence_path && <EvidenceDownload complaint={selected} token={token} isAdmin={isAdmin} />}
+                </>
+              )}
             </dl>
+            <div className="mt-5 border-t border-slate-100 pt-4">
+              <h4 className="text-sm font-bold text-[#132A4A]">Case timeline</h4>
+              {complaintTimeline.length > 0 ? (
+                <ol className="mt-4 space-y-3">
+                  {complaintTimeline.map((entry) => (
+                    <li key={entry.key} className="flex items-start gap-3 text-sm">
+                      <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TIMELINE_TONES[entry.key === "filed" ? "pending" : selected.status]}`} />
+                      <div className="min-w-0">
+                        <p className="font-semibold text-[#172B4D]">{entry.label}</p>
+                        <p className="text-xs text-slate-500">{formatDateTime(entry.at)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="mt-4 text-xs text-slate-500">No timeline recorded yet.</p>
+              )}
+            </div>
           </div>
           <div className="border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
             {isAdmin ? (
@@ -810,6 +972,29 @@ function formatDate(value) {
   if (!value) return "—";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function formatTime(value) {
+  if (!value) return "—";
+  const timeStr = String(value).trim();
+  if (!timeStr) return "—";
+  const parts = timeStr.split(":");
+  if (parts.length >= 2) {
+    const hours = Number(parts[0]);
+    const minutes = parts[1];
+    if (Number.isNaN(hours) || Number.isNaN(Number(minutes))) return timeStr;
+    const ampm = hours >= 12 ? "PM" : "AM";
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes.padStart(2, "0")} ${ampm}`;
+  }
+  return timeStr;
 }
 
 function authHeaders(token) {

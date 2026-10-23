@@ -563,6 +563,7 @@ class StaffController extends Controller
 
         DB::transaction(function () use ($complaint, $validated): void {
             $complaint->status = $validated['status'];
+            $complaint->status_updated_at = now();
             $complaint->staff_remarks = $validated['staff_remarks'] ?? null;
             $complaint->resolution_details = $validated['resolution_details'] ?? null;
             $complaint->resolved_at = in_array($validated['status'], ['resolved', 'closed'], true)
@@ -672,16 +673,15 @@ class StaffController extends Controller
                 $registry = $dateMatches->first();
             }
         }
-        $submittedDateOfBirth = $submitted['date_of_birth'] ?? $resident->date_of_birth;
+        $submittedDateOfBirth = blank($submitted['date_of_birth'] ?? null) ? $resident->date_of_birth : $submitted['date_of_birth'];
         if (!$registry && !blank($submitted['full_name'] ?? null) && !blank($submittedDateOfBirth)) {
             $submittedName = trim((string) $submitted['full_name']);
             $submittedNameMatches = BarangayRegistry::query()
                 ->whereDate('date_of_birth', $submittedDateOfBirth)
                 ->get()
-                ->filter(fn (BarangayRegistry $candidate) => $this->sameIdentityValue(
+                ->filter(fn (BarangayRegistry $candidate) => $this->requestNameMatchesRegistry(
                     $submittedName,
-                    $this->registryFullName($candidate),
-                    'full_name',
+                    $candidate,
                 ))
                 ->take(2)
                 ->values();
@@ -707,21 +707,46 @@ class StaffController extends Controller
             }
         }
 
-        if (!$registry) {
-            return [
-                'ok' => false,
-                'registry_found' => false,
-                'fields' => [],
-                'message' => 'No unique barangay registry record matches this resident. Ask an administrator to verify the resident records.',
-            ];
-        }
-
         $profileFullName = collect([
             $resident->first_name,
             $resident->middle_name,
             $resident->last_name,
             $resident->suffix,
         ])->filter()->implode(' ');
+
+        if (!$registry) {
+            $submittedFullName = collect([
+                $submitted['first_name'] ?? null,
+                $submitted['middle_name'] ?? null,
+                $submitted['last_name'] ?? null,
+                $submitted['suffix'] ?? null,
+            ])->filter()->implode(' ') ?: ($submitted['full_name'] ?? $profileFullName);
+
+            $fields = [
+                ['key' => 'full_name', 'label' => 'Full name', 'profile' => $profileFullName, 'registry' => 'No unique match', 'submitted' => $submittedFullName, 'ok' => false],
+                ['key' => 'date_of_birth', 'label' => 'Date of birth', 'profile' => $resident->date_of_birth, 'registry' => 'No unique match', 'submitted' => $submitted['date_of_birth'] ?? $submittedDateOfBirth, 'ok' => false],
+                ['key' => 'sex', 'label' => 'Sex', 'profile' => $resident->sex, 'registry' => 'No unique match', 'submitted' => $submitted['sex'] ?? null, 'ok' => false],
+                ['key' => 'purok', 'label' => 'Purok', 'profile' => $resident->purok, 'registry' => 'No unique match', 'submitted' => $submitted['purok'] ?? null, 'ok' => false],
+            ];
+
+            if (!blank($resident->address) || !blank($submitted['address'] ?? null)) {
+                $fields[] = [
+                    'key' => 'address',
+                    'label' => 'Address',
+                    'profile' => $resident->address,
+                    'registry' => 'No unique match',
+                    'submitted' => $submitted['address'] ?? null,
+                    'ok' => false,
+                ];
+            }
+
+            return [
+                'ok' => false,
+                'registry_found' => false,
+                'fields' => $fields,
+                'message' => 'No unique barangay registry record matches this resident. Ask an administrator to verify the resident records.',
+            ];
+        }
         $registryFullName = $this->registryFullName($registry);
         $values = [
             'full_name' => ['label' => 'Full name', 'profile' => $profileFullName, 'registry' => $registryFullName],
