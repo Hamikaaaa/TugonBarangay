@@ -12,6 +12,9 @@ import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
 
 const APPLICANT_FIELDS = {
   full_name: { label: "Full Name", type: "text" },
+  first_name: { label: "First name", type: "text" },
+  last_name: { label: "Last name", type: "text" },
+  middle_name: { label: "Middle name", type: "text", required: false },
   address: {
     label: "House/Building No., Street, and Subdivision",
     type: "text",
@@ -63,6 +66,7 @@ function getApplicantDefaults(user = {}) {
     business_purok: user.purok || "",
     business_address: user.address || "",
     tax_year: String(new Date().getFullYear()),
+    taxpayer_signature_name: "",
   };
 }
 
@@ -253,9 +257,12 @@ const DOCUMENT_TYPES = [
     label: "Business Clearance",
     value: "Business Permit",
     notice: "For new applications, attach a Purok Certification, Cedula, applicant ID, DTI/SEC registration, and a picture of the business. If rented, attach the contract of lease. If someone other than the owner is applying, attach the owner's authorization and both required IDs. For renewals, attach the previous Business Clearance.",
-    applicantFields: ["full_name", "address", "contact_number", "email_address", "applicant_is_owner", "authorized_person_name"],
+    applicantFields: ["full_name", "first_name", "last_name", "middle_name", "address", "contact_number", "email_address", "applicant_is_owner", "authorized_person_name"],
     applicantFieldConfigs: [
-      { key: "full_name", label: "Name of taxpayer / applicant", type: "text", required: true },
+      { key: "full_name", label: "Name of taxpayer", type: "text", required: true },
+      { key: "first_name", label: "First name", type: "text", required: true },
+      { key: "last_name", label: "Last name", type: "text", required: true },
+      { key: "middle_name", label: "Middle name", type: "text", required: false },
       { key: "address", label: "Complete owner's address", type: "text", required: true },
       { key: "contact_number", label: "Contact number", type: "tel", required: true },
       { key: "email_address", label: "Email address", type: "email", required: true },
@@ -284,6 +291,7 @@ const DOCUMENT_TYPES = [
       { key: "transfer_location_to", label: "Transfer business to this location", type: "text", required: false, showWhen: { key: "transfer_type", value: "Location" }, requiredWhen: { key: "transfer_type", value: "Location" }, group: "Transfers" },
       { key: "transfer_owner_from", label: "Current owner / ownership", type: "text", required: false, showWhen: { key: "transfer_type", value: "Ownership" }, requiredWhen: { key: "transfer_type", value: "Ownership" }, group: "Transfers" },
       { key: "transfer_owner_to", label: "Transfer ownership to (person / entity)", type: "text", required: false, showWhen: { key: "transfer_type", value: "Ownership" }, requiredWhen: { key: "transfer_type", value: "Ownership" }, group: "Transfers" },
+      { key: "taxpayer_signature_name", label: "Taxpayer / authorized representative name", type: "text", required: true, group: "Attestation" },
       { key: "taxpayer_position", label: "Position", type: "text", required: false, group: "Attestation" },
     ],
     requirements: [
@@ -871,12 +879,16 @@ function Documents({ requests, token, onRefresh, user }) {
                     ...(nextDocumentType === "Business Permit"
                       ? {
                           full_name: "",
+                          first_name: "",
+                          last_name: "",
+                          middle_name: "",
                           address: "",
                           contact_number: "",
                           email_address: "",
                           tax_year: "",
                           business_address: "",
                           business_purok: "",
+                          taxpayer_signature_name: "",
                         }
                       : {}),
                   });
@@ -886,7 +898,6 @@ function Documents({ requests, token, onRefresh, user }) {
                   setDocumentType(event.target.value);
                   setFormFields(getApplicantDefaults(user));
                   clearRequirementFiles();
-main
                 }}
                 className={inputClass}
               >
@@ -966,13 +977,14 @@ main
                       <label key={key} className="block">
                         <span className="text-sm font-bold text-slate-700">
                           {field.label}
+                          {field.required && <span className="ml-1 text-red-600" aria-hidden="true">*</span>}
                         </span>
                         {field.type === "select" ? (
                           <select
                             required={field.requiredWhen
                               ? conditionMatches(field.requiredWhen, formFields)
                               : field.required !== false}
-                            value={formFields[key] || ""}
+                            value={formFields[key] ?? ""}
                             onChange={(event) =>
                               setFormFields((current) => ({
                                 ...current,
@@ -1037,7 +1049,7 @@ main
                           : field.required !== false;
                       const controlProps = {
                         required,
-                        value: formFields[field.key] || "",
+                        value: formFields[field.key] ?? "",
                         onChange: (event) =>
                           setFormFields((current) => ({
                             ...current,
@@ -1085,8 +1097,7 @@ main
                     <button type="button" onClick={() => setBusinessAttestationOpen(true)} className="min-h-9 rounded-lg border border-[#2455D6]/25 bg-white px-3 text-xs font-bold text-[#2455D6] hover:bg-blue-50">View optional attestation</button>
                   </div>
                 </div>}
-              </div>}
-              </div>main
+              </div>
 
               <div className="mt-6 border-t border-slate-100 pt-5">
                 <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-end">
