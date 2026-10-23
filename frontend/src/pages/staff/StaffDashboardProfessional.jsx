@@ -1,9 +1,10 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   Archive,
   BadgeCheck,
   BriefcaseBusiness,
+  Camera,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -24,7 +25,6 @@ import DocumentPreviewModal from "./DocumentPreviewModal";
 import FeeAssessment from "../../components/document/FeeAssessment";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import StaffLayout from "./StaffLayout";
-import useBlotterNavigation from "../../hooks/useBlotterNavigation";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const DOCUMENT_TYPES_CACHE_KEY = "staff-document-types";
@@ -92,6 +92,15 @@ const STATUS_META = {
   rejected: { label: "Rejected", className: "bg-[#FFF0EE] text-[#C74444] ring-[#F2D4D0]", icon: CircleAlert },
 };
 
+function hasApprovedPermitInspection(request) {
+  const report = request?.details?.inspection_report;
+  return report?.decision === "go_ahead" && Boolean(report.file_path);
+}
+
+function requiresPermitInspection(request) {
+  return ["Construction Permit", "Fencing Permit"].includes(request?.document_type);
+}
+
 const WORKFLOW = [
   { status: "pending", description: "Request received" },
   { status: "under_review", description: "Check resident details and uploads" },
@@ -114,7 +123,6 @@ function StaffDashboardProfessional({ documentType = "" }) {
   const { token, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const blotterNavigation = useBlotterNavigation();
   const [documentTypes, setDocumentTypes] = useState(
     () => readCachedDocumentTypes() || DEFAULT_DOCUMENT_TYPES,
   );
@@ -368,6 +376,10 @@ function StaffDashboardProfessional({ documentType = "" }) {
 
   const openPreview = async (request) => {
     if (!request || !token) return;
+    if (requiresPermitInspection(request) && !hasApprovedPermitInspection(request)) {
+      setError(`Upload the completed inspection report and confirm the councilor's go-ahead before generating the ${request.document_type}.`);
+      return;
+    }
     if (request.status !== "processing") {
       setSelectedRequest(request);
       setStaffRemarks(request.staff_remarks || "");
@@ -488,7 +500,6 @@ function StaffDashboardProfessional({ documentType = "" }) {
       icon: DOCUMENT_TYPE_ICONS[item.value] || FileText,
       path: `/staff/document-types/${encodeURIComponent(item.value)}`,
     })),
-    blotterNavigation,
   ];
 
   if (documentType && !documentTypesLoading && !activeType) {
@@ -663,13 +674,24 @@ function StaffDashboardProfessional({ documentType = "" }) {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-40"><Eye size={14} /> {selectedRequest.document_content ? "Preview document" : selectedRequest.status === "processing" ? "Generate and preview" : "Preview template"}</button>
+                  <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting || (requiresPermitInspection(selectedRequest) && !hasApprovedPermitInspection(selectedRequest))} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-40"><Eye size={14} /> {requiresPermitInspection(selectedRequest) && !hasApprovedPermitInspection(selectedRequest) ? "Inspection report and go-ahead required" : selectedRequest.document_content ? "Preview document" : selectedRequest.status === "processing" ? "Generate and preview" : "Preview template"}</button>
                 </div>
               </div>
 
               <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_340px]">
                 <div className="border-b border-slate-200 p-5 sm:p-6 xl:border-b-0 xl:border-r">
                   <RequestDetails request={selectedRequest} token={token} onFeeUpdated={handleFeeUpdated} />
+                  {requiresPermitInspection(selectedRequest) && (
+                    <PermitInspectionPanel
+                      key={selectedRequest.id}
+                      request={selectedRequest}
+                      token={token}
+                      onSaved={(updatedRequest) => {
+                        setSelectedRequest(updatedRequest);
+                        setRequests((current) => current.map((request) => request.id === updatedRequest.id ? { ...request, ...updatedRequest } : request));
+                      }}
+                    />
+                  )}
                   <div className="mt-6 rounded-xl border border-[#E6ECF5] bg-[#F6F8FC] p-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -722,7 +744,11 @@ function StaffDashboardProfessional({ documentType = "" }) {
                       <span className="text-[10px] font-bold uppercase tracking-wide text-[#55708F]">Current status</span>
                     </div>
                     <p className="mt-2 text-xs leading-5 text-slate-700">
-                      {WORKFLOW_GUIDANCE[selectedRequest.status] || "Review the request and follow the available action below."}
+                      {selectedRequest.status === "processing" && requiresPermitInspection(selectedRequest)
+                        ? hasApprovedPermitInspection(selectedRequest)
+                          ? `The councilor has given the inspection go-ahead. You can now prepare the ${selectedRequest.document_type}.`
+                          : `Complete and save the inspection report. The ${selectedRequest.document_type} stays locked until the councilor gives the go-ahead.`
+                        : WORKFLOW_GUIDANCE[selectedRequest.status] || "Review the request and follow the available action below."}
                     </p>
                   </div>
 
@@ -749,8 +775,18 @@ function StaffDashboardProfessional({ documentType = "" }) {
                       <h3 className="text-xs font-bold text-slate-800">Available action</h3>
                       <p className="mt-1 text-[11px] leading-4 text-slate-500">
                         {selectedRequest.status === "pending" && "Select Start requirements review to begin processing."}
-                        {selectedRequest.status === "under_review" && "Select Approve and process after verifying the resident's details."}
-                        {selectedRequest.status === "processing" && "Generate and review the document before marking it ready for release."}
+                        {selectedRequest.status === "under_review" && (selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_blocking_case
+                          ? "An unresolved complaint or open or referred case blocks approval of this Barangay Clearance."
+                          : selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_involved_person_match
+                            ? "A close name match was found in complaint records. Start processing to review the record-check outcome before printing or release."
+                          : "Select Approve and process after verifying the resident's details.")}
+                        {selectedRequest.status === "processing" && (selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_blocking_case
+                          ? "An unresolved complaint or open or referred case blocks clearance printing and release."
+                          : selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_involved_person_match && !selectedRequest.document_content?.derogatory_reviewed
+                            ? "A close name match was found in complaint records. Select an outcome in the document preview and save it to complete the required review."
+                          : selectedRequest.document_type === "Barangay Certification" && selectedRequest.document_content?.derogatory_status !== "no_derogatory_record"
+                            ? "Confirm NO DEROGATORY RECORDS in the document preview before marking this clearance ready."
+                            : "Generate and review the document before marking it ready for release.")}
                         {selectedRequest.status === "ready_for_release" && "Select Complete request only after the resident claims the document."}
                         {["for_correction", "completed", "rejected"].includes(selectedRequest.status) && "There is no staff status action available at this stage."}
                       </p>
@@ -774,12 +810,12 @@ function StaffDashboardProfessional({ documentType = "" }) {
                         <button type="button" onClick={() => updateStatus("under_review")} disabled={submitting} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50"><Search size={14} /> {submitting ? "Updating request..." : "Start requirements review"}</button>
                       )}
                       {selectedRequest.status === "under_review" && (
-                        <button type="button" onClick={() => updateStatus("processing")} disabled={submitting} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50"><Settings2 size={14} /> {submitting ? "Updating request..." : "Approve requirements and start processing"}</button>
+                        <button type="button" onClick={() => updateStatus("processing")} disabled={submitting || (selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_blocking_case)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50"><Settings2 size={14} /> {submitting ? "Updating request..." : "Approve requirements and start processing"}</button>
                       )}
                       {selectedRequest.status === "processing" && (
                         <>
-                          <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50"><Eye size={14} /> Generate and review document</button>
-                          <button type="button" onClick={() => updateStatus("ready_for_release")} disabled={submitting || !selectedRequest.document_content} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#CDEBD8] bg-[#ECF9F1] px-3 py-2 text-xs font-bold text-[#21864A] transition hover:bg-[#DDF3E5] disabled:opacity-50"><FileCheck2 size={14} /> Mark ready for release</button>
+                          <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting || (requiresPermitInspection(selectedRequest) && !hasApprovedPermitInspection(selectedRequest))} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50"><Eye size={14} /> {requiresPermitInspection(selectedRequest) && !hasApprovedPermitInspection(selectedRequest) ? "Inspection report and go-ahead required" : "Generate and review document"}</button>
+                          <button type="button" onClick={() => updateStatus("ready_for_release")} disabled={submitting || !selectedRequest.document_content || (selectedRequest.document_type === "Barangay Certification" && (selectedRequest.identity_review?.has_blocking_case || selectedRequest.document_content?.derogatory_status !== "no_derogatory_record" || (selectedRequest.identity_review?.has_involved_person_match && !selectedRequest.document_content?.derogatory_reviewed)))} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#CDEBD8] bg-[#ECF9F1] px-3 py-2 text-xs font-bold text-[#21864A] transition hover:bg-[#DDF3E5] disabled:opacity-50"><FileCheck2 size={14} /> Mark ready for release</button>
                           {!selectedRequest.document_content && (
                             <p className="text-[10px] leading-4 text-slate-500">Generate and review the document first. Then this action will be enabled.</p>
                           )}
@@ -825,6 +861,234 @@ function StaffDashboardProfessional({ documentType = "" }) {
       )}
     </StaffLayout>
   );
+}
+
+function PermitInspectionPanel({ request, token, onSaved }) {
+  const existing = request.details?.inspection_report || {};
+  const [inspectionFile, setInspectionFile] = useState(null);
+  const [councilorGoAhead, setCouncilorGoAhead] = useState(existing.decision === "go_ahead");
+  const [assessedFee, setAssessedFee] = useState(String(existing.assessed_fee ?? (request.details?.fee_assessed ? request.fee : "")));
+  const [staffNote, setStaffNote] = useState(existing.staff_note || "");
+  const [saving, setSaving] = useState(false);
+  const [viewing, setViewing] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [error, setError] = useState("");
+  const editable = request.status === "processing";
+  const saved = Boolean(existing.file_path);
+
+  useEffect(() => {
+    setAssessedFee(String(existing.assessed_fee ?? (request.details?.fee_assessed ? request.fee : "")));
+  }, [existing.assessed_fee, request.details?.fee_assessed, request.fee]);
+
+  const saveReport = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+    try {
+      const body = new FormData();
+      body.append("_method", "PATCH");
+      body.append("councilor_go_ahead", councilorGoAhead ? "1" : "0");
+      body.append("staff_note", staffNote.trim());
+      body.append("assessed_fee", assessedFee);
+      if (inspectionFile) body.append("inspection_report", inspectionFile);
+      const response = await fetch(`${API_URL}/staff/document-requests/${request.id}/permit-inspection`, {
+        method: "POST",
+        headers: authHeaders(token),
+        body,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to save the inspection report.");
+      setInspectionFile(null);
+      setAssessedFee(String(payload.data.fee ?? assessedFee));
+      onSaved(payload.data);
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const openUploadedReport = async () => {
+    setViewing(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/staff/document-requests/${request.id}/permit-inspection`, {
+        headers: authHeaders(token),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.message || "Unable to open the uploaded inspection report.");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      window.open(url, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (viewError) {
+      setError(viewError.message);
+    } finally {
+      setViewing(false);
+    }
+  };
+
+  return (
+    <section className="mt-6 rounded-xl border border-[#D9E6FF] bg-white p-4" aria-labelledby="permit-inspection-title">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 id="permit-inspection-title" className="text-sm font-bold text-[#172B4D]">{request.document_type === "Fencing Permit" ? "Fencing inspection report" : "Construction inspection report"}</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">Print the blank report for the councilor. After the inspection, upload the completed scan and confirm whether the Go ahead box was ticked.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={() => printPermitInspection(request)} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-[#2455D6] hover:bg-blue-50">Print blank inspection report</button>
+          {saved && <button type="button" onClick={openUploadedReport} disabled={viewing} className="rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-[#2455D6] hover:bg-blue-50 disabled:opacity-50">{viewing ? "Opening report…" : "View uploaded report"}</button>}
+        </div>
+      </div>
+      {editable ? (
+        <form onSubmit={saveReport} className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+            <label className="block text-xs font-semibold text-slate-800">Completed inspection report
+              <span className="mt-1 block text-[11px] font-normal leading-5 text-slate-500">Choose a scan or take a photo. PDF, JPG, or PNG up to 5 MB.</span>
+              <input type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" onChange={(event) => {
+                const file = event.target.files?.[0] || null;
+                if (file && file.size > 5 * 1024 * 1024) {
+                  setError("The inspection report must be 5 MB or smaller.");
+                  setInspectionFile(null);
+                  event.target.value = "";
+                  return;
+                }
+                setError("");
+                setInspectionFile(file);
+              }} className="mt-3 block w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs file:mr-3 file:rounded-md file:border-0 file:bg-blue-100 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-[#2455D6]" />
+            </label>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button type="button" onClick={() => { setError(""); setCameraOpen(true); }} className="inline-flex items-center gap-2 rounded-lg border border-[#2455D6]/25 bg-white px-3 py-2 text-xs font-bold text-[#2455D6] hover:bg-blue-50"><Camera size={14} /> Scan with camera</button>
+              <span className="min-w-0 break-all text-[11px] text-slate-600">{inspectionFile?.name || (existing.original_name ? `Saved report: ${existing.original_name}. Select a replacement if needed.` : "No report selected yet.")}</span>
+            </div>
+            <label className="mt-4 block text-xs font-semibold text-slate-800">Fee assessed by inspector (PHP)
+              <input type="number" min="0" max="1000000000" step="0.01" required value={assessedFee} onChange={(event) => setAssessedFee(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" placeholder="Enter the amount written on the report" />
+            </label>
+            {cameraOpen && <InspectionCamera filePrefix={request.document_type === "Fencing Permit" ? "fencing" : "construction"} onCapture={(file) => { setInspectionFile(file); setError(""); }} onClose={() => setCameraOpen(false)} />}
+          </div>
+          <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm leading-6 transition-colors ${councilorGoAhead ? "border-emerald-200 bg-emerald-50/70 text-emerald-950" : "border-slate-200 bg-slate-50 text-slate-700"}`}>
+            <input type="checkbox" checked={councilorGoAhead} onChange={(event) => setCouncilorGoAhead(event.target.checked)} className="mt-1 h-4 w-4 shrink-0 accent-[#2455D6]" />
+            <span className="min-w-0">
+              <span className="flex flex-wrap items-center gap-2 font-semibold text-slate-900">Councilor decision <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${councilorGoAhead ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{councilorGoAhead ? "Go ahead confirmed" : "Awaiting confirmation"}</span></span>
+              <span className="mt-2 block text-xs leading-5 text-slate-600">Confirm after reviewing the completed inspection report. A checked Go ahead authorizes staff to prepare this permit.</span>
+            </span>
+          </label>
+          <label className="block text-xs font-semibold text-slate-700 lg:col-span-2">Staff note <span className="font-normal text-slate-500">(optional)</span>
+            <textarea rows={3} maxLength={2000} value={staffNote} onChange={(event) => setStaffNote(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-normal outline-none transition focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" placeholder="Internal note about the uploaded inspection report" />
+          </label>
+          {error && <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 lg:col-span-2">{error}</p>}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-4 lg:col-span-2">
+            <p className="max-w-xl text-xs leading-5 text-slate-500">The report, inspector-assessed fee, staff account, decision, and save time are recorded in the request history.</p>
+            <button type="submit" disabled={saving || (!inspectionFile && !existing.file_path)} className="rounded-lg bg-[#2455D6] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-50">{saving ? "Saving inspection report..." : saved ? "Save report, fee, and decision" : "Upload report and save fee and decision"}</button>
+          </div>        </form>
+      ) : (
+        <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+          {saved ? <p><span className="font-semibold">Inspection report:</span> {existing.original_name} · <span className="font-semibold">Inspector-assessed fee:</span> PHP {Number(existing.assessed_fee ?? request.fee ?? 0).toFixed(2)} · <span className="font-semibold">Decision:</span> {existing.decision === "go_ahead" ? "Councilor marked Go ahead" : "Go ahead not recorded"}</p> : <p>The request must be in Processing before staff can upload the completed inspection report.</p>}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InspectionCamera({ onCapture, onClose, filePrefix = "permit" }) {
+  const videoRef = useRef(null);
+  const [stream, setStream] = useState(null);
+  const [cameraError, setCameraError] = useState("");
+  const [capturing, setCapturing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    let activeStream = null;
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError("Camera access is unavailable here. Use HTTPS or localhost, or choose a file instead.");
+      return undefined;
+    }
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
+      .then((cameraStream) => {
+        if (cancelled) {
+          cameraStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        activeStream = cameraStream;
+        setStream(cameraStream);
+      })
+      .catch((error) => {
+        setCameraError(error.name === "NotAllowedError"
+          ? "Camera permission was denied. Allow access in your browser settings or choose a file."
+          : "Unable to open the camera. Check the camera connection or choose a file instead.");
+      });
+    return () => {
+      cancelled = true;
+      activeStream?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
+
+  useEffect(() => {
+    if (videoRef.current && stream) videoRef.current.srcObject = stream;
+  }, [stream]);
+
+  const capture = () => {
+    const video = videoRef.current;
+    if (!video?.videoWidth || !video.videoHeight) {
+      setCameraError("The camera is not ready yet. Please wait and try again.");
+      return;
+    }
+    setCapturing(true);
+    const scale = Math.min(1, 1800 / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = window.document.createElement("canvas");
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    const context = canvas.getContext("2d");
+    if (!context) {
+      setCapturing(false);
+      setCameraError("Unable to capture the camera image. Please choose a file instead.");
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((blob) => {
+      setCapturing(false);
+      if (!blob) {
+        setCameraError("Unable to capture the camera image. Please try again.");
+        return;
+      }
+      if (blob.size > 5 * 1024 * 1024) {
+        setCameraError("This scan is larger than 5 MB. Move closer to the report and try again.");
+        return;
+      }
+      onCapture(new File([blob], `${filePrefix}-inspection-${Date.now()}.jpg`, { type: "image/jpeg" }));
+      onClose();
+    }, "image/jpeg", 0.82);
+  };
+
+  return (
+    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+      <video ref={videoRef} autoPlay muted playsInline aria-label="Inspection report camera preview" className="max-h-[480px] w-full rounded-lg bg-slate-900 object-contain" />
+      {cameraError && <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{cameraError}</p>}
+      <div className="mt-3 flex flex-wrap justify-end gap-2">
+        <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600">Close camera</button>
+        <button type="button" onClick={capture} disabled={!stream || capturing} className="inline-flex items-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><Camera size={14} /> {capturing ? "Capturing…" : "Capture scan"}</button>
+      </div>
+      <p className="mt-2 text-[11px] text-slate-500">Frame the whole report in good light. The captured image is attached as a JPG.</p>
+    </div>
+  );
+}
+
+function printPermitInspection(request) {
+  const escapeHtml = (value) => String(value || "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;",
+  })[character]);
+  const formFields = request.details?.form_fields || {};
+  const permitName = request.document_type === "Fencing Permit" ? "Fencing Permit" : "Construction Permit";
+  const fenceDetails = request.document_type === "Fencing Permit"
+    ? `<p><strong>Fence material:</strong> ${escapeHtml(formFields.fence_material)}</p><p><strong>Fence height:</strong> ${escapeHtml(formFields.fence_height)} m</p><p><strong>Fence length:</strong> ${escapeHtml(formFields.fence_length)} m</p>`
+    : "";
+  const printWindow = window.open("", "_blank", "width=850,height=1000");
+  if (!printWindow) return;
+  printWindow.document.write(`<!doctype html><html><head><title>${permitName} Inspection Report - Request ${request.id}</title><style>
+    @page{size:letter portrait;margin:1in}body{font-family:Arial,sans-serif;color:#111;font-size:12pt}h1{text-align:center;font-size:16pt;margin:0 0 24pt;text-transform:uppercase}p{margin:0 0 16pt}.line{display:inline-block;min-width:250pt;border-bottom:1px solid #111;padding:0 4pt 3pt}.remarks{height:120pt;border-bottom:1px solid #111;white-space:pre-wrap;margin-top:12pt;padding:0 4pt 4pt;line-height:2.4}.decision{margin-top:24pt;padding:12pt;border:1px solid #555}.choice{display:inline-block;margin:12pt 20pt 0 0}.choice i{display:inline-block;width:12pt;height:12pt;border:1px solid #111;vertical-align:-2pt;margin-right:5pt}footer{margin-top:28pt;font-size:9pt;color:#555}@media print{button{display:none}}
+  </style></head><body><h1>Inspection Report</h1><p><strong>${permitName} Request:</strong> #${escapeHtml(request.id)}</p><p><strong>Project Owner:</strong> ${escapeHtml(formFields.project_owner_name || formFields.full_name)}</p><p><strong>Project Location:</strong> ${escapeHtml(formFields.project_address)}</p>${fenceDetails}<p><strong>Inspection Conducted By:</strong> <span class="line">&nbsp;</span></p><p><strong>Date of Inspection:</strong> <span class="line">&nbsp;</span></p><p><strong>Fee assessed by inspector (PHP):</strong> <span class="line">&nbsp;</span></p><p><strong>Remarks:</strong></p><div class="remarks"></div><div class="decision"><strong>Councilor decision:</strong><br><span class="choice"><i></i> Go ahead - authorize permit preparation</span><span class="choice"><i></i> Needs correction</span></div><footer>${permitName} Request #${escapeHtml(request.id)}</footer><script>window.onload=()=>window.print()</script></body></html>`);
+  printWindow.document.close();
 }
 
 function SummaryCard({ label, value, icon: Icon, color, note, onClick }) {
@@ -948,12 +1212,19 @@ function decodeDocumentType(documentType) {
 function RequestDetails({ request, token, onFeeUpdated }) {
   const details = request.details || {};
   const formFields = details.form_fields || {};
+  const isClearance = request.document_type === "Barangay Certification";
+  const clearanceAddress = formFields.purok
+    ? `${String(formFields.purok).trim()}, Barangay Tayud, Consolacion, Cebu`
+    : formFields.address;
+  const displayedFormFields = isClearance
+    ? { ...formFields, address: clearanceAddress }
+    : formFields;
   const configuredFields = [
     ...(request.type?.applicant_fields || []),
     ...(request.type?.fields || []),
   ];
-  const formFieldGroups = Object.entries(formFields)
-    .filter(([key]) => !["purpose", "full_name"].includes(key))
+  const formFieldGroups = Object.entries(displayedFormFields)
+    .filter(([key]) => !["purpose", "full_name"].includes(key) && !(isClearance && key === "purok"))
     .reduce((groups, [key, value]) => {
       const config = configuredFields.find((field) => field.key === key);
       const group = config?.group || "";
@@ -975,7 +1246,14 @@ function RequestDetails({ request, token, onFeeUpdated }) {
         <DetailCard label="Request date" value={formatDate(request.created_at)} />
         <DetailCard label="Purpose" value={details.form_fields?.purpose || details.purpose || details.notes || "Not provided"} />
         {details.fee_mode === "assessed" ? (
-          <FeeAssessment request={request} token={token} role="staff" onUpdated={onFeeUpdated} />
+          ["Construction Permit", "Fencing Permit"].includes(request.document_type) ? (
+            <div className="rounded-xl border border-[#D9E6FF] bg-[#EEF4FF]/70 p-3">
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Inspector-assessed fee</p>
+              <p className="mt-1.5 text-xs font-semibold text-slate-700">{details.fee_assessed ? `PHP ${Number(request.fee || 0).toFixed(2)} payable upon release` : "Recorded with the inspection report"}</p>
+            </div>
+          ) : (
+            <FeeAssessment request={request} token={token} role="staff" onUpdated={onFeeUpdated} />
+          )
         ) : (
           <DetailCard
             label={request.document_type === "Barangay Residency" ? "Fee (payable upon release)" : "Fee"}
@@ -1009,6 +1287,7 @@ function RequestDetails({ request, token, onFeeUpdated }) {
 function IdentityComparison({ review }) {
   const isClear = review?.ok === true;
   const hasReview = Boolean(review);
+  const applicantName = review?.fields?.find((field) => field.key === "full_name")?.submitted || "Clearance applicant";
 
   return (
     <section aria-labelledby="identity-comparison-heading" className={`mt-6 rounded-xl border p-4 ${isClear ? "border-emerald-200 bg-emerald-50/60" : "border-amber-200 bg-amber-50/70"}`}>
@@ -1016,15 +1295,32 @@ function IdentityComparison({ review }) {
         <div>
           <h3 id="identity-comparison-heading" className="text-sm font-bold text-[#172B4D]">Identity verification</h3>
           <p className="mt-1 text-xs leading-5 text-slate-600">
-            {isClear
+            {review?.has_involved_person_match && !review?.involved_person_reviewed
+              ? "A close name match was found in the involved-person names listed on complaint records. REQUIRED REVIEW before clearance printing or release."
+              : review?.has_involved_person_match
+                ? "A close name match was found in complaint records and the staff record check has been completed."
+              : isClear
               ? "Resident profile and submitted identity information match the barangay registry."
               : review?.message || "Identity information does not match. Review the differences below before taking action."}
           </p>
         </div>
         <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${isClear ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
-          {isClear ? "Match confirmed" : hasReview ? "Review required" : "Checking required"}
+          {review?.has_involved_person_match && !review?.involved_person_reviewed ? "Required review" : review?.has_involved_person_match ? "Reviewed" : isClear ? "Match confirmed" : hasReview ? "Review required" : "Checking required"}
         </span>
       </div>
+      {review?.involved_person_matches?.length > 0 && (
+        <div className="mt-4 rounded-lg border border-amber-200 bg-white p-3">
+          <h4 className="text-xs font-bold text-amber-900">Similar names in complaint records</h4>
+          <ul className="mt-2 space-y-2">
+            {review.involved_person_matches.map((match) => (
+              <li key={`${match.complaint_id}-${match.matched_name}`} className="rounded-md bg-amber-50/70 px-3 py-2 text-xs text-slate-700">
+                <p><span className="font-semibold">Clearance applicant:</span> {applicantName} <span aria-hidden="true">→</span> <span className="font-semibold">Name listed:</span> {match.matched_name} <span className="font-bold text-amber-800">({match.match_type}{match.match_type === "Close match" ? `, ${match.similarity}% similar` : ""})</span></p>
+                <p className="mt-1"><span className="font-semibold">Complaint #{match.complaint_id}:</span> {match.subject || "No subject"} · <span className="capitalize">{String(match.status || "unknown").replaceAll("_", " ")}</span>{match.incident_date ? ` · Incident date ${match.incident_date}` : ""}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {review?.fields?.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="w-full min-w-[620px] text-left text-xs">
@@ -1040,10 +1336,10 @@ function IdentityComparison({ review }) {
             <tbody className="divide-y divide-slate-100">
               {review.fields.map((field) => (
                 <tr key={field.key} className={field.ok ? "" : "bg-red-50/70"}>
-                  <th className="px-3 py-2.5 font-semibold text-slate-700">{field.label}</th>
+                  <th className="px-3 py-2.5 font-semibold text-slate-700">{field.key === "address" ? "House/Lot No." : field.label}</th>
                   <td className="px-3 py-2.5 text-slate-600">{formatFieldValue(field.profile)}</td>
                   <td className="px-3 py-2.5 text-slate-600">{formatFieldValue(field.registry)}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{formatFieldValue(field.submitted)}</td>
+                  <td className="px-3 py-2.5 text-slate-600">{formatSubmittedIdentityValue(field, review.fields)}</td>
                   <td className={`px-3 py-2.5 font-bold ${field.ok ? "text-emerald-700" : "text-red-700"}`}>{field.ok ? "Match" : "Mismatch"}</td>
                 </tr>
               ))}
@@ -1053,6 +1349,30 @@ function IdentityComparison({ review }) {
       )}
     </section>
   );
+}
+
+function formatSubmittedIdentityValue(field, fields = []) {
+  if (field.key !== "address") return formatFieldValue(field.submitted);
+
+  const address = String(field.submitted || "").trim();
+  if (!address) return "Not provided";
+
+  const submittedPurok = String(fields.find((item) => item.key === "purok")?.submitted || "").trim();
+  if (submittedPurok) {
+    const parts = address.split(",").map((part) => part.trim());
+    const purokIndex = parts.findIndex((part) => part.toLowerCase() === submittedPurok.toLowerCase());
+    if (purokIndex >= 0) return parts.slice(0, purokIndex).join(", ") || "Not provided";
+  }
+
+  const beforePurok = address.match(/^(.+?)(?:,\s*|\s+)Purok\b/i)?.[1]?.trim();
+  if (beforePurok) return beforePurok;
+  if (/^Purok\b/i.test(address)) return "Not provided";
+
+  if (/\bBarangay\s+Tayud\b.*\bConsolacion\b.*\bCebu\b/i.test(address)) {
+    return "Not provided";
+  }
+
+  return formatFieldValue(address);
 }
 
 function formatFieldLabel(value) {

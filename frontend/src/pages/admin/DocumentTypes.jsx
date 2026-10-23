@@ -5,6 +5,7 @@ import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
 import { useAuth } from "../../context/AuthContext";
 import { primaryButtonClass } from "../../utils/buttonStyles";
+import { BUSINESS_CLEARANCE_WORDING, CONSTRUCTION_PERMIT_WORDING, FENCING_PERMIT_WORDING, isLegacyBusinessClearanceWording } from "../../utils/documentWording";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const fieldTypes = ["text", "textarea", "number", "date", "email", "tel", "select"];
@@ -25,6 +26,9 @@ const BARANGAY_CLEARANCE_WORDING = `This is to certify that the applicant whose 
 function defaultDocumentWording(type) {
   if (type.value === "Barangay Certification") return BARANGAY_CLEARANCE_WORDING;
   if (type.value === "Barangay Certificate") return BARANGAY_CERTIFICATE_WORDING;
+  if (type.value === "Business Permit") return BUSINESS_CLEARANCE_WORDING;
+  if (type.value === "Construction Permit") return CONSTRUCTION_PERMIT_WORDING;
+  if (type.value === "Fencing Permit") return FENCING_PERMIT_WORDING;
   if (type.value === "Certificate of Good Moral Character") return GOOD_MORAL_CHARACTER_WORDING;
   return "";
 }
@@ -53,6 +57,7 @@ const blankType = () => ({
 });
 
 const RECOMMENDED_LAYOUT = { content_top: 64, content_left: 19, content_right: 19, content_bottom: 19, font_size_pt: 12, text_color: "#1f2937", accent_color: "#123f70" };
+const RECOMMENDED_SECOND_PAGE_LAYOUT = { ...RECOMMENDED_LAYOUT };
 const clampLayout = (layout = {}) => ({
   ...RECOMMENDED_LAYOUT,
   ...layout,
@@ -61,6 +66,17 @@ const clampLayout = (layout = {}) => ({
   content_right: Math.min(38, Math.max(13, Number(layout.content_right ?? RECOMMENDED_LAYOUT.content_right))),
   content_bottom: Math.min(38, Math.max(13, Number(layout.content_bottom ?? RECOMMENDED_LAYOUT.content_bottom))),
   font_size_pt: Math.min(14, Math.max(10, Number(layout.font_size_pt ?? RECOMMENDED_LAYOUT.font_size_pt))),
+  ...(layout.page2 ? {
+    page2: {
+      ...RECOMMENDED_SECOND_PAGE_LAYOUT,
+      ...layout.page2,
+      content_top: Math.min(76, Math.max(51, Number(layout.page2.content_top ?? RECOMMENDED_SECOND_PAGE_LAYOUT.content_top))),
+      content_left: Math.min(38, Math.max(13, Number(layout.page2.content_left ?? RECOMMENDED_SECOND_PAGE_LAYOUT.content_left))),
+      content_right: Math.min(38, Math.max(13, Number(layout.page2.content_right ?? RECOMMENDED_SECOND_PAGE_LAYOUT.content_right))),
+      content_bottom: Math.min(38, Math.max(13, Number(layout.page2.content_bottom ?? RECOMMENDED_SECOND_PAGE_LAYOUT.content_bottom))),
+      font_size_pt: Math.min(14, Math.max(10, Number(layout.page2.font_size_pt ?? RECOMMENDED_SECOND_PAGE_LAYOUT.font_size_pt))),
+    },
+  } : {}),
 });
 
 function DocumentTypes() {
@@ -276,10 +292,12 @@ function DocumentTypes() {
 
   const openEditType = async (type) => {
     if (draft?.templatePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(draft.templatePreviewUrl);
+    const savedWording = type.template?.trim() || "";
+    const useBusinessDefault = type.value === "Business Permit" && isLegacyBusinessClearanceWording(savedWording);
     setDraft({
       ...type,
       fee: String(type.fee),
-      template: type.template || defaultDocumentWording(type),
+      template: savedWording && !useBusinessDefault ? savedWording : defaultDocumentWording(type),
       document_layout: clampLayout(type.document_layout),
       templateFile: null,
       templatePreviewUrl: "",
@@ -467,6 +485,38 @@ function DocumentTypes() {
               </div>
             </section>
 
+            {["First-Time Jobseeker Certification", "First-Time Job Seeker Certification"].includes(draft.value) && (
+              <section className="grid gap-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <h4 className="text-sm font-bold text-[#172B4D]">Printed text layout · Page 2 (Oath)</h4>
+                  <p className="mt-1 text-xs text-slate-500">Set the oath page independently from the certification page. These settings are saved with this document type.</p>
+                </div>
+                <label className="text-xs font-semibold text-slate-600">Space from the top edge (inches)
+                  <input type="number" min="2" max="3" step="0.1" value={((draft.document_layout?.page2?.content_top ?? RECOMMENDED_SECOND_PAGE_LAYOUT.content_top) / 25.4).toFixed(1)} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, page2: { ...RECOMMENDED_SECOND_PAGE_LAYOUT, ...draft.document_layout?.page2, content_top: Math.round(Number(event.target.value) * 25.4) } } })} className={controlClass} />
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Space from both side edges (inches)
+                  <input type="number" min="0.5" max="1.5" step="0.1" value={(((draft.document_layout?.page2?.content_left ?? 19) + (draft.document_layout?.page2?.content_right ?? 19)) / 2 / 25.4).toFixed(1)} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, page2: { ...RECOMMENDED_SECOND_PAGE_LAYOUT, ...draft.document_layout?.page2, content_left: Math.round(Number(event.target.value) * 25.4), content_right: Math.round(Number(event.target.value) * 25.4) } } })} className={controlClass} />
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Space from the bottom edge (inches)
+                  <input type="number" min="0.5" max="1.5" step="0.1" value={((draft.document_layout?.page2?.content_bottom ?? 19) / 25.4).toFixed(1)} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, page2: { ...RECOMMENDED_SECOND_PAGE_LAYOUT, ...draft.document_layout?.page2, content_bottom: Math.round(Number(event.target.value) * 25.4) } } })} className={controlClass} />
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Body text size
+                  <select value={draft.document_layout?.page2?.font_size_pt ?? 12} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, page2: { ...RECOMMENDED_SECOND_PAGE_LAYOUT, ...draft.document_layout?.page2, font_size_pt: Number(event.target.value) } } })} className={controlClass}>
+                    {[10, 11, 12, 13, 14].map((size) => <option key={size} value={size}>{size} pt</option>)}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Body text color
+                  <input type="color" value={draft.document_layout?.page2?.text_color || "#1f2937"} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, page2: { ...RECOMMENDED_SECOND_PAGE_LAYOUT, ...draft.document_layout?.page2, text_color: event.target.value } } })} className="mt-1 block h-10 w-full rounded-lg border border-slate-200 bg-white p-1" />
+                </label>
+                <label className="text-xs font-semibold text-slate-600">Heading/accent color
+                  <input type="color" value={draft.document_layout?.page2?.accent_color || "#123f70"} onChange={(event) => setDraft({ ...draft, document_layout: { ...draft.document_layout, page2: { ...RECOMMENDED_SECOND_PAGE_LAYOUT, ...draft.document_layout?.page2, accent_color: event.target.value } } })} className="mt-1 block h-10 w-full rounded-lg border border-slate-200 bg-white p-1" />
+                </label>
+                <div className="sm:col-span-2">
+                  <button type="button" onClick={() => setDraft({ ...draft, document_layout: { ...draft.document_layout, page2: { ...RECOMMENDED_SECOND_PAGE_LAYOUT } } })} className="text-xs font-bold text-[#2455D6] hover:underline">Reset page 2 layout</button>
+                </div>
+              </section>
+            )}
+
             <section className="block border-t border-slate-100 pt-4">
               <span className="text-sm font-bold text-[#172B4D]">Document wording</span>
               <span className="mt-1 block text-xs leading-5 text-slate-500">Write the document as you want it to read. Use the buttons below to add request details automatically. Leave this blank to use the standard wording.</span>
@@ -523,7 +573,7 @@ function DocumentTypes() {
               </div>
               <div className="space-y-2">
                 {draft.requirements.map((requirement, index) => (
-                  <div key={`${requirement.key}-${index}`} className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
+                  <div key={index} className="grid gap-2 sm:grid-cols-[1fr_auto_auto_auto]">
                     <input required aria-label="Attachment name" placeholder="For example, Government-issued ID" value={requirement.label} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value, key: makeFieldKey(event.target.value, `upload_${index + 1}`) } : item) }))} className={controlClass} />
                     <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={requirement.required} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, required: event.target.checked } : item) }))} />Required</label>
                     <label className="flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={requirement.enabled !== false} onChange={(event) => setDraft((current) => ({ ...current, requirements: current.requirements.map((item, itemIndex) => itemIndex === index ? { ...item, enabled: event.target.checked } : item) }))} />Show to residents</label>
@@ -608,6 +658,16 @@ function WordingEditor({ value, onChange }) {
     ["subject_verb", "Pronoun verb"], ["derogatory_remarks", "Record-check result"],
     ["purpose", "Purpose"], ["date_issued", "Issue date"],
     ["issued_day", "Day"], ["issued_month", "Month"], ["issued_year", "Year"],
+    ["business_name", "Business name"], ["business_address", "Business address"],
+    ["type_of_structure", "Type of structure/building"],
+    ["construction_site_address", "Construction site address"],
+    ["project_address", "Project address/location"],
+    ["property_address", "Property address"],
+    ["barangay_name", "Barangay name"], ["municipality", "Municipality"],
+    ["valid_until", "Valid until"],
+    ["new_application_mark", "New application mark"],
+    ["renewal_application_mark", "Renewal application mark"],
+    ["punong_barangay_name", "Punong Barangay name"],
   ];
   const toEditorText = (source) => tokenLabels.reduce((text, [key, label]) => text.replaceAll(`{{${key}}}`, `[${label}]`), source).replaceAll("**", "");
   const toTemplateText = (text) => tokenLabels.reduce((source, [key, label]) => source.replaceAll(`[${label}]`, `{{${key}}}`), text);
@@ -645,6 +705,12 @@ function WordingEditor({ value, onChange }) {
     ["Day", "{{issued_day}}"],
     ["Month", "{{issued_month}}"],
     ["Year", "{{issued_year}}"],
+    ["Business name", "{{business_name}}"],
+    ["Business address", "{{business_address}}"],
+    ["Valid until", "{{valid_until}}"],
+    ["New application mark", "{{new_application_mark}}"],
+    ["Renewal application mark", "{{renewal_application_mark}}"],
+    ["Punong Barangay name", "{{punong_barangay_name}}"],
   ];
 
   return (
@@ -683,7 +749,7 @@ function SchemaEditor({ title, description, section, fields, changeField, addFie
       <div className="space-y-3">
         {fields.map((field, index) => (
           <div
-            key={`${field.key}-${index}`}
+            key={index}
             onDragOver={(event) => event.preventDefault()}
             onDrop={(event) => {
               event.preventDefault();

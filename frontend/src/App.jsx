@@ -97,7 +97,7 @@ function App() {
           <Route
             path="/staff/blotter"
             element={
-              <ProtectedRoute allowedRoles={["staff"]}>
+              <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Complaint Management Officer"]}>
                 <BlotterManagement />
               </ProtectedRoute>
             }
@@ -106,7 +106,7 @@ function App() {
           <Route
             path="/staff/blotter/summon"
             element={
-              <ProtectedRoute allowedRoles={["staff"]}>
+              <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Complaint Management Officer"]}>
                 <SummonForm />
               </ProtectedRoute>
             }

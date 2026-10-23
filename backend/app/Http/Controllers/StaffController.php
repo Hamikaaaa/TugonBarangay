@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Complaint;
 use App\Models\BarangayRegistry;
+use App\Models\BlotterEntry;
 use App\Models\DocumentRequest;
 use App\Models\DocumentRequestEvent;
 use App\Models\DocumentType;
@@ -84,6 +85,10 @@ class StaffController extends Controller
                 'identity_review',
                 $this->documentRequestIdentityReview($documentRequest),
             );
+            $documentRequest->setAttribute(
+                'clearance_number',
+                $documentRequest->clearanceSequenceNumber(),
+            );
 
             return $documentRequest;
         });
@@ -127,9 +132,129 @@ class StaffController extends Controller
 
     public function showDocumentRequest(DocumentRequest $documentRequest)
     {
+        $documentRequest->load(['resident', 'type', 'assignedStaff']);
+        $documentRequest->setAttribute(
+            'identity_review',
+            $this->getDocumentRequestIdentityReview($documentRequest),
+        );
+        $documentRequest->setAttribute(
+            'clearance_number',
+            $documentRequest->clearanceSequenceNumber(),
+        );
+
         return response()->json([
-            'data' => $documentRequest->load(['resident', 'type', 'assignedStaff']),
+            'data' => $documentRequest,
         ]);
+    }
+
+    public function getDocumentRequestIdentityReview(DocumentRequest $documentRequest): array
+    {
+        $documentRequest->loadMissing('resident');
+
+        return $this->documentRequestIdentityReview($documentRequest);
+    }
+
+    public function saveConstructionInspection(Request $request, DocumentRequest $documentRequest)
+    {
+        abort_unless(in_array($documentRequest->document_type, ['Construction Permit', 'Fencing Permit'], true), 404);
+        abort_unless($documentRequest->status === 'processing', 409, 'Permit inspection can only be recorded while the request is processing.');
+
+        $details = $documentRequest->details ?? [];
+        $existingReport = $details['inspection_report'] ?? [];
+        $feeWasAssessed = !empty($details['fee_assessed']);
+        $fileRules = ['file', 'mimes:pdf,jpg,jpeg,png', 'max:5120'];
+        if (empty($existingReport['file_path'])) {
+            array_unshift($fileRules, 'required');
+        } else {
+            array_unshift($fileRules, 'sometimes');
+        }
+        $validated = $request->validate([
+            'inspection_report' => $fileRules,
+            'councilor_go_ahead' => ['required', 'boolean'],
+            'staff_note' => ['nullable', 'string', 'max:2000'],
+            'assessed_fee' => ['required', 'numeric', 'min:0', 'max:1000000000'],
+        ]);
+
+        $previousFee = (float) $documentRequest->fee;
+        $documentRequest->fee = (float) $validated['assessed_fee'];
+        $details['fee_assessed'] = true;
+        $newFilePath = null;
+        if ($request->hasFile('inspection_report')) {
+            $newFilePath = $request->file('inspection_report')->store(
+                "document-requests/{$documentRequest->id}/permit-inspection",
+                'local',
+            );
+        }
+        $report = array_merge($existingReport, [
+            'decision' => $validated['councilor_go_ahead'] ? 'go_ahead' : 'needs_correction',
+            'assessed_fee' => (float) $validated['assessed_fee'],
+            'staff_note' => $validated['staff_note'] ?? null,
+            'recorded_by' => $request->user()->name,
+            'recorded_at' => now()->toIso8601String(),
+        ]);
+        if ($newFilePath) {
+            $report['file_path'] = $newFilePath;
+            $report['original_name'] = $request->file('inspection_report')->getClientOriginalName();
+            $report['mime_type'] = $request->file('inspection_report')->getMimeType();
+        }
+        $details['inspection_report'] = $report;
+        $documentRequest->details = $details;
+        $documentRequest->save();
+        if ($newFilePath && !empty($existingReport['file_path'])) {
+            Storage::disk('local')->delete($existingReport['file_path']);
+        }
+
+        DocumentRequestEvent::record(
+            $documentRequest,
+            $request->user(),
+            'permit_inspection_recorded',
+            $documentRequest->status,
+            $documentRequest->status,
+            $report,
+        );
+        if (!$feeWasAssessed || $previousFee !== (float) $validated['assessed_fee']) {
+            DocumentRequestEvent::record(
+                $documentRequest,
+                $request->user(),
+                'fee_assessed',
+                $documentRequest->status,
+                $documentRequest->status,
+                ['previous_fee' => $previousFee, 'fee' => (float) $documentRequest->fee],
+            );
+        }
+
+        return response()->json([
+            'message' => 'Permit inspection report saved.',
+            'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']),
+        ]);
+    }
+
+    public function viewConstructionInspection(DocumentRequest $documentRequest)
+    {
+        abort_unless(in_array($documentRequest->document_type, ['Construction Permit', 'Fencing Permit'], true), 404);
+        $report = $documentRequest->details['inspection_report'] ?? [];
+        abort_unless(!empty($report['file_path']), 404);
+
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists($report['file_path']), 404);
+        $filename = $report['original_name'] ?? 'permit-inspection-report';
+        $headers = [
+            'Cache-Control' => 'private, no-store',
+            'Content-Disposition' => (new ResponseHeaderBag)->makeDisposition(
+                ResponseHeaderBag::DISPOSITION_INLINE,
+                $filename,
+                preg_replace('/[^A-Za-z0-9_.-]/', '_', $filename),
+            ),
+            'Content-Type' => $report['mime_type'] ?? (mime_content_type($disk->path($report['file_path'])) ?: 'application/octet-stream'),
+        ];
+
+        return response()->stream(function () use ($disk, $report): void {
+            $stream = $disk->readStream($report['file_path']);
+            if (is_resource($stream)) {
+                fpassthru($stream);
+                fclose($stream);
+            }
+        }, 200, $headers);
     }
 
     public function generateDocumentPreview(Request $request, DocumentRequest $documentRequest)
@@ -139,17 +264,32 @@ class StaffController extends Controller
                 'message' => 'A document preview can only be generated while the request is processing or ready for release.',
             ], 409);
         }
+        if (in_array($documentRequest->document_type, ['Construction Permit', 'Fencing Permit'], true)
+            && (($documentRequest->details['inspection_report']['decision'] ?? null) !== 'go_ahead'
+                || empty($documentRequest->details['inspection_report']['file_path']))) {
+            return response()->json([
+                'message' => 'Upload the completed inspection report and record the councilor go-ahead before generating this permit.',
+            ], 409);
+        }
 
         $rules = [
             'document_content' => ['sometimes', 'required', 'array'],
             'staff_remarks' => ['nullable', 'string', 'max:2000'],
         ];
         $isBarangayClearance = $documentRequest->document_type === 'Barangay Certification';
+        $isGoodMoralCertificate = $documentRequest->document_type === 'Certificate of Good Moral Character';
+        $requiresCaseReview = $isBarangayClearance || $isGoodMoralCertificate;
+        $hasUnresolvedComplaint = $requiresCaseReview && Complaint::query()
+            ->where('resident_id', $documentRequest->resident_id)
+            ->whereIn('status', ['pending', 'in_progress'])
+            ->exists();
+        $hasOpenBlotterCase = $requiresCaseReview && $this->hasOpenBlotterCase($documentRequest);
+        $hasInvolvedPersonMatch = $requiresCaseReview && $this->clearanceNameMatchesInvolvedPersons($documentRequest);
         if ($isBarangayClearance) {
             $rules['document_content.derogatory_status'] = [
                 'sometimes',
                 'string',
-                'in:pending_verification,no_derogatory_record,refer_authorized_review',
+                'in:required_review,pending_verification,no_derogatory_record,refer_authorized_review',
             ];
         }
         $configuredType = DocumentType::where('value', $documentRequest->document_type)->first();
@@ -166,15 +306,28 @@ class StaffController extends Controller
         $hadPreview = $documentRequest->document_generated_at !== null;
         $preview = $request->input('document_content', $this->buildDocumentPayload($documentRequest));
         if ($isBarangayClearance) {
-            $recordCheckStatus = $preview['derogatory_status'] ?? 'pending_verification';
-            $hasUnresolvedComplaint = Complaint::query()
-                ->where('resident_id', $documentRequest->resident_id)
-                ->whereIn('status', ['pending', 'in_progress'])
-                ->exists();
+            $recordCheckStatus = $preview['derogatory_status']
+                ?? ($hasUnresolvedComplaint || $hasOpenBlotterCase
+                    ? 'pending_verification'
+                    : ($hasInvolvedPersonMatch ? 'required_review' : 'no_derogatory_record'));
+
+            if ($hasInvolvedPersonMatch && empty($preview['derogatory_reviewed'])
+                && !$hasUnresolvedComplaint && !$hasOpenBlotterCase) {
+                $recordCheckStatus = 'required_review';
+            }
+            if (!$hasInvolvedPersonMatch && !$hasUnresolvedComplaint && !$hasOpenBlotterCase
+                && empty($preview['derogatory_reviewed'])) {
+                $recordCheckStatus = 'no_derogatory_record';
+            }
 
             if ($hasUnresolvedComplaint && $recordCheckStatus !== 'pending_verification') {
                 return response()->json([
                     'message' => 'A pending or in-progress complaint requires PENDING VERIFICATION. A complaint alone is not a finding of wrongdoing.',
+                ], 409);
+            }
+            if ($hasOpenBlotterCase && $recordCheckStatus !== 'pending_verification') {
+                return response()->json([
+                    'message' => 'An open or referred blotter case requires PENDING VERIFICATION and blocks clearance approval and printing.',
                 ], 409);
             }
 
@@ -216,7 +369,10 @@ class StaffController extends Controller
 
         return response()->json([
             'message' => 'Document preview generated successfully.',
-            'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']),
+            'data' => tap($documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']), function (DocumentRequest $freshRequest) {
+                $freshRequest->setAttribute('identity_review', $this->documentRequestIdentityReview($freshRequest));
+                $freshRequest->setAttribute('clearance_number', $freshRequest->clearanceSequenceNumber());
+            }),
         ]);
     }
 
@@ -259,6 +415,31 @@ class StaffController extends Controller
             ], 409);
         }
 
+        if ($status === 'processing' && $documentRequest->document_type === 'Barangay Certification'
+            && Complaint::query()
+                ->where('resident_id', $documentRequest->resident_id)
+                ->whereIn('status', ['pending', 'in_progress'])
+                ->exists()) {
+            return response()->json([
+                'message' => 'This Barangay Clearance cannot be approved for processing while the resident has a pending or in-progress complaint.',
+            ], 409);
+        }
+        if ($status === 'processing' && $documentRequest->document_type === 'Barangay Certification'
+            && $this->hasOpenBlotterCase($documentRequest)) {
+            return response()->json([
+                'message' => 'This Barangay Clearance cannot be approved for processing while the resident has an open or referred blotter case.',
+            ], 409);
+        }
+        if ($status === 'processing'
+            && $documentRequest->document_type === 'Certificate of Good Moral Character') {
+            $identityReview = $this->documentRequestIdentityReview($documentRequest);
+            if ($identityReview['has_blocking_case'] || $identityReview['has_involved_person_match']) {
+                return response()->json([
+                    'message' => 'This Certificate of Good Moral Character cannot be processed while the resident has an unresolved complaint, an open or referred blotter case, or a match in an unresolved complaint’s involved-person list.',
+                ], 409);
+            }
+        }
+
         if ($status === 'for_correction' && blank($validated['staff_remarks'] ?? null)) {
             return response()->json([
                 'message' => 'Staff remarks explaining the required correction are required.',
@@ -285,11 +466,19 @@ class StaffController extends Controller
                 'message' => 'Generate and review the document before marking it ready for release.',
             ], 409);
         }
+        if ($status === 'ready_for_release'
+            && in_array($documentRequest->document_type, ['Construction Permit', 'Fencing Permit'], true)
+            && (($documentRequest->details['inspection_report']['decision'] ?? null) !== 'go_ahead'
+                || empty($documentRequest->details['inspection_report']['file_path']))) {
+            return response()->json([
+                'message' => 'This permit cannot be released until the completed inspection report is uploaded and the councilor go-ahead is recorded.',
+            ], 409);
+        }
         if (in_array($status, ['ready_for_release', 'completed'], true)
             && $documentRequest->document_type === 'Barangay Certification') {
             if (($documentRequest->document_content['derogatory_status'] ?? null) !== 'no_derogatory_record') {
                 return response()->json([
-                    'message' => 'This Barangay Clearance is not eligible for release while its record-check outcome is pending verification or referred for authorized review. Confirm NO DEROGATORY RECORD ON FILE only when the record check supports that result.',
+                'message' => 'This Barangay Clearance is not eligible for release until the record check is completed and NO DEROGATORY RECORDS is confirmed.',
                 ], 409);
             }
 
@@ -300,6 +489,26 @@ class StaffController extends Controller
             if ($hasUnresolvedComplaint) {
                 return response()->json([
                     'message' => 'A pending or in-progress complaint requires PENDING VERIFICATION. A complaint alone is not a finding of wrongdoing.',
+                ], 409);
+            }
+            if ($this->hasOpenBlotterCase($documentRequest)) {
+                return response()->json([
+                    'message' => 'An open or referred blotter case blocks Barangay Clearance release.',
+                ], 409);
+            }
+            if ($this->clearanceNameMatchesInvolvedPersons($documentRequest)
+                && empty($documentRequest->document_content['derogatory_reviewed'])) {
+                return response()->json([
+                    'message' => 'A close name match in complaint involved-person records requires staff review before clearance release.',
+                ], 409);
+            }
+        }
+        if (in_array($status, ['ready_for_release', 'completed'], true)
+            && $documentRequest->document_type === 'Certificate of Good Moral Character') {
+            $identityReview = $this->documentRequestIdentityReview($documentRequest);
+            if ($identityReview['has_blocking_case'] || $identityReview['has_involved_person_match']) {
+                return response()->json([
+                    'message' => 'This Certificate of Good Moral Character cannot be released while the resident has an unresolved complaint, an open or referred blotter case, or a match in an unresolved complaint’s involved-person list.',
                 ], 409);
             }
         }
@@ -369,6 +578,29 @@ class StaffController extends Controller
             'completed' => ['Document request completed', 'Your document request was marked complete after release.'],
             'rejected' => ['Document request rejected', $validated['rejection_reason'] ?? null],
         ];
+        if ($status === 'ready_for_release'
+            && ($documentRequest->details['fee_mode'] ?? null) === 'assessed') {
+            $documentLabel = $documentRequest->document_type_label;
+            $assessedFee = number_format((float) $documentRequest->fee, 2);
+            if ($documentRequest->document_type === 'Cedula') {
+                $formFields = $documentRequest->document_content
+                    ?? $documentRequest->details['form_fields']
+                    ?? [];
+                $annualGrossSalary = max(0, (float) ($formFields['taxable_amount'] ?? 0));
+                $additionalTax = floor($annualGrossSalary / 1000);
+                $totalCommunityTax = 5 + $additionalTax;
+                $totalPayable = number_format($totalCommunityTax, 2);
+                $messages['ready_for_release'] = [
+                    "{$documentLabel} ready for release",
+                    "Your {$documentLabel} is ready to claim. The total amount payable is ₱{$totalPayable} (₱5.00 basic community tax plus ₱".number_format($additionalTax, 2)." additional tax), payable at the barangay office upon release.",
+                ];
+            } else {
+                $messages['ready_for_release'] = [
+                    "{$documentLabel} ready for release",
+                    "Your {$documentLabel} is ready to claim. The assessed fee is ₱{$assessedFee}, payable at the barangay office upon release.",
+                ];
+            }
+        }
         [$notificationTitle, $notificationMessage] = $messages[$status];
         ResidentNotification::create([
             'resident_id' => $documentRequest->resident_id,
@@ -402,6 +634,9 @@ class StaffController extends Controller
         $documentRequest->fee = $validated['fee'];
         $details = $documentRequest->details ?? [];
         $details['fee_assessed'] = true;
+        if (isset($details['inspection_report']) && is_array($details['inspection_report'])) {
+            $details['inspection_report']['assessed_fee'] = (float) $validated['fee'];
+        }
         $documentRequest->details = $details;
         $documentRequest->save();
         DocumentRequestEvent::record(
@@ -412,17 +647,12 @@ class StaffController extends Controller
             $documentRequest->status,
             ['previous_fee' => $previousFee, 'fee' => (float) $documentRequest->fee],
         );
-        $documentLabel = $documentRequest->document_type_label;
-        ResidentNotification::create([
-            'resident_id' => $documentRequest->resident_id,
-            'type' => 'document_request_fee_assessed',
-            'title' => "{$documentLabel} fee assessed",
-            'message' => "The fee for your {$documentLabel} request is ₱".number_format((float) $documentRequest->fee, 2).'. It is payable at the barangay upon release.',
-        ]);
-
         return response()->json([
-            'message' => 'Assessed fee updated.',
-            'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']),
+            'message' => 'Assessed fee saved. The resident will be notified when the document is ready for release.',
+            'data' => $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff'])->setAttribute(
+                'identity_review',
+                $this->documentRequestIdentityReview($documentRequest),
+            ),
         ]);
     }
 
@@ -648,10 +878,30 @@ class StaffController extends Controller
             return [
                 'ok' => false,
                 'registry_found' => false,
+                'has_blocking_case' => false,
+                'has_involved_person_match' => false,
+                'involved_person_reviewed' => false,
                 'fields' => [],
                 'message' => 'The resident profile could not be found.',
             ];
         }
+
+        $requiresCaseReview = in_array($documentRequest->document_type, [
+            'Barangay Certification',
+            'Certificate of Good Moral Character',
+        ], true);
+        $hasUnresolvedComplaint = $requiresCaseReview
+            && Complaint::query()
+                ->where('resident_id', $documentRequest->resident_id)
+                ->whereIn('status', ['pending', 'in_progress'])
+                ->exists();
+        $hasOpenBlotterCase = $requiresCaseReview
+            && $this->hasOpenBlotterCase($documentRequest);
+        $involvedPersonMatches = $requiresCaseReview
+            ? $this->clearanceInvolvedPersonMatches($documentRequest)
+            : [];
+        $hasInvolvedPersonMatch = !empty($involvedPersonMatches);
+        $hasUnresolvedCase = $hasUnresolvedComplaint || $hasOpenBlotterCase;
 
         $submitted = $documentRequest->details['form_fields'] ?? [];
         $registryQuery = BarangayRegistry::query()
@@ -743,6 +993,10 @@ class StaffController extends Controller
             return [
                 'ok' => false,
                 'registry_found' => false,
+                'has_blocking_case' => $hasUnresolvedCase,
+                'has_involved_person_match' => $hasInvolvedPersonMatch,
+                'involved_person_reviewed' => !empty($documentRequest->document_content['derogatory_reviewed']),
+                'involved_person_matches' => $involvedPersonMatches,
                 'fields' => $fields,
                 'message' => 'No unique barangay registry record matches this resident. Ask an administrator to verify the resident records.',
             ];
@@ -796,9 +1050,116 @@ class StaffController extends Controller
         return [
             'ok' => collect($fields)->every(fn (array $field) => $field['ok']),
             'registry_found' => true,
+            'has_blocking_case' => $hasUnresolvedCase,
+            'has_involved_person_match' => $hasInvolvedPersonMatch,
+            'involved_person_reviewed' => !empty($documentRequest->document_content['derogatory_reviewed']),
+            'involved_person_matches' => $involvedPersonMatches,
             'fields' => $fields,
             'message' => null,
         ];
+    }
+
+    private function hasOpenBlotterCase(DocumentRequest $documentRequest): bool
+    {
+        if (!Schema::hasTable('blotter_entries')) {
+            return false;
+        }
+
+        $residentName = trim((string) ($documentRequest->resident?->name ?? ''));
+
+        return BlotterEntry::query()
+            ->whereIn('status', ['open', 'referred'])
+            ->where(function ($query) use ($documentRequest, $residentName) {
+                $query->where('resident_id', $documentRequest->resident_id);
+                if ($residentName !== '') {
+                    $query->orWhere(function ($nameQuery) use ($residentName) {
+                        $nameQuery->whereNull('resident_id')
+                            ->whereRaw('LOWER(TRIM(resident_name)) = ?', [mb_strtolower($residentName)]);
+                    });
+                }
+            })
+            ->exists();
+    }
+
+    private function clearanceNameMatchesInvolvedPersons(DocumentRequest $documentRequest): bool
+    {
+        return !empty($this->clearanceInvolvedPersonMatches($documentRequest));
+    }
+
+    private function clearanceInvolvedPersonMatches(DocumentRequest $documentRequest): array
+    {
+        if (!Schema::hasTable('complaints') || !$documentRequest->resident) {
+            return [];
+        }
+
+        $formFields = $documentRequest->details['form_fields'] ?? [];
+        $names = [
+            collect([
+                $formFields['first_name'] ?? $documentRequest->resident->first_name,
+                $formFields['middle_name'] ?? $documentRequest->resident->middle_name,
+                $formFields['last_name'] ?? $documentRequest->resident->last_name,
+                $formFields['suffix'] ?? $documentRequest->resident->suffix,
+            ])->filter()->implode(' '),
+            $formFields['full_name'] ?? null,
+            $documentRequest->resident->name ?? null,
+        ];
+        $normalizedNames = collect($names)
+            ->map(fn ($name) => $this->normalizePersonName((string) $name))
+            ->filter(fn ($name) => mb_strlen($name) >= 5)
+            ->unique()
+            ->values();
+
+        if ($normalizedNames->isEmpty()) {
+            return [];
+        }
+
+        $matches = [];
+        Complaint::query()
+            ->whereNotNull('involved_persons')
+            ->where('involved_persons', '<>', '')
+            ->whereNotIn('status', ['closed', 'resolved'])
+            ->get(['id', 'subject', 'status', 'incident_date', 'involved_persons'])
+            ->each(function (Complaint $complaint) use ($normalizedNames, &$matches) {
+                $entries = preg_split('/[,;|\r\n]+|\s+and\s+/i', (string) $complaint->involved_persons) ?: [];
+                foreach ($entries as $entry) {
+                    $listedName = trim($entry);
+                    $normalizedEntry = $this->normalizePersonName($listedName);
+                    if ($normalizedEntry === '') {
+                        continue;
+                    }
+                    foreach ($normalizedNames as $name) {
+                        similar_text($normalizedEntry, $name, $similarity);
+                        $exact = $normalizedEntry === $name;
+                        $minLength = min(mb_strlen($normalizedEntry), mb_strlen($name));
+                        if ($exact || ($minLength >= 8 && $similarity >= 86)) {
+                            $matches[] = [
+                                'complaint_id' => $complaint->id,
+                                'subject' => $complaint->subject,
+                                'status' => $complaint->status,
+                                'incident_date' => $complaint->incident_date?->toDateString(),
+                                'matched_name' => $listedName,
+                                'match_type' => $exact ? 'Exact match' : 'Close match',
+                                'similarity' => round($similarity),
+                            ];
+                            break;
+                        }
+                    }
+                }
+            });
+
+        return collect($matches)
+            ->unique(fn (array $match) => $match['complaint_id'].'|'.$this->normalizePersonName($match['matched_name']))
+            ->take(5)
+            ->values()
+            ->all();
+    }
+
+    private function normalizePersonName(string $name): string
+    {
+        $name = mb_strtolower($name);
+        $name = preg_replace('/[^\p{L}\p{N}\s]/u', ' ', $name) ?? $name;
+
+        return trim(preg_replace('/\s+/', ' ', $name) ?? $name);
     }
 
     private function sameIdentityValue(mixed $left, mixed $right, string $key): bool
