@@ -87,4 +87,16 @@ class DocumentRequest extends Model
 
         return $this->type?->label ?? $labels[$this->document_type] ?? $this->document_type;
     }
+
+    public function clearanceSequenceNumber(): ?int
+    {
+        if ($this->document_type !== 'Barangay Certification') {
+            return null;
+        }
+
+        return static::query()
+            ->where('document_type', 'Barangay Certification')
+            ->where('id', '<=', $this->getKey())
+            ->count();
+    }
 }

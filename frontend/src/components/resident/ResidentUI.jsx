@@ -112,6 +112,13 @@ function RequestRow({ request, token }) {
       ? details.requirements
       : {};
   const uploadedFiles = Object.values(requirements).filter(Boolean);
+  const isCedula = request.document_type === "Cedula";
+  const cedulaGrossSalary = Number(
+    String(formFields.taxable_amount ?? "").replaceAll(",", ""),
+  );
+  const cedulaTotalFee = Number.isFinite(cedulaGrossSalary)
+    ? 5 + Math.floor(Math.max(0, cedulaGrossSalary) / 1000)
+    : null;
 
   const [fileError, setFileError] = useState("");
   const [openingFile, setOpeningFile] = useState("");
@@ -145,9 +152,15 @@ function RequestRow({ request, token }) {
     rejected: "bg-[#FFF0EE] text-[#C74444]",
   };
 
-  const feeLabel =
-    details.fee_mode === "assessed" && !details.fee_assessed
-      ? "To be assessed by barangay staff"
+  const feeLabel = isCedula &&
+    formFields.taxable_amount !== undefined &&
+    formFields.taxable_amount !== "" &&
+    cedulaTotalFee !== null
+    ? `₱${cedulaTotalFee.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} payable upon release`
+    : details.fee_mode === "assessed" && !details.fee_assessed
+      ? ["Construction Permit", "Fencing Permit"].includes(request.document_type)
+        ? "To be determined by the inspector. We will notify you when the document is ready for release."
+        : "To be assessed by barangay staff"
       : Number(request.fee || 0) === 0
         ? "No fee"
         : `₱${Number(request.fee || 0).toFixed(2)} payable upon release`;

@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+.sidebar-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .document-paper {
   width: 8.5in;
   min-height: 11in;
@@ -13,18 +22,130 @@
   min-height: var(--paper-height, 11in);
 }
 
+.document-paper--business {
+  height: var(--paper-height, 11in);
+  min-height: var(--paper-height, 11in);
+}
+
+.document-paper--cedula {
+  height: var(--paper-height, 5.5in);
+  min-height: var(--paper-height, 5.5in);
+}
+
+.document-paper--jobseeker {
+  height: auto;
+  min-height: 11in;
+  overflow: visible;
+}
+
+.document-page-break {
+  break-before: page;
+  page-break-before: always;
+  height: 0.35in;
+  margin: 0 -0.55in;
+  border-top: 1px solid #dbe3ee;
+  border-bottom: 1px solid #dbe3ee;
+  background: #f1f5f9;
+}
+
+.jobseeker-content-page {
+  min-height: 8.2in;
+}
+
+.jobseeker-content-page--second {
+  min-height: 8.2in;
+  padding-top: 0.2in;
+}
+
+.jobseeker-oath-page {
+  padding-top: 0.2in;
+}
+
+.jobseeker-sheet {
+  position: relative;
+  box-sizing: border-box;
+  height: var(--paper-height, 11in);
+  min-height: var(--paper-height, 11in);
+  padding: 0.52in 0.58in;
+  border: 1px solid #d6dfeb;
+  background:
+    linear-gradient(90deg, #123f70 0 0.11in, transparent 0.11in) top left / 100% 0.12in no-repeat,
+    linear-gradient(180deg, #f5f8fc, #fff 1.05in);
+  box-shadow: inset 0 0 0 0.055in #fff, inset 0 0 0 0.07in #d6dfeb;
+}
+
+.jobseeker-sheet-design {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  pointer-events: none;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.jobseeker-sheet--uploaded {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.jobseeker-sheet--uploaded::after {
+  content: none;
+}
+
+.jobseeker-sheet > :not(.jobseeker-sheet-design) {
+  position: relative;
+  z-index: 1;
+}
+
+.jobseeker-sheet::after {
+  position: absolute;
+  right: 0.58in;
+  bottom: 0.3in;
+  left: 0.58in;
+  border-top: 1px solid #d6dfeb;
+  color: #64748b;
+  content: "BARANGAY TAYUD  •  CONSOLACION, CEBU";
+  font-size: 7pt;
+  letter-spacing: 0.12em;
+  padding-top: 0.1in;
+  text-align: center;
+}
+
+.jobseeker-sheet .document-template-heading {
+  border-bottom: 2px solid #d8e2ef;
+  margin-bottom: 0.28in;
+  padding-bottom: 0.18in;
+}
+
+.jobseeker-content-page--second > p {
+  margin-bottom: 0.1in;
+}
+
 .document-paper--designed .document-template-heading {
   display: none;
 }
 
 .document-paper .text-slate-800,
 .document-paper .text-slate-700 {
-  color: var(--document-text-color, #1f2937) !important;
+  color: var(--document-text-color, #172b4d) !important;
+}
+
+.document-paper .text-black {
+  color: var(--document-text-color, #172b4d) !important;
 }
 
 .document-paper .text-\[\#2455D6\],
 .document-paper .text-\[\#123F70\] {
   color: var(--document-accent-color, #123f70) !important;
+}
+
+.document-paper.document-paper--cedula .text-\[\#2455D6\],
+.document-paper.document-paper--cedula .text-\[\#123F70\] {
+  color: #172b4d !important;
 }
 
 @media print {
@@ -37,15 +158,27 @@
     background: #ffffff !important;
   }
 
+  html,
+  body,
+  #root {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
   body * {
     visibility: hidden !important;
   }
 
   #document-preview-modal {
-    position: static !important;
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
     display: block !important;
     width: var(--paper-width, 8.5in) !important;
-    min-height: var(--paper-height, 11in) !important;
+    min-height: 0 !important;
     height: auto !important;
     padding: 0 !important;
     overflow: visible !important;
@@ -69,12 +202,66 @@
   .document-paper {
     position: relative !important;
     width: var(--paper-width, 8.5in) !important;
-    height: var(--paper-height, 11in) !important;
+    height: auto !important;
     min-height: var(--paper-height, 11in) !important;
     max-width: none !important;
     margin: 0 !important;
     padding: 0.55in !important;
+    overflow: visible !important;
     box-shadow: none !important;
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .document-paper--jobseeker {
+    height: auto !important;
+    min-height: 11in !important;
+    overflow: visible !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .document-paper--jobseeker > div.relative {
+    display: block !important;
+    flex: none !important;
+  }
+
+  .document-paper--jobseeker > footer {
+    display: none !important;
+  }
+
+  .document-page-break {
+    display: none !important;
+  }
+
+  .jobseeker-content-page,
+  .jobseeker-content-page--second {
+    min-height: 0 !important;
+    margin: 0 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .jobseeker-content-page--second {
+    break-before: page !important;
+    page-break-before: always !important;
+    font-size: 12pt !important;
+    line-height: 1.65 !important;
+  }
+
+  .jobseeker-content-page--second > p {
+    margin-bottom: 0.1in !important;
+  }
+
+  .jobseeker-sheet {
+    height: var(--paper-height, 11in) !important;
+    min-height: var(--paper-height, 11in) !important;
+    max-height: var(--paper-height, 11in) !important;
+    overflow: hidden !important;
+    break-inside: avoid-page !important;
+    page-break-inside: avoid !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
@@ -84,7 +271,28 @@
   }
 
   .document-paper--designed {
+    height: var(--paper-height, 11in) !important;
+    min-height: var(--paper-height, 11in) !important;
     padding: 0 !important;
+  }
+
+  .document-paper--business {
+    height: var(--paper-height, 11in) !important;
+    min-height: var(--paper-height, 11in) !important;
+    max-height: var(--paper-height, 11in) !important;
+    overflow: hidden !important;
+  }
+
+  .document-paper--cedula {
+    height: var(--paper-height, 5.5in) !important;
+    min-height: var(--paper-height, 5.5in) !important;
+    max-height: var(--paper-height, 5.5in) !important;
+    overflow: hidden !important;
+  }
+
+  .document-paper--business .business-clearance-content {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
   }
 
   #document-preview-modal > div {
@@ -92,6 +300,7 @@
     width: var(--paper-width, 8.5in) !important;
     max-width: none !important;
     margin: 0 !important;
+    height: auto !important;
     max-height: none !important;
     overflow: visible !important;
     border-radius: 0 !important;
@@ -99,7 +308,8 @@
   }
 
   #document-preview-modal > div > div:first-child,
-  #document-preview-modal button {
+  #document-preview-modal button,
+  #document-preview-modal [role="alert"] {
     display: none !important;
   }
 }

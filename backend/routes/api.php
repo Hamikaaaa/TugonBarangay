@@ -62,6 +62,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/document-requests/overview', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'overview']);
     Route::get('/document-request-events', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'events']);
     Route::get('/document-requests', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'index']);
+    Route::get('/document-requests/{documentRequest}/requirements/{requirement}', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'viewRequirement']);
     Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'show']);
     Route::get('/bantaybot/escalations', [ResidentController::class, 'adminBotEscalations']);
     Route::patch('/bantaybot/escalations/{chatbotEscalation}/reply', [ResidentController::class, 'replyToBotEscalation']);
@@ -103,6 +104,10 @@ Route::middleware(['auth:sanctum', 'role:staff', 'designation:Document Request O
     Route::get('/document-request-dashboard', [\App\Http\Controllers\StaffController::class, 'documentRequestDashboard']);
     Route::get('/document-requests', [\App\Http\Controllers\StaffController::class, 'documentRequests']);
     Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\StaffController::class, 'showDocumentRequest']);
+    Route::patch('/document-requests/{documentRequest}/construction-inspection', [\App\Http\Controllers\StaffController::class, 'saveConstructionInspection']);
+    Route::get('/document-requests/{documentRequest}/construction-inspection', [\App\Http\Controllers\StaffController::class, 'viewConstructionInspection']);
+    Route::patch('/document-requests/{documentRequest}/permit-inspection', [\App\Http\Controllers\StaffController::class, 'saveConstructionInspection']);
+    Route::get('/document-requests/{documentRequest}/permit-inspection', [\App\Http\Controllers\StaffController::class, 'viewConstructionInspection']);
     Route::post('/document-requests/{documentRequest}/generate', [\App\Http\Controllers\StaffController::class, 'generateDocumentPreview']);
     Route::get('/document-requests/{documentRequest}/requirements/{requirement}', [\App\Http\Controllers\StaffController::class, 'downloadDocumentRequirement']);
     Route::patch('/document-requests/{documentRequest}/status', [\App\Http\Controllers\StaffController::class, 'updateDocumentRequestStatus']);

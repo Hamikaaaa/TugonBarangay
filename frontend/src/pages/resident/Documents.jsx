@@ -43,13 +43,18 @@ function getApplicantDefaults(user = {}) {
   const dateOfBirth = user.date_of_birth
     ? String(user.date_of_birth).slice(0, 10)
     : "";
+  const residentAddress =
+    user.address ||
+    (user.purok
+      ? `${formatPurok(user.purok)}, Barangay Tayud, Consolacion, Cebu`
+      : "");
 
   return {
     full_name: fullName || user.name || "",
     first_name: firstName,
     middle_name: middleName,
     last_name: lastName,
-    address: user.address || "",
+    address: residentAddress,
     date_of_birth: dateOfBirth,
     age: calculateAge(dateOfBirth),
     sex: user.sex || "",
@@ -59,8 +64,9 @@ function getApplicantDefaults(user = {}) {
     contact_number: user.mobile_number || "",
     email_address: user.email || "",
     project_owner_name: fullName || user.name || "",
-    project_address: user.address || "",
+    project_address: residentAddress,
     construction_type: "",
+    construction_type_other: "",
     municipality_city: user.municipality_city || "Consolacion",
     province: user.province || "Cebu",
     business_contact_number: user.mobile_number || "",
@@ -68,8 +74,18 @@ function getApplicantDefaults(user = {}) {
     business_purok: user.purok || "",
     business_address: user.address || "",
     tax_year: String(new Date().getFullYear()),
-    taxpayer_signature_name: "",
   };
+}
+
+function getClearanceAddress(purok) {
+  const value = String(purok || "").trim();
+  return value ? `${formatPurok(value)}, Barangay Tayud, Consolacion, Cebu` : "";
+}
+
+function formatPurok(value) {
+  const purok = String(value || "").trim();
+  if (!purok) return "";
+  return /^purok\b/i.test(purok) ? purok : `Purok ${purok}`;
 }
 
 function getFriendlyRequestError(error, document) {
@@ -114,6 +130,19 @@ function getFriendlyRequestError(error, document) {
   return message || "We couldn’t submit your request. Please check the form and try again.";
 }
 
+function getValidationField(message, document) {
+  const match = String(message || "").match(/\b(form_fields|requirements)\.([a-zA-Z0-9_]+)\b/);
+  if (!match) return null;
+
+  const [, section, key] = match;
+  const field = section === "requirements"
+    ? document?.requirements?.find((item) => item.key === key)
+    : document?.fields?.find((item) => item.key === key) ||
+      document?.applicantFieldConfigs?.find((item) => item.key === key);
+
+  return field ? { key, label: field.label || key, section } : null;
+}
+
 function calculateAge(dateOfBirth) {
   if (!dateOfBirth) return "";
   const birthDate = new Date(`${dateOfBirth.slice(0, 10)}T00:00:00`);
@@ -143,17 +172,19 @@ const DOCUMENT_TYPES = [
     label: "Barangay Clearance",
     value: "Barangay Certification",
     fee: 80,
-    applicantFields: [
-      "full_name",
-      "address",
-      "purok",
-      "date_of_birth",
-      "sex",
+    applicantFields: ["first_name", "last_name", "middle_name", "address", "place_of_birth", "date_of_birth"],
+    applicantFieldConfigs: [
+      { key: "first_name", label: "First Name", type: "text", required: true },
+      { key: "last_name", label: "Last Name", type: "text", required: true },
+      { key: "middle_name", label: "Middle Name", type: "text", required: true },
+      { key: "address", label: "Address", type: "text", required: true },
+      { key: "place_of_birth", label: "Place of Birth", type: "text", required: true },
+      { key: "date_of_birth", label: "Date of Birth", type: "date", required: true },
     ],
     fields: [
       {
         key: "purpose",
-        label: "Purpose of request",
+        label: "Purpose",
         type: "select",
         options: GENERAL_REQUEST_PURPOSES,
       },
@@ -167,8 +198,9 @@ const DOCUMENT_TYPES = [
       },
     ],
     requirements: [
-      { key: "purok_certificate", label: "Purok Certificate", required: true },
-      { key: "valid_id", label: "Valid government-issued ID", required: true },
+      { key: "valid_id", label: "Valid ID", required: true },
+      { key: "purok_certificate", label: "Purok Certification", required: true },
+      { key: "applicant_photo", label: "Applicant Photo (JPG or PNG, up to 5 MB)", required: false },
     ],
   },
   {
@@ -258,55 +290,41 @@ const DOCUMENT_TYPES = [
   {
     label: "Business Clearance",
     value: "Business Permit",
-    notice: "For new applications, attach a Purok Certification, Cedula, applicant ID, DTI/SEC registration, and a picture of the business. If rented, attach the contract of lease. If someone other than the owner is applying, attach the owner's authorization and both required IDs. For renewals, attach the previous Business Clearance.",
-    applicantFields: ["full_name", "first_name", "last_name", "middle_name", "address", "contact_number", "email_address", "applicant_is_owner", "authorized_person_name"],
+    notice: "For new applications, attach a Purok Certification, Cedula, applicant ID, DTI/SEC registration, and a picture of the business. For renewals, attach the previous Business Clearance and Purok Certification. If rented, attach the contract of lease.",
+    applicantFields: ["full_name", "last_name", "first_name", "middle_name", "address", "contact_number"],
     applicantFieldConfigs: [
-      { key: "full_name", label: "Name of taxpayer", type: "text", required: true },
-      { key: "first_name", label: "First name", type: "text", required: true },
+      { key: "full_name", label: "Name of taxpayer", type: "text", required: false, residentVisible: false },
       { key: "last_name", label: "Last name", type: "text", required: true },
-      { key: "middle_name", label: "Middle name", type: "text", required: false },
-      { key: "address", label: "Complete owner's address", type: "text", required: true },
+      { key: "first_name", label: "First name", type: "text", required: true },
+      { key: "middle_name", label: "Middle name", type: "text", required: true },
+      { key: "address", label: "Complete owner address", type: "text", required: true },
       { key: "contact_number", label: "Contact number", type: "tel", required: true },
-      { key: "email_address", label: "Email address", type: "email", required: true },
-      { key: "applicant_is_owner", label: "Are you the business owner?", type: "select", options: ["Yes", "No"], required: true, group: "Applicant authorization" },
-      { key: "authorized_person_name", label: "Authorized person's name", type: "text", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" }, group: "Applicant authorization" },
     ],
     fields: [
-      { key: "application_type", label: "Application", type: "select", options: ["New", "Renewal"], required: true, group: "Application" },
-      { key: "tax_year", label: "Tax year", type: "number", min: 2020, step: 1, required: true, group: "Application" },
-      { key: "business_ownership", label: "Type of business ownership", type: "select", options: ["Sole Proprietorship", "Partnership", "Corporation", "Cooperative"], required: true, group: "Business information" },
-      { key: "business_name", label: "Business name", type: "text", required: true, group: "Business information" },
-      { key: "tradename_franchise_name", label: "Trade name / franchise name", type: "text", required: false, group: "Business information" },
-      { key: "nature_of_business", label: "Nature of business", type: "text", required: true, group: "Business information" },
-      { key: "business_address", label: "Complete business address", type: "text", required: true, group: "Business information" },
-      { key: "business_purok", label: "Business Purok", type: "text", required: true, group: "Business information" },
-      { key: "business_area_sqm", label: "Business area (sq. m.)", type: "number", min: 0, step: "0.01", required: true, group: "Business information" },
-      { key: "place_of_business", label: "Place of business", type: "select", options: ["Owned", "Rented"], required: true, group: "Business information" },
-      { key: "monthly_rental", label: "Monthly rental (PHP)", type: "number", min: 0, step: "0.01", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" }, group: "Rental information" },
-      { key: "lessor_name", label: "Lessor's name", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" }, group: "Rental information" },
-      { key: "lessor_address", label: "Lessor's address", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" }, group: "Rental information" },
-      { key: "amendment_type", label: "Ownership amendment", type: "select", options: ["None", "From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"], required: true, group: "Amendments" },
-      { key: "amendment_owner_from", label: "Current owner / business type", type: "text", required: false, showWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, requiredWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, group: "Amendments" },
-      { key: "amendment_owner_to", label: "New owner(s) / business type", type: "text", required: false, showWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, requiredWhen: { key: "amendment_type", value: ["From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"] }, group: "Amendments" },
-      { key: "transfer_type", label: "Transfer type", type: "select", options: ["None", "Location", "Ownership"], required: true, group: "Transfers" },
-      { key: "transfer_location_from", label: "Current business location", type: "text", required: false, showWhen: { key: "transfer_type", value: "Location" }, requiredWhen: { key: "transfer_type", value: "Location" }, group: "Transfers" },
-      { key: "transfer_location_to", label: "Transfer business to this location", type: "text", required: false, showWhen: { key: "transfer_type", value: "Location" }, requiredWhen: { key: "transfer_type", value: "Location" }, group: "Transfers" },
-      { key: "transfer_owner_from", label: "Current owner / ownership", type: "text", required: false, showWhen: { key: "transfer_type", value: "Ownership" }, requiredWhen: { key: "transfer_type", value: "Ownership" }, group: "Transfers" },
-      { key: "transfer_owner_to", label: "Transfer ownership to (person / entity)", type: "text", required: false, showWhen: { key: "transfer_type", value: "Ownership" }, requiredWhen: { key: "transfer_type", value: "Ownership" }, group: "Transfers" },
-      { key: "taxpayer_signature_name", label: "Taxpayer / authorized representative name", type: "text", required: true, group: "Attestation" },
-      { key: "taxpayer_position", label: "Position", type: "text", required: false, group: "Attestation" },
+      { key: "application_type", label: "Application", type: "select", options: ["New", "Renewal"], required: true },
+      { key: "amendment_type", label: "Amendments (optional)", type: "select", options: ["None", "From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"], required: false },
+      { key: "transfer_type", label: "Transfer", type: "select", options: ["None", "Location", "Ownership"], required: false },
+      { key: "transfer_location_to", label: "Transfer location to", type: "text", required: false, showWhen: { key: "transfer_type", value: "Location" }, requiredWhen: { key: "transfer_type", value: "Location" } },
+      { key: "transfer_owner_to", label: "Transfer ownership to (person / entity)", type: "text", required: false, showWhen: { key: "transfer_type", value: "Ownership" }, requiredWhen: { key: "transfer_type", value: "Ownership" } },
+      { key: "business_ownership", label: "Type of business", type: "select", options: ["Sole Proprietorship", "Partnership", "Corporation", "Cooperative"], required: true },
+      { key: "business_name", label: "Business name", type: "text", required: true },
+      { key: "tradename_franchise_name", label: "Tradename / franchise name", type: "text", required: false },
+      { key: "business_address", label: "Complete business address", type: "text", required: true },
+      { key: "business_area_sqm", label: "Business area (sq. m.)", type: "number", min: 0, step: "0.01", required: true },
+      { key: "place_of_business", label: "Place of business", type: "select", options: ["Owned", "Rented"], required: true },
+      { key: "monthly_rental", label: "Monthly rental (PHP)", type: "number", min: 0, step: "0.01", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
+      { key: "lessor_name", label: "Lessor's name", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
+      { key: "lessor_address", label: "Lessor's address", type: "text", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
+      { key: "business_attestation_accepted", label: "Attestation acceptance", type: "text", required: false, residentVisible: false },
     ],
     requirements: [
-      { key: "purok_certification", label: "Purok Certification", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
+      { key: "purok_certification", label: "Purok Certification", required: false, showWhen: { key: "application_type", value: ["New", "Renewal"] }, requiredWhen: { key: "application_type", value: ["New", "Renewal"] } },
       { key: "cedula_copy", label: "Cedula (Community Tax Certificate)", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
       { key: "applicant_id", label: "Applicant's ID", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
       { key: "dti_sec_registration", label: "DTI / SEC registration", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
       { key: "business_picture", label: "Picture of the business", required: false, showWhen: { key: "application_type", value: "New" }, requiredWhen: { key: "application_type", value: "New" } },
       { key: "previous_business_clearance", label: "Previous Business Clearance", required: false, showWhen: { key: "application_type", value: "Renewal" }, requiredWhen: { key: "application_type", value: "Renewal" } },
       { key: "lease_contract", label: "Contract of lease", required: false, showWhen: { key: "place_of_business", value: "Rented" }, requiredWhen: { key: "place_of_business", value: "Rented" } },
-      { key: "authorization_letter", label: "Photocopy of owner's signed authorization", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" } },
-      { key: "authorized_person_id", label: "Photocopy of authorized person's ID with 3 specimen signatures", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" } },
-      { key: "business_owner_id", label: "Photocopy of business owner's ID with 3 specimen signatures", required: false, showWhen: { key: "applicant_is_owner", value: "No" }, requiredWhen: { key: "applicant_is_owner", value: "No" } },
     ],
   },
   {
@@ -346,14 +364,193 @@ function conditionMatches(condition, values) {
 }
 
 function mapConfiguredDocumentType(type) {
-  const applicantFieldConfigs = (type.applicant_fields || []).filter(
+  const applicantFieldConfigs = (type.applicant_fields || type.applicantFieldConfigs || []).filter(
     (field) => field.enabled !== false,
   );
+  const configuredFields = (type.fields || []).filter(
+    (field) => field.enabled !== false,
+  );
+  if (["Construction Permit", "Fencing Permit"].includes(type.value)) {
+    const isFencingPermit = type.value === "Fencing Permit";
+    const applicantConfigByKey = new Map(
+      applicantFieldConfigs.map((field) => [field.key, field]),
+    );
+    const applicantDefinitions = [
+      { key: "full_name", label: "Name", type: "text", required: true },
+      { key: "address", label: "Address", type: "text", required: true },
+      { key: "contact_number", label: "Contact number", type: "tel", required: true },
+      { key: "email_address", label: "Email address", type: "email", required: false },
+    ].map((field) => ({
+      ...applicantConfigByKey.get(field.key),
+      ...field,
+      readOnly: false,
+      group: "1. Applicant information",
+    }));
+    const fieldConfigByKey = new Map(
+      configuredFields.map((field) => [field.key, field]),
+    );
+    const projectFields = [
+      { key: "project_owner_name", label: "Project owner", type: "text", required: true },
+      { key: "project_address", label: "Project address/location", type: "text", required: true },
+      {
+        key: "construction_type",
+        label: "Type of construction",
+        type: "select",
+        required: true,
+        options: isFencingPermit ? ["Fencing"] : ["New Construction", "Renovation/Repair", "Extension/Addition", "Demolition", "Fencing", "Other"],
+      },
+      ...(!isFencingPermit ? [{
+        key: "type_of_structure",
+        label: "Type of structure/building",
+        type: "text",
+        required: true,
+      }] : []),
+      {
+        key: "construction_type_other",
+        label: "Specify other construction type",
+        type: "text",
+        required: false,
+        showWhen: { key: "construction_type", value: "Other" },
+        requiredWhen: { key: "construction_type", value: "Other" },
+      },
+      ...(!isFencingPermit ? [{
+        key: "proposed_floor_area",
+        label: "Proposed floor area (m², if applicable)",
+        type: "number",
+        required: false,
+        min: 0,
+        step: "0.01",
+      }] : [
+        { key: "fence_material", label: "Fence material", type: "text", required: true },
+        { key: "fence_height", label: "Fence height (meters)", type: "number", required: true, min: 0, step: "0.01" },
+        { key: "fence_length", label: "Fence length (meters)", type: "number", required: true, min: 0, step: "0.01" },
+      ]),
+    ].map((field) => ({
+      ...fieldConfigByKey.get(field.key),
+      ...field,
+      group: isFencingPermit && field.key.startsWith("fence_") ? "3. Fence details" : "2. Project information",
+    }));
+    const certificationField = fieldConfigByKey.get("applicant_certification_accepted");
+    return {
+      ...type,
+      ...(isFencingPermit ? {
+        requirements: [
+          { key: "purok_certificate", label: "Purok Certification", required: true },
+        ],
+      } : {}),
+      description: isFencingPermit
+        ? "File this form so the barangay can inspect the proposed fence before preparing the Fencing Permit."
+        : "File this form so the barangay can review and inspect the proposed construction project.",
+      applicantFieldConfigs: applicantDefinitions,
+      applicantFields: applicantDefinitions.map((field) => field.key),
+      fields: [
+        ...projectFields,
+        ...(certificationField ? [{ ...certificationField, residentVisible: false }] : []),
+      ],
+    };
+  }
+  if (type.value === "Business Permit") {
+    const applicantOrder = [
+      "full_name",
+      "last_name",
+      "first_name",
+      "middle_name",
+      "address",
+      "contact_number",
+    ];
+    const orderedApplicantFields = applicantOrder
+      .map((key) => applicantFieldConfigs.find((field) => field.key === key))
+      .filter(Boolean)
+      .map((field) => ({
+        ...field,
+        group: "2. Type, taxpayer, and business information",
+        residentVisible: field.key !== "full_name",
+        required: field.key === "full_name" ? false : ["last_name", "first_name", "middle_name", "address", "contact_number"].includes(field.key) || field.required,
+      }));
+    const omittedBusinessKeys = new Set([
+      "tax_year",
+      "nature_of_business",
+      "business_purok",
+      "amendment_owner_from",
+      "amendment_owner_to",
+      "transfer_location_from",
+      "transfer_owner_from",
+      "taxpayer_signature_name",
+      "taxpayer_position",
+    ]);
+    const orderedBusinessFields = configuredFields
+      .filter((field) => !omittedBusinessKeys.has(field.key))
+      .map((field) => ({
+        ...field,
+        group: ["application_type", "amendment_type", "transfer_type", "transfer_location_to", "transfer_owner_to"].includes(field.key)
+          ? "1. Application details"
+          : "2. Type, taxpayer, and business information",
+        ...(field.key === "amendment_type"
+          ? {
+              required: false,
+              options: ["None", "From Single to Partnership", "From Single to Corporation", "From Partnership to Single", "From Partnership to Corporation", "From Corporation to Single", "From Corporation to Partnership"],
+            }
+          : {}),
+        ...(field.key === "transfer_type" ? { required: false, options: ["None", "Location", "Ownership"] } : {}),
+      }));
+    const businessTypeField = orderedBusinessFields.find(
+      (field) => field.key === "business_ownership",
+    );
+    return {
+      ...type,
+      applicantFieldConfigs: [],
+      applicantFields: [],
+      fields: [
+        ...orderedBusinessFields.filter((field) => field.group.startsWith("1.")),
+        ...(businessTypeField ? [businessTypeField] : []),
+        ...orderedApplicantFields,
+        ...orderedBusinessFields.filter(
+          (field) => field.group.startsWith("2.") && field.key !== "business_ownership",
+        ),
+      ],
+      requirements: (type.requirements || []).filter(
+        (requirement) =>
+          requirement.enabled !== false &&
+          !["authorization_letter", "authorized_person_id", "business_owner_id"].includes(requirement.key),
+      ),
+    };
+  }
+  if (
+    type.value === "Barangay Certification" ||
+    type.label === "Barangay Clearance"
+  ) {
+    const clearanceApplicantFields = applicantFieldConfigs
+      .filter((field) => field.key !== "purok")
+      .map((field) =>
+        field.key === "address"
+          ? {
+              ...field,
+              label: "Address",
+              required: true,
+              residentVisible: true,
+            }
+          : field,
+      );
+    if (!clearanceApplicantFields.some((field) => field.key === "address")) {
+      clearanceApplicantFields.push({
+        key: "address",
+        label: "Address",
+        type: "text",
+        required: true,
+      });
+    }
+    return {
+      ...type,
+      applicantFieldConfigs: clearanceApplicantFields,
+      applicantFields: clearanceApplicantFields.map((field) => field.key),
+      fields: configuredFields,
+    };
+  }
   return {
     ...type,
     applicantFieldConfigs,
     applicantFields: applicantFieldConfigs.map((field) => field.key),
-    fields: (type.fields || []).filter((field) => field.enabled !== false),
+    fields: configuredFields,
     requirements: (type.requirements || []).filter(
       (requirement) => requirement.enabled !== false,
     ),
@@ -456,6 +653,7 @@ function Documents({ requests, token, onRefresh, user }) {
   const [submitting, setSubmitting] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [businessAttestationOpen, setBusinessAttestationOpen] = useState(false);
+  const [businessAttestationAccepted, setBusinessAttestationAccepted] = useState(false);
   const [permitCertificationOpen, setPermitCertificationOpen] = useState(false);
   const [permitCertificationAccepted, setPermitCertificationAccepted] = useState(false);
   const [history, setHistory] = useState(requests);
@@ -600,7 +798,7 @@ function Documents({ requests, token, onRefresh, user }) {
     };
   }, [historyPage, reloadHistory, token]);
   const availableDocuments = useMemo(() => {
-    if (catalogTypes === null) return DOCUMENT_TYPES;
+    if (catalogTypes === null) return DOCUMENT_TYPES.map(mapConfiguredDocumentType);
     return catalogTypes.map(mapConfiguredDocumentType);
   }, [catalogTypes]);
   const selectedDocument = (catalogTypes === null && editingRequest?.type
@@ -647,12 +845,24 @@ function Documents({ requests, token, onRefresh, user }) {
       existingFields.purpose &&
       !purposeOptions.includes(existingFields.purpose);
 
+    setBusinessAttestationAccepted(false);
+    setBusinessAttestationOpen(false);
+    setPermitCertificationAccepted(false);
+    setPermitCertificationOpen(false);
     setEditingRequest(request);
     setDocumentType(request.document_type);
     const applicantDefaults = getApplicantDefaults(user);
     setFormFields({
       ...applicantDefaults,
       ...existingFields,
+      ...(request.document_type === "Business Permit"
+        ? {
+            address:
+              existingFields.address ||
+              getClearanceAddress(applicantDefaults.purok) ||
+              applicantDefaults.address,
+          }
+        : {}),
       ...(applicantDefaults.date_of_birth
         ? {
             date_of_birth: applicantDefaults.date_of_birth,
@@ -675,6 +885,10 @@ function Documents({ requests, token, onRefresh, user }) {
     setCameraError("");
     setEditingRequest(null);
     setDocumentType("");
+    setBusinessAttestationAccepted(false);
+    setBusinessAttestationOpen(false);
+    setPermitCertificationAccepted(false);
+    setPermitCertificationOpen(false);
     closeApplicantCamera();
     setCameraError("");
     setFormFields(getApplicantDefaults(user));
@@ -689,6 +903,12 @@ function Documents({ requests, token, onRefresh, user }) {
     event.preventDefault();
     if (!selectedDocument) {
       setMessage("Choose a document type before submitting your request.");
+      setMessageTone("error");
+      return;
+    }
+    if (selectedDocument.value === "Business Permit" && !businessAttestationAccepted) {
+      setBusinessAttestationOpen(true);
+      setMessage("Review and accept the Business Clearance attestation before submitting.");
       setMessageTone("error");
       return;
     }
@@ -720,20 +940,33 @@ function Documents({ requests, token, onRefresh, user }) {
           .filter(({ field }) => !field?.showWhen || conditionMatches(field.showWhen, formFields)),
         ...selectedDocument.fields.filter(
           (field) =>
+            field.key !== "applicant_certification_accepted" &&
             field.submit !== false &&
             (!field.showWhen || conditionMatches(field.showWhen, formFields)),
         ),
       ];
+      const submittedFields = {};
       requestFieldDefinitions.forEach(({ key }) => {
         const value =
+          key === "full_name" && documentType === "Business Permit"
+            ? [formFields.first_name, formFields.middle_name, formFields.last_name]
+                .filter(Boolean)
+                .join(" ")
+            :
           key === "purpose" &&
           formFields.purpose === "Other" &&
           selectedDocument.fields.some((field) => field.key === "purpose_other")
             ? formFields.purpose_other
             : formFields[key];
         if (value !== undefined && value !== "") {
-          formData.append(`form_fields[${key}]`, value.trim());
+          submittedFields[key] = String(value).trim();
         }
+      });
+      if (selectedDocument.value === "Construction Permit") {
+        submittedFields.applicant_certification_accepted = "Yes";
+      }
+      Object.entries(submittedFields).forEach(([key, value]) => {
+        formData.append(`form_fields[${key}]`, value);
       });
       const visibleRequirementKeys = new Set(visibleRequirements.map((requirement) => requirement.key));
       Object.entries(requirementFiles).forEach(([key, file]) => {
@@ -776,6 +1009,8 @@ function Documents({ requests, token, onRefresh, user }) {
       setDocumentType("");
       setPermitCertificationAccepted(false);
       setPermitCertificationOpen(false);
+      setBusinessAttestationAccepted(false);
+      setBusinessAttestationOpen(false);
       setFormFields(getApplicantDefaults(user));
       setNotes("");
       clearRequirementFiles();
@@ -789,7 +1024,25 @@ function Documents({ requests, token, onRefresh, user }) {
         // The request is saved; the request history has its own refresh state.
       }
     } catch (error) {
-      setMessage(getFriendlyRequestError(error, selectedDocument));
+      const validationField = getValidationField(error.message, selectedDocument);
+      if (validationField) {
+        setMessage(
+          validationField.section === "requirements"
+            ? `Please upload ${validationField.label}.`
+            : `Please complete ${validationField.label}.`,
+        );
+        requestAnimationFrame(() => {
+          const control = validationField.section === "requirements"
+            ? window.document.getElementById(`requirement-${validationField.key}`)
+            : window.document.querySelector(
+                `[data-validation-field="${validationField.key}"]`,
+              );
+          control?.scrollIntoView({ behavior: "smooth", block: "center" });
+          control?.focus({ preventScroll: true });
+        });
+      } else {
+        setMessage(getFriendlyRequestError(error, selectedDocument));
+      }
       setMessageTone("error");
     } finally {
       setSubmitting(false);
@@ -888,25 +1141,29 @@ function Documents({ requests, token, onRefresh, user }) {
                   setDocumentType(nextDocumentType);
                   setPermitCertificationAccepted(false);
                   setPermitCertificationOpen(false);
+                  setBusinessAttestationAccepted(false);
+                  setBusinessAttestationOpen(false);
                   const applicantDefaults = getApplicantDefaults(user);
+                  const isBusinessPermit = nextDocumentType === "Business Permit";
                   setFormFields({
                     ...applicantDefaults,
                     project_owner_name: applicantDefaults.full_name,
                     project_address: applicantDefaults.address,
                     construction_type: nextDocumentType === "Fencing Permit" ? "Fencing" : "",
-                    ...(nextDocumentType === "Business Permit"
+                    ...(isBusinessPermit
                       ? {
-                          full_name: "",
-                          first_name: "",
-                          last_name: "",
-                          middle_name: "",
-                          address: "",
-                          contact_number: "",
-                          email_address: "",
-                          tax_year: "",
+                          address: getClearanceAddress(applicantDefaults.purok) || applicantDefaults.address,
+                          amendment_type: "None",
+                          transfer_type: "None",
+                          business_ownership: "",
+                          business_name: "",
+                          tradename_franchise_name: "",
                           business_address: "",
-                          business_purok: "",
-                          taxpayer_signature_name: "",
+                          business_area_sqm: "",
+                          place_of_business: "",
+                          monthly_rental: "",
+                          lessor_name: "",
+                          lessor_address: "",
                         }
                       : {}),
                   });
@@ -951,18 +1208,23 @@ function Documents({ requests, token, onRefresh, user }) {
                 </p>
               )}
 
-              <div className="mt-6 border-t border-slate-100 pt-5">
+              {selectedDocument.value !== "Business Permit" && <div className="mt-6 border-t border-slate-100 pt-5">
                 <h3 className="text-sm font-bold text-[#172B4D]">
-                  Applicant information
+                  {["Construction Permit", "Fencing Permit"].includes(selectedDocument.value)
+                    ? "1. Applicant information"
+                    : "Applicant information"}
                 </h3>
                 <p className="mt-1 text-xs text-slate-500">
-                  Your profile details are filled in automatically. Complete any
-                  missing details in your profile.
+                  {["Construction Permit", "Fencing Permit"].includes(selectedDocument.value)
+                    ? "Your profile information is filled in when available. Review and complete the required applicant details."
+                    : "Your profile details are filled in automatically. Complete any missing details in your profile."}
                 </p>
                 {selectedDocument.fee_mode === "assessed" ? (
                   <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
-                              Fee will be assessed by barangay staff based on your business information.
-                            </p>
+                    { ["Construction Permit", "Fencing Permit"].includes(selectedDocument.value)
+                      ? "The inspector will determine the fee for this permit. We will notify you when the document is ready for release."
+                      : "The barangay will assess the fee and notify you when your Business Clearance is ready for release."}
+                  </p>
                 ) : selectedDocument.fee !== undefined && (
                             <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
                               {Number(selectedDocument.fee) === 0
@@ -974,7 +1236,7 @@ function Documents({ requests, token, onRefresh, user }) {
                   {selectedDocument.applicantFields
                     .filter((key) => {
                       const config = selectedDocument.applicantFieldConfigs?.find((item) => item.key === key);
-                      return !config?.showWhen || conditionMatches(config.showWhen, formFields);
+                      return config?.residentVisible !== false && (!config?.showWhen || conditionMatches(config.showWhen, formFields));
                     })
                     .map((key) => {
                     const field = selectedDocument.applicantFieldConfigs?.find(
@@ -996,6 +1258,7 @@ function Documents({ requests, token, onRefresh, user }) {
                         </span>
                         {field.type === "select" ? (
                           <select
+                            data-validation-field={key}
                             required={field.requiredWhen
                               ? conditionMatches(field.requiredWhen, formFields)
                               : field.required !== false}
@@ -1017,6 +1280,7 @@ function Documents({ requests, token, onRefresh, user }) {
                           </select>
                         ) : (
                           <input
+                            data-validation-field={key}
                             required={field.readOnly && formFields[key] ? false : (field.requiredWhen
                               ? conditionMatches(field.requiredWhen, formFields)
                               : field.required !== false)}
@@ -1039,30 +1303,33 @@ function Documents({ requests, token, onRefresh, user }) {
                     );
                   })}
                 </div>
-                { ["Construction Permit", "Fencing Permit"].includes(selectedDocument.value) && (
-                  <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600 sm:col-span-2">
-                    <span className="font-semibold text-slate-700">Application details:</span>{" "}
-                    Date filed {new Intl.DateTimeFormat("en-PH", { dateStyle: "long" }).format(new Date())}; Barangay Tayud, Consolacion, Cebu.
-                    <div className="mt-3 flex flex-wrap items-center gap-3">
-                      <button type="button" onClick={() => setPermitCertificationOpen(true)} className="min-h-9 rounded-lg border border-[#2455D6]/25 bg-white px-3 text-xs font-bold text-[#2455D6] hover:bg-blue-50">
-                        {permitCertificationAccepted ? "Certification accepted" : "Review applicant certification"}
-                      </button>
-                      {permitCertificationAccepted && <span className="text-xs font-semibold text-emerald-700">You accepted the certification.</span>}
-                    </div>
-                  </div>
-                )}
-              </div>
+              </div>}
 
               <div className="mt-6 border-t border-slate-100 pt-5">
                 <h3 className="text-sm font-bold text-[#172B4D]">
-                  Request details
+                  {selectedDocument.value === "Business Permit"
+                    ? "Business Clearance application"
+                    : ["Construction Permit", "Fencing Permit"].includes(selectedDocument.value)
+                      ? `${selectedDocument.label} application`
+                      : "Request details"}
                 </h3>
                 <p className="mt-1 text-xs text-slate-500">
-                  Provide the information needed for this document.
+                  {selectedDocument.value === "Business Permit"
+                    ? "Complete the two groups below. Profile details are prefilled and can be edited."
+                    : ["Construction Permit", "Fencing Permit"].includes(selectedDocument.value)
+                      ? `Complete the project information so the barangay can inspect the proposed ${selectedDocument.value === "Fencing Permit" ? "fence" : "construction project"}.`
+                      : "Provide the information needed for this document."}
                 </p>
+                {selectedDocument.fee_mode === "assessed" && (
+                  <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
+                    { ["Construction Permit", "Fencing Permit"].includes(selectedDocument.value)
+                      ? "The inspector will determine the fee for this permit. We will notify you when the document is ready for release."
+                      : "The barangay will assess the fee and notify you when your Business Clearance is ready for release."}
+                  </p>
+                )}
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   {Object.entries(selectedDocument.fields
-                    .filter((field) => !field.showWhen || conditionMatches(field.showWhen, formFields))
+                    .filter((field) => field.residentVisible !== false && (!field.showWhen || conditionMatches(field.showWhen, formFields)))
                     .reduce((groups, field) => {
                       const group = field.group || "";
                       (groups[group] ||= []).push(field);
@@ -1075,13 +1342,18 @@ function Documents({ requests, token, onRefresh, user }) {
                           ? conditionMatches(field.requiredWhen, formFields)
                           : field.required !== false;
                       const controlProps = {
+                        "data-validation-field": field.key,
                         required: field.readOnly && formFields[field.key] ? false : required,
                         value: formFields[field.key] ?? "",
-                        onChange: (event) =>
-                          setFormFields((current) => ({
-                            ...current,
-                            [field.key]: event.target.value,
-                          })),
+                        onChange: (event) => setFormFields((current) => {
+                          const updated = { ...current, [field.key]: event.target.value };
+                          if (["first_name", "middle_name", "last_name"].includes(field.key)) {
+                            updated.full_name = [updated.first_name, updated.middle_name, updated.last_name]
+                              .filter(Boolean)
+                              .join(" ");
+                          }
+                          return updated;
+                        }),
                         className: inputClass,
                       };
 
@@ -1120,12 +1392,34 @@ function Documents({ requests, token, onRefresh, user }) {
                     })}
                     </Fragment>)}
                 </div>
-                {selectedDocument.value === "Business Permit" && <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-slate-600">The attestation is optional to review and is not required to submit this online request.</p>
-                    <button type="button" onClick={() => setBusinessAttestationOpen(true)} className="min-h-9 rounded-lg border border-[#2455D6]/25 bg-white px-3 text-xs font-bold text-[#2455D6] hover:bg-blue-50">View optional attestation</button>
+                {selectedDocument.value === "Business Permit" && <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+                  <h4 className="mb-3 border-b border-slate-200 pb-2 text-xs font-bold uppercase tracking-wide text-[#55708F]">3. Attestation and undertaking</h4>
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <label className="flex items-start gap-3 text-sm text-slate-700">
+                      <input
+                        type="checkbox"
+                        checked={businessAttestationAccepted}
+                        onChange={(event) => setBusinessAttestationAccepted(event.target.checked)}
+                        className="mt-1 h-4 w-4 accent-[#2455D6]"
+                      />
+                      <span>I have read and agree to the attestation and undertaking.</span>
+                    </label>
+                    <button type="button" onClick={() => setBusinessAttestationOpen(true)} className="min-h-9 rounded-lg border border-[#2455D6]/25 bg-white px-3 text-xs font-bold text-[#2455D6] hover:bg-blue-50">View attestation</button>
                   </div>
-                </div>}
+                </section>}
+                {["Construction Permit", "Fencing Permit"].includes(selectedDocument.value) && <section className="mt-6 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:col-span-2">
+                  <h4 className="mb-3 border-b border-slate-200 pb-2 text-xs font-bold uppercase tracking-wide text-[#55708F]">{selectedDocument.value === "Fencing Permit" ? "4." : "3."} Applicant certification</h4>
+                  <div className="flex flex-wrap items-center justify-between gap-4">
+                    <p className="text-sm text-slate-700">
+                      {permitCertificationAccepted
+                        ? "You accepted the applicant’s certification."
+                        : "Review and accept the applicant’s certification before submitting."}
+                    </p>
+                    <button type="button" onClick={() => setPermitCertificationOpen(true)} className="min-h-9 rounded-lg border border-[#2455D6]/25 bg-white px-3 text-xs font-bold text-[#2455D6] hover:bg-blue-50">
+                      {permitCertificationAccepted ? "Review certification" : "View and accept certification"}
+                    </button>
+                  </div>
+                </section>}
               </div>
 
               <div className="mt-6 border-t border-slate-100 pt-5">
@@ -1184,6 +1478,7 @@ function Documents({ requests, token, onRefresh, user }) {
                         </label>
                         <input
                           id={inputId}
+                          data-validation-field={requirement.key}
                           required={
                             required &&
                             !hasExistingFile &&
@@ -1424,7 +1719,7 @@ function Documents({ requests, token, onRefresh, user }) {
             </div>
             <button type="button" onClick={() => setPermitCertificationOpen(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
           </div>
-          <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">I hereby certify that all information provided in this application is true and correct. I further agree to comply with all applicable laws, ordinances, and regulations governing construction activities within the barangay.</p>
+          <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm leading-7 text-slate-700">I hereby certify that all information provided in this application is true and correct. I further agree to comply with all applicable laws, ordinances, and regulations governing {selectedDocument?.value === "Fencing Permit" ? "fence construction and related activities" : "construction activities"} within the barangay.</p>
           <label className="mt-5 flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-700">
             <input type="checkbox" checked={permitCertificationAccepted} onChange={(event) => setPermitCertificationAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#2455D6]" />
             <span>I have read and agree to this certification.</span>
@@ -1439,18 +1734,23 @@ function Documents({ requests, token, onRefresh, user }) {
         <section role="dialog" aria-modal="true" aria-labelledby="business-attestation-title" className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#2455D6]">Optional review</p>
-              <h2 id="business-attestation-title" className="mt-1 text-lg font-bold text-[#172B4D]">Attestation and Undertaking</h2>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#2455D6]">Required review</p>
+              <h2 id="business-attestation-title" className="mt-1 text-lg font-bold text-[#172B4D]">Online Attestation and Undertaking</h2>
             </div>
             <button type="button" onClick={() => setBusinessAttestationOpen(false)} className="rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Close</button>
           </div>
           <div className="mt-5 space-y-4 text-sm leading-6 text-slate-700">
-            <p>I undertake to comply with the regulatory requirements and other deficiencies within 30 days from receipt of this application.</p>
-            <p>I understand that misrepresentation or falsification may be grounds for revocation of a business permit and closure of the business establishment, without prejudice to applicable civil or criminal action.</p>
-            <p>I certify that the information entered in this application is true and correct, and that I will comply with applicable laws, ordinances, policies, rules, and regulations.</p>
-            <p>If I am an authorized representative, I confirm that I have authority from the owner to transact and submit this application and receive notices on the owner's behalf.</p>
+            <p>I agree to comply with the barangay's regulatory requirements and to address any deficiencies communicated to me within 30 days of receiving notice.</p>
+            <p>I understand that providing false or misleading information may result in the denial or revocation of the business clearance and other action allowed by applicable law.</p>
+            <p>By checking the agreement box and submitting this online application, I confirm that I have read and understood the information provided, that the information I entered is true and accurate to the best of my knowledge, and that I will comply with applicable laws, ordinances, policies, rules, and regulations.</p>
           </div>
-          <p className="mt-5 rounded-lg bg-slate-50 p-3 text-xs text-slate-500">This is an optional on-screen reference to the paper form's attestation. Signing the official form may still be required by the barangay.</p>
+          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-lg bg-slate-50 p-3 text-sm text-slate-700">
+            <input type="checkbox" checked={businessAttestationAccepted} onChange={(event) => setBusinessAttestationAccepted(event.target.checked)} className="mt-1 h-4 w-4 accent-[#2455D6]" />
+            <span>I have read and agree to this online attestation and undertaking.</span>
+          </label>
+          <div className="mt-5 flex justify-end">
+            <button type="button" disabled={!businessAttestationAccepted} onClick={() => { setBusinessAttestationOpen(false); setMessage(""); setMessageTone("info"); }} className="rounded-lg bg-[#2455D6] px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">Agree and continue</button>
+          </div>
         </section>
       </div>}
       {feedbackOpen && (

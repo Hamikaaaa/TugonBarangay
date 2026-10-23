@@ -7,6 +7,8 @@ use App\Models\DocumentRequestEvent;
 use App\Models\Staff;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 
 class AdminDocumentRequestHistoryController extends Controller
 {
@@ -46,6 +48,10 @@ class AdminDocumentRequestHistoryController extends Controller
                 in_array($documentRequest->status, ['pending', 'under_review', 'processing'], true)
                     && $documentRequest->status_changed_at?->lte(Carbon::now()->subDays(3)),
             );
+            $documentRequest->setAttribute(
+                'clearance_number',
+                $documentRequest->clearanceSequenceNumber(),
+            );
         });
 
         return $results;
@@ -53,9 +59,47 @@ class AdminDocumentRequestHistoryController extends Controller
 
     public function show(DocumentRequest $documentRequest)
     {
+        $documentRequest->load(['resident', 'type', 'assignedStaff', 'events']);
+        $documentRequest->setAttribute(
+            'identity_review',
+            app(StaffController::class)->getDocumentRequestIdentityReview($documentRequest),
+        );
+        $documentRequest->setAttribute(
+            'clearance_number',
+            $documentRequest->clearanceSequenceNumber(),
+        );
+
         return response()->json([
-            'data' => $documentRequest->load(['resident', 'type', 'assignedStaff', 'events']),
+            'data' => $documentRequest,
         ]);
+    }
+
+    public function viewRequirement(DocumentRequest $documentRequest, string $requirement)
+    {
+        $file = $documentRequest->details['requirements'][$requirement] ?? null;
+        abort_unless(is_array($file) && !empty($file['path']), 404);
+
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists($file['path']), 404);
+
+        $filename = $file['original_name'] ?? basename($file['path']);
+        $headers = [
+            'Cache-Control' => 'private, no-store',
+            'Content-Disposition' => (new ResponseHeaderBag)->makeDisposition(
+                ResponseHeaderBag::DISPOSITION_INLINE,
+                $filename,
+                preg_replace('/[^A-Za-z0-9_.-]/', '_', $filename),
+            ),
+            'Content-Type' => mime_content_type($disk->path($file['path'])) ?: 'application/octet-stream',
+        ];
+
+        return response()->stream(function () use ($disk, $file): void {
+            $stream = $disk->readStream($file['path']);
+            if (is_resource($stream)) {
+                fpassthru($stream);
+                fclose($stream);
+            }
+        }, 200, $headers);
     }
 
     public function overview()

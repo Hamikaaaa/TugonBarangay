@@ -41,8 +41,8 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
         />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,88vw)] flex-col overflow-y-auto bg-[#123F70] px-5 py-6 text-white shadow-2xl transition-transform duration-300 lg:w-72 lg:translate-x-0 lg:shadow-none ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="border-b border-white/10 px-2 pb-5">
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,88vw)] flex-col overflow-hidden bg-[#123F70] px-5 py-6 text-white shadow-2xl transition-transform duration-300 lg:w-72 lg:translate-x-0 lg:shadow-none ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="shrink-0 border-b border-white/10 px-2 pb-5">
           <div className="flex items-center gap-3">
             <img src="/images/logo-white-version.png" alt="TugonBarangay" className="h-12 w-12 object-contain" />
             <div>
@@ -55,7 +55,7 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
           </div>
         </div>
 
-        <nav className="mt-7" aria-label="Staff workspace">
+        <nav className="sidebar-scroll mt-7 min-h-0 flex-1 overflow-y-auto overscroll-contain" aria-label="Staff workspace">
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Workspace</p>
           <div className="space-y-1">
             {navigationItems.map((item) => {
@@ -108,7 +108,7 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
           </div>
         </nav>
 
-        <div className="mt-auto pt-6">
+        <div className="mt-auto shrink-0 pt-6">
           <div className="rounded-xl bg-white/10 p-3">
             <div className="flex items-center gap-3">
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-bold text-[#2455D6]">{(user?.name || "S").charAt(0)}</span>

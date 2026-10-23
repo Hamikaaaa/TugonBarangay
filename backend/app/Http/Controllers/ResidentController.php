@@ -189,6 +189,13 @@ class ResidentController extends Controller
     {
         $documentType = $request->input('document_type');
         $configuredType = DocumentType::where('value', $documentType)->where('active', true)->first();
+        if ($documentType === 'Barangay Certification') {
+            $formFields = $request->input('form_fields', []);
+            if (empty($formFields['purok']) && $request->user()->purok) {
+                $formFields['purok'] = $request->user()->purok;
+                $request->merge(['form_fields' => $formFields]);
+            }
+        }
         $managedValues = DocumentType::whereNotNull('value')->pluck('value')->all();
         $legacyValues = array_values(array_diff(array_keys(self::DOCUMENT_REQUIREMENTS), $managedValues));
         $rules = [
@@ -376,6 +383,13 @@ class ResidentController extends Controller
         abort_unless($documentRequest->status === 'for_correction', 409);
 
         $documentType = $documentRequest->document_type;
+        if ($documentType === 'Barangay Certification') {
+            $formFields = $request->input('form_fields', []);
+            if (empty($formFields['purok']) && $request->user()->purok) {
+                $formFields['purok'] = $request->user()->purok;
+                $request->merge(['form_fields' => $formFields]);
+            }
+        }
         $configuredType = DocumentType::where('value', $documentType)->first();
         $applicantFields = $configuredType
             ? array_column(array_values(array_filter(
