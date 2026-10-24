@@ -2,13 +2,13 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import ComplaintQueue from "./ComplaintQueue";
 import StaffLayout from "./StaffLayout";
-import useBlotterNavigation from "../../hooks/useBlotterNavigation";
+import useComplaintStaffNavigation from "../../hooks/useComplaintStaffNavigation";
 
 function ComplaintManagement() {
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const blotterNavigation = useBlotterNavigation();
+  const navigationItems = useComplaintStaffNavigation();
   const isDashboard = location.pathname === "/staff/dashboard";
   const statusFilter = new URLSearchParams(location.search).get("status") || "all";
 
@@ -26,16 +26,7 @@ function ComplaintManagement() {
               : statusFilter === "rejected" ? "Rejected Complaints"
                 : statusFilter === "closed" ? "Closed Complaints"
                   : "Complaints"}
-      navigationItems={[
-        { label: "Dashboard", path: "/staff/dashboard" },
-        blotterNavigation,
-        { label: "Pending", path: "/staff/complaints?status=pending" },
-        { label: "In Progress", path: "/staff/complaints?status=in_progress" },
-        { label: "Resolved", path: "/staff/complaints?status=resolved" },
-        { label: "Rejected", path: "/staff/complaints?status=rejected" },
-        { label: "Closed", path: "/staff/complaints?status=closed" },
-        
-      ]}
+      navigationItems={navigationItems}
       activePath={`${location.pathname}${location.search}`}
       onNavigate={navigate}
     >

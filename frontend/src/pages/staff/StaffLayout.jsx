@@ -58,8 +58,9 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
         <nav className="sidebar-scroll mt-7 min-h-0 flex-1 overflow-y-auto overscroll-contain" aria-label="Staff workspace">
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Workspace</p>
           <div className="space-y-1">
-            {navigationItems.map((item) => {
+            {navigationItems.map((item, index) => {
               const active = activePath === item.path;
+              const showGroup = item.group && navigationItems[index - 1]?.group !== item.group;
               const Icon = item.icon || (item.value
                 ? FileText
                 : item.label === "Pending"
@@ -77,6 +78,11 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
                       : LayoutDashboard);
               return (
                 <div key={item.path}>
+                  {showGroup && (
+                    <p className="mb-2 mt-4 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/50 first:mt-0">
+                      {item.group}
+                    </p>
+                  )}
                   <button
                     type="button"
                     onClick={() => {

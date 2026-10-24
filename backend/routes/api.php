@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\DocumentTypeController;
 use App\Http\Controllers\ResidentController;
+use App\Http\Controllers\SummonsSettingsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -73,6 +74,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/bantaybot/stats', [ResidentController::class, 'adminBotStats']);
     Route::get('/residents/registry-stats', [AdminController::class, 'residentRegistryStats']);
     Route::get('/barangay-registry', [AdminController::class, 'barangayRegistry']);
+    Route::post('/barangay-registry', [AdminController::class, 'storeBarangayRegistry']);
     Route::get('/resident-accounts', [AdminController::class, 'residentAccounts']);
     Route::patch('/resident-accounts/{resident}/status', [AdminController::class, 'updateResidentAccountStatus']);
     Route::get('/pending-residents', [AdminController::class, 'pendingResidents']);
@@ -83,6 +85,12 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::patch('/complaint-categories/{id}', [\App\Http\Controllers\ComplaintController::class, 'updateCategory']);
     Route::delete('/complaint-categories/{id}', [\App\Http\Controllers\ComplaintController::class, 'destroyCategory']);
     Route::get('/complaints', [\App\Http\Controllers\StaffController::class, 'complaints']);
+    Route::get('/complaints/summons-settings', [SummonsSettingsController::class, 'show']);
+    Route::put('/complaints/summons-settings', [SummonsSettingsController::class, 'update']);
+    Route::post('/complaints/summons-settings/template', [SummonsSettingsController::class, 'uploadTemplate']);
+    Route::get('/complaints/summons-settings/template', [SummonsSettingsController::class, 'downloadTemplate']);
+    Route::get('/complaints/summon-history', [\App\Http\Controllers\BlotterController::class, 'summonEntries']);
+    Route::get('/complaints/summon-history/{summonEntry}/template', [\App\Http\Controllers\BlotterController::class, 'downloadSummonEntryTemplate']);
     Route::patch('/complaints/{complaint}/status', [\App\Http\Controllers\StaffController::class, 'updateComplaintStatus']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);
     Route::get('/blotter/entries', [\App\Http\Controllers\BlotterController::class, 'index']);
@@ -115,6 +123,10 @@ Route::middleware(['auth:sanctum', 'role:staff', 'designation:Document Request O
 });
 
 Route::middleware(['auth:sanctum', 'role:staff', 'designation:Complaint Management Officer'])->prefix('staff')->group(function () {
+    Route::get('/blotter/summon-entries', [\App\Http\Controllers\BlotterController::class, 'summonEntries']);
+    Route::patch('/blotter/summon-entries/{summonEntry}', [\App\Http\Controllers\BlotterController::class, 'updateSummonEntry']);
+    Route::get('/blotter/summon-settings', [SummonsSettingsController::class, 'show']);
+    Route::get('/blotter/summon-template', [SummonsSettingsController::class, 'downloadTemplate']);
     Route::get('/complaint-categories', [\App\Http\Controllers\ComplaintController::class, 'enabledCategories']);
     Route::get('/complaints', [\App\Http\Controllers\StaffController::class, 'complaints']);
     Route::get('/complaints/{complaint}', [\App\Http\Controllers\StaffController::class, 'showComplaint']);
