@@ -65,7 +65,7 @@ function AdminDashboard() {
     { label: "Verified residents", value: residentStats?.verified_total, note: "Resident accounts verified", icon: UsersRound, tone: "violet" },
     { label: "Barangay registry", value: residentStats?.registry_total, note: "People on the barangay masterlist", icon: UsersRound, tone: "blue" },
     { label: "Pending verification", value: residentStats?.pending_total, note: "Resident accounts to review", icon: UsersRound, tone: "amber" },
-    { label: "Complaints", value: report?.summary?.complaints?.total, note: "Submitted in the last 12 months", icon: Activity, tone: "coral" },
+    { label: "Complaints, blotters & summons", value: report?.summary?.complaints?.total, note: `${report?.summary?.complaints?.resident_complaints || 0} complaints · ${report?.summary?.complaints?.blotter_entries || 0} blotters · ${report?.summary?.complaints?.summon_notices || 0} summons`, icon: Activity, tone: "coral" },
     { label: "Chatbot escalations", value: report?.summary?.chatbot_escalations?.total, note: "Submitted in the last 12 months", icon: Activity, tone: "violet" },
     { label: "New resident accounts", value: report?.summary?.new_residents, note: "Joined in the last 12 months", icon: UsersRound, tone: "blue" },
     { label: "Feedback rating", value: report ? Number(report.summary.feedback.average_rating).toFixed(1) : null, note: `out of 5 · ${report?.summary?.feedback?.total || 0} ratings in the last 12 months`, icon: Activity, tone: "coral" },
@@ -110,7 +110,7 @@ function AdminDashboard() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="font-bold text-[#172B4D]">Service activity across the barangay</h2>
-              <p className="mt-1 text-xs text-slate-500">Monthly document requests, complaints, and chatbot escalations for the last 12 months.</p>
+              <p className="mt-1 text-xs text-slate-500">Monthly document requests, complaints, blotter entries, summons, and chatbot escalations for the last 12 months.</p>
             </div>
             <Link to="/admin/reports" className="text-xs font-bold text-[#2455D6] hover:underline">Open reports and analytics</Link>
           </div>
@@ -160,6 +160,7 @@ function AdminDashboard() {
               <OverviewLink to="/admin/document-requests/dashboard" label="Document request dashboard" />
               <OverviewLink to="/admin/document-requests" label="Review document requests" value={overview ? `${overview.pending} pending` : undefined} />
               <OverviewLink to="/admin/complaints" label="Open complaints dashboard" />
+              <OverviewLink to="/admin/complaints/summon-history" label="Review summon history" value={report ? `${report.summary.complaints.summon_notices} notices` : undefined} />
               <OverviewLink to="/admin/chatbot/dashboard" label="Open chatbot dashboard" value={report ? `${report.summary.chatbot_escalations.pending} awaiting reply` : undefined} />
               <OverviewLink to="/admin/reports" label="Reports and analytics" />
             </div>
@@ -172,7 +173,7 @@ function AdminDashboard() {
               <h2 className="text-sm font-bold text-[#172B4D]">Work requiring attention across services</h2>
               <p className="mt-1 text-xs text-[#55708F]">
                 {overview && residentStats && report
-                  ? `${residentStats.pending_total} resident verifications · ${overview.delayed} delayed document requests · ${overview.for_correction} document corrections · ${report.summary.complaints.open} complaints open · ${report.summary.chatbot_escalations.pending} chatbot replies waiting`
+                  ? `${residentStats.pending_total} resident verifications · ${overview.delayed} delayed document requests · ${overview.for_correction} document corrections · ${report.summary.complaints.open} complaint-related records open · ${report.summary.chatbot_escalations.pending} chatbot replies waiting`
                   : loading ? "Loading service queues..." : "Service queue statistics are unavailable."}
               </p>
             </div>
@@ -189,7 +190,7 @@ function AdminDashboard() {
 function ServiceTrendChart({ monthly }) {
   const series = [
     { key: "document_requests", label: "Document requests", color: "#2455D6" },
-    { key: "complaints", label: "Complaints", color: "#7138E8" },
+    { key: "complaints", label: "Complaints, blotters & summons", color: "#7138E8" },
     { key: "chatbot_escalations", label: "Chatbot escalations", color: "#E52B32" },
     { key: "new_residents", label: "New residents", color: "#123F70" },
   ];
@@ -217,7 +218,7 @@ function ServiceTrendChart({ monthly }) {
         ))}
       </div>
       <div className="overflow-x-auto">
-        <svg viewBox={`0 0 ${width} ${height}`} className="h-auto min-w-[580px] w-full" role="img" aria-label="Monthly line chart comparing document requests, complaints, and chatbot escalations">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-auto min-w-[580px] w-full" role="img" aria-label="Monthly line chart comparing document requests, complaints, blotters, summons, and chatbot escalations">
           {[0, 1, 2, 3].map((step) => {
             const y = top + (step * (height - top - bottom)) / 3;
             const value = Math.round(max - (step * max) / 3);

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Archive,
-  Bell,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -19,7 +18,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import StaffLayout from "./StaffLayout";
-import useBlotterNavigation from "../../hooks/useBlotterNavigation";
+import useComplaintStaffNavigation from "../../hooks/useComplaintStaffNavigation";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 
 const API_URL = "http://127.0.0.1:8000/api";
@@ -93,7 +92,7 @@ function BlotterManagement() {
   const { token, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const blotterNavigation = useBlotterNavigation();
+  const navigationItems = useComplaintStaffNavigation();
 
   const residentFilter = new URLSearchParams(location.search).get("resident") || "";
   const [entries, setEntries] = useState([]);
@@ -173,10 +172,6 @@ function BlotterManagement() {
     }
   };
 
-  const handleSummon = () => {
-    navigate("/staff/blotter/summon");
-  };
-
   useEffect(() => {
     // Load the blotter entries for the current page and filters.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -204,10 +199,7 @@ function BlotterManagement() {
   return (
     <StaffLayout
       title="Barangay Blotter"
-      navigationItems={[
-        { label: "Dashboard", path: "/staff/dashboard" },
-        blotterNavigation,
-      ]}
+      navigationItems={navigationItems}
       activePath="/staff/blotter"
       onNavigate={navigate}
     >
@@ -274,15 +266,6 @@ function BlotterManagement() {
             <button type="button" onClick={() => setFormOpen(true)} className={primaryButtonClass}>
               <Plus size={15} aria-hidden="true" />
               New blotter entry
-            </button>
-            <button
-              type="button"
-              onClick={handleSummon}
-              className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#F59E0B] via-[#EF4444] to-[#F59E0B] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-amber-500/15 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-amber-500/20 active:translate-y-0"
-              aria-label="Summon responder"
-            >
-              <Bell size={15} aria-hidden="true" />
-              Summon
             </button>
           </div>
 

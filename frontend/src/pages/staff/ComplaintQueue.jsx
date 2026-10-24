@@ -66,6 +66,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
   const navigate = useNavigate();
   const [complaints, setComplaints] = useState([]);
   const [counts, setCounts] = useState({});
+  const [blotterSummary, setBlotterSummary] = useState(null);
   const [priorityCounts, setPriorityCounts] = useState({});
   const [categoryCounts, setCategoryCounts] = useState([]);
   const [selected, setSelected] = useState(null);
@@ -120,6 +121,34 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
 
     return () => controller.abort();
   }, [isAdmin, token]);
+
+  useEffect(() => {
+    if (isAdmin || !isDashboard || !token) return undefined;
+    let active = true;
+    let loadingBlotterSummary = false;
+    const loadBlotterSummary = async () => {
+      if (loadingBlotterSummary) return;
+      loadingBlotterSummary = true;
+      try {
+        const response = await fetch(`${API_URL}/staff/blotter/entries?per_page=1`, {
+          headers: authHeaders(token),
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        if (active) setBlotterSummary(payload.status_counts || null);
+      } catch {
+        // Keep the latest available summary during temporary connection issues.
+      } finally {
+        loadingBlotterSummary = false;
+      }
+    };
+    loadBlotterSummary();
+    const timer = window.setInterval(loadBlotterSummary, 30000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [isAdmin, isDashboard, token]);
 
   const loadComplaints = useCallback(async () => {
     if (!token) return;
@@ -378,6 +407,33 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
               </div>
             </article>
           ))}
+        </section>
+      )}
+
+      {!isAdmin && isDashboard && (
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2" aria-label="Blotter and summons summary">
+          <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Blotter entries</p>
+                <p className="mt-2 text-2xl font-bold text-[#132A4A]">{blotterSummary?.all ?? "—"}</p>
+                <p className="mt-1 text-xs text-slate-500">{blotterSummary ? `${blotterSummary.open || 0} open · ${blotterSummary.referred || 0} referred` : "Incident records"}</p>
+              </div>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#EAF1FF] text-[#2455D6]"><ShieldAlert size={17} aria-hidden="true" /></span>
+            </div>
+            <button type="button" onClick={() => navigate("/staff/blotter")} className="mt-4 text-xs font-bold text-[#2455D6] hover:underline">Open blotter</button>
+          </article>
+          <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Summons</p>
+                <p className="mt-2 text-2xl font-bold text-[#132A4A]">Ready</p>
+                <p className="mt-1 text-xs text-slate-500">Prepare a summons document</p>
+              </div>
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-700"><FileText size={17} aria-hidden="true" /></span>
+            </div>
+            <button type="button" onClick={() => navigate("/staff/blotter/summon")} className="mt-4 text-xs font-bold text-[#2455D6] hover:underline">Prepare summons</button>
+          </article>
         </section>
       )}
 

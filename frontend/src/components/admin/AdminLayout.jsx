@@ -28,6 +28,7 @@ const navigation = [
     icon: Users,
     children: [
       { label: "Dashboard", path: "/admin/residents/dashboard" },
+      { label: "Residents Account", path: "/admin/residents/accounts" },
       { label: "Barangay Masterlist", path: "/admin/residents" },
       { label: "Account Verification", path: "/admin/residents/verification" },
     ],
@@ -51,6 +52,8 @@ const navigation = [
       { label: "Resident Complaints", path: "/admin/complaints/resident-complaints" },
       { label: "Category Management", path: "/admin/complaints/categories" },
       { label: "Blotter", path: "/admin/complaints/blotter-history", icon: FileText },
+      { label: "Summons Settings", path: "/admin/complaints/summons-settings", icon: FileText },
+      { label: "Summon History", path: "/admin/complaints/summon-history", icon: FileText },
     ],
   },
   {
@@ -105,6 +108,7 @@ function AdminLayout({ children, title }) {
   return (
     <div className="min-h-screen bg-[#F5F7FB] text-[#172B4D]">
       <AdminSidebar
+        token={token}
         activePath={location.pathname}
         onSelect={handleSelect}
         onLogout={logout}
@@ -129,12 +133,41 @@ function AdminLayout({ children, title }) {
   );
 }
 
-function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
+function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) {
   const [openMenuOverride, setOpenMenuOverride] = useState(null);
+  const [pendingEscalationCount, setPendingEscalationCount] = useState(null);
   const activeNavigationItem = navigation.find((item) =>
     isActiveNavigationItem(item, activePath),
   );
   const openMenu = openMenuOverride ?? activeNavigationItem?.label ?? "";
+
+  useEffect(() => {
+    let cancelled = false;
+    let loading = false;
+    const loadEscalationCount = async () => {
+      if (!token || loading) return;
+      loading = true;
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/admin/bantaybot/stats", {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        const count = Number(payload.pending);
+        if (!cancelled && Number.isFinite(count)) setPendingEscalationCount(count);
+      } catch {
+        // The sidebar remains usable if the count cannot be refreshed.
+      } finally {
+        loading = false;
+      }
+    };
+    loadEscalationCount();
+    const timer = window.setInterval(loadEscalationCount, 30000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [token]);
 
   const isActiveItem = (item) => isActiveNavigationItem(item, activePath);
 
@@ -225,6 +258,11 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
                       })()}
                     </span>
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    {item.label === "Chatbot" && pendingEscalationCount > 0 && (
+                      <span aria-label={`${pendingEscalationCount} pending escalated questions`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                        {pendingEscalationCount > 99 ? "99+" : pendingEscalationCount}
+                      </span>
+                    )}
                     <ChevronDown
                       size={15}
                       className={`transition-transform ${openMenu === item.label ? "rotate-180" : ""}`}
@@ -241,13 +279,18 @@ function AdminSidebar({ activePath, onSelect, onLogout, open, onClose }) {
                         key={child.path}
                         type="button"
                         onClick={() => onSelect(child.path)}
-                        className={`flex w-full items-center rounded-lg px-3 py-2.5 text-left text-xs font-semibold ${
+                        className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left text-xs font-semibold ${
                           getActiveChild(item, activePath)?.path === child.path
                             ? "bg-white/15 text-white"
                             : "text-blue-100/75"
                         }`}
                       >
-                        {child.label}
+                        <span>{child.label}</span>
+                        {child.path === "/admin/chatbot/escalations" && pendingEscalationCount > 0 && (
+                          <span aria-label={`${pendingEscalationCount} pending escalated questions`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                            {pendingEscalationCount > 99 ? "99+" : pendingEscalationCount}
+                          </span>
+                        )}
                       </button>
                     ))}
                   </div>

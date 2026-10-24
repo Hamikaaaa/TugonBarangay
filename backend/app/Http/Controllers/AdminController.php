@@ -6,9 +6,11 @@ use App\Models\Resident;
 use App\Models\Feedback;
 use App\Models\ChatbotEscalation;
 use App\Models\Complaint;
+use App\Models\BlotterEntry;
 use App\Models\DocumentRequest;
 use App\Models\BarangayRegistry;
 use App\Models\Staff;
+use App\Models\SummonEntry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -127,6 +129,28 @@ class AdminController extends Controller
         });
 
         return $page;
+    }
+
+    public function storeBarangayRegistry(Request $request)
+    {
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'suffix' => ['nullable', 'string', 'max:50'],
+            'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
+            'sex' => ['required', 'string', 'max:50'],
+            'purok' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'mobile_number' => ['required', 'regex:/^09\\d{9}$/'],
+        ]);
+
+        $record = BarangayRegistry::create($validated);
+
+        return response()->json([
+            'message' => 'Resident added to the barangay registry.',
+            'resident' => $record,
+        ], 201);
     }
 
     public function residentAccounts(Request $request)
@@ -296,14 +320,24 @@ class AdminController extends Controller
             ->get($columns);
         $documents = $loadPeriodRecords(DocumentRequest::class, ['created_at', 'status']);
         $complaints = $loadPeriodRecords(Complaint::class, ['created_at', 'status', 'category']);
+        $blotters = $loadPeriodRecords(BlotterEntry::class, ['created_at', 'status']);
         $escalations = $loadPeriodRecords(ChatbotEscalation::class, ['created_at', 'status']);
         $residents = $loadPeriodRecords(Resident::class, ['created_at']);
         $feedback = $loadPeriodRecords(Feedback::class, ['created_at', 'rating']);
+        $summons = $loadPeriodRecords(SummonEntry::class, [
+            'created_at', 'status', 'complainant_attended', 'respondent_attended',
+        ]);
 
         foreach ($documents as $record) {
             $monthly[$record->created_at->format('Y-m')]['document_requests']++;
         }
         foreach ($complaints as $record) {
+            $monthly[$record->created_at->format('Y-m')]['complaints']++;
+        }
+        foreach ($blotters as $record) {
+            $monthly[$record->created_at->format('Y-m')]['complaints']++;
+        }
+        foreach ($summons as $record) {
             $monthly[$record->created_at->format('Y-m')]['complaints']++;
         }
         foreach ($escalations as $record) {
@@ -349,9 +383,31 @@ class AdminController extends Controller
                     'rejected' => $documents->where('status', 'rejected')->count(),
                 ],
                 'complaints' => [
-                    'total' => $complaints->count(),
-                    'resolved' => $complaints->whereIn('status', ['resolved', 'closed'])->count(),
-                    'open' => $complaints->whereNotIn('status', ['resolved', 'closed', 'rejected'])->count(),
+                    'total' => $complaints->count() + $blotters->count() + $summons->count(),
+                    'resident_complaints' => $complaints->count(),
+                    'blotter_entries' => $blotters->count(),
+                    'summon_notices' => $summons->count(),
+                    'resolved' => $complaints->whereIn('status', ['resolved', 'closed'])->count()
+                        + $blotters->where('status', 'resolved')->count()
+                        + $summons->where('status', 'completed')->count(),
+                    'open' => $complaints->whereNotIn('status', ['resolved', 'closed', 'rejected'])->count()
+                        + $blotters->whereIn('status', ['open', 'referred'])->count()
+                        + $summons->whereIn('status', ['scheduled', 'rescheduled'])->count(),
+                    'rejected' => $complaints->where('status', 'rejected')->count()
+                        + $summons->where('status', 'cancelled')->count(),
+                    'scheduled' => $summons->where('status', 'scheduled')->count(),
+                    'completed' => $summons->where('status', 'completed')->count(),
+                    'rescheduled' => $summons->where('status', 'rescheduled')->count(),
+                    'cancelled' => $summons->where('status', 'cancelled')->count(),
+                    'complainant_attended' => $summons->where('complainant_attended', true)->count(),
+                    'respondent_attended' => $summons->where('respondent_attended', true)->count(),
+                    'complainant_absent' => $summons->where('complainant_attended', false)->count(),
+                    'respondent_absent' => $summons->where('respondent_attended', false)->count(),
+                    'complainant_attendance_unmarked' => $summons->whereNull('complainant_attended')->count(),
+                    'respondent_attendance_unmarked' => $summons->whereNull('respondent_attended')->count(),
+                    'both_attended' => $summons->filter(fn ($summon) => $summon->complainant_attended && $summon->respondent_attended)->count(),
+                    'attended_by_complainant' => $summons->where('complainant_attended', true)->count(),
+                    'attended_by_respondent' => $summons->where('respondent_attended', true)->count(),
                 ],
                 'chatbot_escalations' => [
                     'total' => $escalations->count(),
