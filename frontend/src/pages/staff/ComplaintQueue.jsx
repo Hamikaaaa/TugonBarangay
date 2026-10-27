@@ -286,6 +286,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
       if (!response.ok) throw new Error(payload.message || "Unable to update complaint.");
       setSelected(payload.data);
       setNotice(payload.message || "Complaint updated.");
+      window.dispatchEvent(new Event("staff-complaint-updated"));
       await loadComplaints();
     } catch (updateError) {
       setError(updateError.message);

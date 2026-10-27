@@ -120,7 +120,7 @@ const WORKFLOW_GUIDANCE = {
 };
 
 function StaffDashboardProfessional({ documentType = "" }) {
-  const { token, user } = useAuth();
+  const { token } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [documentTypes, setDocumentTypes] = useState(
@@ -132,15 +132,6 @@ function StaffDashboardProfessional({ documentType = "" }) {
   const [requests, setRequests] = useState([]);
   const [dashboardSummary, setDashboardSummary] = useState(null);
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const viewedRequestStorageKey = `staff-viewed-document-requests-${user?.id || "current"}`;
-  const [viewedRequestIds, setViewedRequestIds] = useState(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem(viewedRequestStorageKey) || "[]");
-      return new Set(Array.isArray(stored) ? stored : []);
-    } catch {
-      return new Set();
-    }
-  });
   const activeDocumentType = documentType;
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -292,17 +283,6 @@ function StaffDashboardProfessional({ documentType = "" }) {
     };
   }, [activeDocumentType, dashboardSummary]);
 
-  const unseenPendingCount = useMemo(
-    () => requests.filter((request) => request.status === "pending" && !viewedRequestIds.has(request.id)).length,
-    [requests, viewedRequestIds],
-  );
-  const unseenByDocumentType = useMemo(() => requests.reduce((countsByType, request) => {
-    if (request.status === "pending" && !viewedRequestIds.has(request.id)) {
-      countsByType[request.document_type] = (countsByType[request.document_type] || 0) + 1;
-    }
-    return countsByType;
-  }, {}), [requests, viewedRequestIds]);
-
   const filteredRequests = useMemo(
     () => requests.filter((request) => !activeDocumentType || request.document_type === activeDocumentType),
     [activeDocumentType, requests],
@@ -314,13 +294,6 @@ function StaffDashboardProfessional({ documentType = "" }) {
   };
 
   const selectRequest = (request) => {
-    if (request.status === "pending") {
-      setViewedRequestIds((current) => {
-        const next = new Set(current).add(request.id);
-        try { localStorage.setItem(viewedRequestStorageKey, JSON.stringify([...next])); } catch { /* Viewing still clears the in-page badge. */ }
-        return next;
-      });
-    }
     setSelectedRequest(request);
     setStaffRemarks(request.staff_remarks || "");
     setRejectionReason(request.rejection_reason || "");
@@ -511,7 +484,12 @@ function StaffDashboardProfessional({ documentType = "" }) {
       title={documentType ? `${activeDocumentLabel} Requests` : "Document Requests"}
       navigationItems={navigationItems}
       notificationCounts={Object.fromEntries(
-        navigationItems.map((item) => [item.path, item.value ? (unseenByDocumentType[item.value] || 0) : 0]),
+        navigationItems.map((item) => [
+          item.path,
+          item.value
+            ? (dashboardSummary?.summary_by_type?.find((type) => type.value === item.value)?.pending || 0)
+            : 0,
+        ]),
       )}
       activePath={documentType ? `/staff/document-types/${encodeURIComponent(documentType)}` : "/staff/dashboard"}
       onNavigate={(path) => {

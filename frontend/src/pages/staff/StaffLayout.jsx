@@ -26,8 +26,13 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
       } catch { /* Keep the latest count during a temporary connection issue. */ }
     };
     refresh();
+    window.addEventListener("staff-complaint-updated", refresh);
     const timer = window.setInterval(refresh, 10000);
-    return () => { active = false; window.clearInterval(timer); };
+    return () => {
+      active = false;
+      window.removeEventListener("staff-complaint-updated", refresh);
+      window.clearInterval(timer);
+    };
   }, [token, user?.designation]);
 
   return (
@@ -97,7 +102,7 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
                     </span>
                     <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">{item.label}</span>
                     {user?.designation === "Document Request Officer" && notificationCounts[item.path] > 0 && (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white" aria-label={`${notificationCounts[item.path]} unseen pending requests`}>
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white" aria-label={`${notificationCounts[item.path]} pending requests`}>
                         {notificationCounts[item.path] > 99 ? "99+" : notificationCounts[item.path]}
                       </span>
                     )}

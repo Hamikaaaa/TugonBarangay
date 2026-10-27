@@ -234,6 +234,7 @@ function Residents() {
           ? `${resident.name} has been approved.`
           : `${resident.name}'s registration was rejected.`,
       );
+      window.dispatchEvent(new Event("resident-verification-updated"));
       setRejectingResident(null);
       setRejectionReason("");
       await loadPendingResidents();
@@ -487,7 +488,7 @@ function Residents() {
             ) : registry.length ? (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1000px] text-left">
+                  <table className="w-full min-w-[1120px] text-left">
                     <thead className="bg-[#F7F9FC] text-[10px] uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-5 py-3 font-bold">Resident name</th>
@@ -495,6 +496,7 @@ function Residents() {
                         <th className="px-5 py-3 font-bold">Purok</th>
                         <th className="px-5 py-3 font-bold">Address</th>
                         <th className="px-5 py-3 font-bold">Mobile</th>
+                        <th className="px-5 py-3 font-bold">System account</th>
                         <th className="px-5 py-3 font-bold">First-time job seeker</th>
                       </tr>
                     </thead>
@@ -516,6 +518,9 @@ function Residents() {
                           </td>
                           <td className="px-5 py-4 text-sm text-slate-600">
                             {record.mobile_number || "—"}
+                          </td>
+                          <td className="px-5 py-4">
+                            <SystemAccountStatus status={record.system_account_status} count={record.system_account_count} />
                           </td>
                           <td className="px-5 py-4">
                             <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold ${record.first_time_jobseeker_available ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
@@ -999,6 +1004,23 @@ function DetailsCard({ title, resident, missing = false }) {
         </dl>
       )}
     </section>
+  );
+}
+
+function SystemAccountStatus({ status, count }) {
+  const variants = {
+    no_account: { label: "No account", className: "bg-slate-100 text-slate-600" },
+    pending: { label: "Pending verification", className: "bg-amber-50 text-amber-800" },
+    verified: { label: "Verified account", className: "bg-emerald-50 text-emerald-700" },
+    rejected: { label: "Registration rejected", className: "bg-red-50 text-red-700" },
+    multiple_accounts: { label: `${count} matching accounts`, className: "bg-orange-50 text-orange-800" },
+  };
+  const variant = variants[status] || variants.no_account;
+
+  return (
+    <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold ${variant.className}`}>
+      {variant.label}
+    </span>
   );
 }
 
