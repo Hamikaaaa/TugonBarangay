@@ -33,12 +33,16 @@ class ResidentController extends Controller
 
     ];
 
-    private const COMPLAINT_STATUSES = [
-        'pending',
-        'in_progress',
-        'resolved',
-        'rejected',
-        'closed',
+    private const BOT_TERM_SYNONYMS = [
+        'account' => ['accounts', 'profile', 'profiles', 'login', 'logins', 'signin', 'signins'],
+        'complaint' => ['complaints'],
+        'document' => ['documents', 'certificate', 'certificates', 'certification', 'certifications', 'clearance', 'clearances', 'paperwork', 'papers'],
+        'fee' => ['fees', 'cost', 'costs', 'price', 'prices', 'payment', 'payments', 'pay', 'paid', 'charge', 'charges', 'expensive', 'much'],
+        'password' => ['passcode', 'passcodes'],
+        'requirement' => ['requirements', 'required', 'need', 'needs', 'needed'],
+        'report' => ['reports', 'reporting', 'file', 'filed', 'filing', 'lodge', 'lodging'],
+        'residency' => ['resident', 'residents', 'residence', 'residential'],
+        'status' => ['progress', 'track', 'tracking', 'updates'],
     ];
 
     private const DOCUMENT_FEES = [
@@ -189,13 +193,6 @@ class ResidentController extends Controller
     {
         $documentType = $request->input('document_type');
         $configuredType = DocumentType::where('value', $documentType)->where('active', true)->first();
-        if ($documentType === 'Barangay Certification') {
-            $formFields = $request->input('form_fields', []);
-            if (empty($formFields['purok']) && $request->user()->purok) {
-                $formFields['purok'] = $request->user()->purok;
-                $request->merge(['form_fields' => $formFields]);
-            }
-        }
         $managedValues = DocumentType::whereNotNull('value')->pluck('value')->all();
         $legacyValues = array_values(array_diff(array_keys(self::DOCUMENT_REQUIREMENTS), $managedValues));
         $rules = [
@@ -383,13 +380,6 @@ class ResidentController extends Controller
         abort_unless($documentRequest->status === 'for_correction', 409);
 
         $documentType = $documentRequest->document_type;
-        if ($documentType === 'Barangay Certification') {
-            $formFields = $request->input('form_fields', []);
-            if (empty($formFields['purok']) && $request->user()->purok) {
-                $formFields['purok'] = $request->user()->purok;
-                $request->merge(['form_fields' => $formFields]);
-            }
-        }
         $configuredType = DocumentType::where('value', $documentType)->first();
         $applicantFields = $configuredType
             ? array_column(array_values(array_filter(
@@ -553,33 +543,7 @@ class ResidentController extends Controller
 
     public function complaints(Request $request)
     {
-        $validated = $request->validate([
-            'status' => ['sometimes', 'string', 'in:all,pending,in_progress,resolved,rejected,closed'],
-        ]);
-
-        $query = Complaint::where('resident_id', $request->user()->id);
-
-        $status = $validated['status'] ?? 'all';
-        if ($status !== 'all') {
-            $query->where('status', $status);
-        }
-
-        $complaints = $query->latest()->paginate(10)->withQueryString();
-
-        $statusCounts = Complaint::where('resident_id', $request->user()->id)
-            ->selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
-            ->pluck('count', 'status');
-
-        $counts = [];
-        foreach (self::COMPLAINT_STATUSES as $complaintStatus) {
-            $counts[$complaintStatus] = (int) ($statusCounts[$complaintStatus] ?? 0);
-        }
-        $counts['all'] = array_sum($counts);
-
-        return response()->json(array_merge($complaints->toArray(), [
-            'status_counts' => $counts,
-        ]));
+        return Complaint::where('resident_id', $request->user()->id)->latest()->paginate(10);
     }
 
     public function storeComplaint(Request $request)
@@ -759,6 +723,7 @@ class ResidentController extends Controller
     public function botMessages(Request $request)
     {
         $messages = ChatbotMessage::where('resident_id', $request->user()->id)
+            ->with('faq:id,category,question,question_ceb,answer,answer_ceb')
             ->oldest('created_at')
             ->oldest('id')
             ->get()
@@ -771,8 +736,15 @@ class ResidentController extends Controller
                     'answer' => $message->answer,
                     'matched' => $message->matched,
                     'intent' => $message->intent,
-                    'faq' => $message->faq_category
-                        ? ['category' => $message->faq_category]
+                    'faq' => $message->faq_id && $message->faq
+                        ? [
+                            'id' => $message->faq->id,
+                            'category' => $message->faq->category,
+                            'question' => $message->faq->question,
+                            'question_ceb' => $message->faq->question_ceb,
+                            'answer' => $message->faq->answer,
+                            'answer_ceb' => $message->faq->answer_ceb,
+                        ]
                         : null,
                 ],
             ]);
@@ -782,7 +754,12 @@ class ResidentController extends Controller
 
     public function askBot(Request $request)
     {
-        $validated = $request->validate(['question' => ['required', 'string', 'max:1000']]);
+        $validated = $request->validate([
+            'question' => ['required', 'string', 'max:1000'],
+            'language' => ['sometimes', 'in:en,ceb'],
+            'faq_id' => ['nullable', 'integer'],
+        ]);
+        $language = $validated['language'] ?? 'en';
         $normalizedQuestion = $this->normalizeBotText($validated['question']);
         if ($this->isBotGreeting($normalizedQuestion)) {
             $answer = 'Hello! Good day, and welcome to BantayBot. How can I help you with barangay services today?';
@@ -807,32 +784,62 @@ class ResidentController extends Controller
         }
 
         $faqs = ChatbotFaq::where('is_active', true)->get();
-        $faq = $faqs->first(
-            fn(ChatbotFaq $candidate) => $this->normalizeBotText($candidate->question) === $normalizedQuestion,
-        );
+        $faq = !empty($validated['faq_id'])
+            ? $faqs->firstWhere('id', (int) $validated['faq_id'])
+            : null;
 
         if (!$faq) {
-            $queryTerms = $this->botSearchTerms($normalizedQuestion);
-            if (count($queryTerms) > 1) {
-                $match = $faqs->map(function (ChatbotFaq $candidate) use ($queryTerms) {
-                    $candidateTerms = $this->botSearchTerms(implode(' ', [
-                        $candidate->category,
-                        $candidate->question,
-                        implode(' ', $candidate->keywords ?? []),
-                    ]));
-                    $overlap = count(array_intersect($queryTerms, $candidateTerms));
+            $faq = $faqs->first(function (ChatbotFaq $candidate) use ($normalizedQuestion, $language) {
+                $candidateQuestion = $language === 'ceb'
+                    ? ($candidate->question_ceb ?: $candidate->question)
+                    : $candidate->question;
 
-                    return ['faq' => $candidate, 'score' => $overlap / count($queryTerms)];
+                return $this->normalizeBotText($candidateQuestion) === $normalizedQuestion;
+            });
+        }
+
+        if (!$faq) {
+            $queryTerms = $this->botSearchTerms($normalizedQuestion, $language);
+            if (count($queryTerms) > 1) {
+                $match = $faqs->map(function (ChatbotFaq $candidate) use ($queryTerms, $language) {
+                    $candidateQuestion = $language === 'ceb'
+                        ? ($candidate->question_ceb ?: $candidate->question)
+                        : $candidate->question;
+                    $candidateAnswer = $language === 'ceb'
+                        ? ($candidate->answer_ceb ?: $candidate->answer)
+                        : $candidate->answer;
+                    $questionTerms = $this->botSearchTerms($candidateQuestion, $language);
+                    $categoryTerms = $this->botSearchTerms($candidate->category, $language);
+                    $answerTerms = $this->botSearchTerms($candidateAnswer, $language);
+                    $questionOverlap = count(array_intersect($queryTerms, $questionTerms));
+                    $categoryOverlap = count(array_intersect($queryTerms, $categoryTerms));
+                    $answerOverlap = count(array_intersect($queryTerms, $answerTerms));
+                    $sharedConcepts = $questionOverlap + $categoryOverlap;
+                    $precision = $questionOverlap / max(count($questionTerms), 1);
+                    $recall = $questionOverlap / count($queryTerms);
+                    $questionScore = $precision + $recall > 0
+                        ? (2 * $precision * $recall) / ($precision + $recall)
+                        : 0;
+
+                    return [
+                        'faq' => $candidate,
+                        'shared_concepts' => $sharedConcepts,
+                        'score' => $questionScore + min($categoryOverlap * 0.05, 0.1) + min($answerOverlap * 0.01, 0.05),
+                    ];
                 })->sortByDesc('score')->first();
 
-                if ($match && $match['score'] >= 0.5) {
+                if ($match && $match['shared_concepts'] >= 2 && $match['score'] >= 0.4) {
                     $faq = $match['faq'];
                 }
             }
         }
 
         $matched = (bool) $faq;
-        $answer = $faq?->answer ?? 'I do not have a confident answer for that question. You can rephrase it or escalate it to barangay staff for follow-up.';
+        $answer = $faq
+            ? ($language === 'ceb' ? ($faq->answer_ceb ?: $faq->answer) : $faq->answer)
+            : ($language === 'ceb'
+                ? 'Wala koy kasaligan nga tubag niini. Mahimo nimong ipangutana kini sa laing paagi o ipadala sa staff sa barangay para sa tabang.'
+                : 'I do not have a confident answer for that question. You can rephrase it or escalate it to barangay staff for follow-up.');
         $message = ChatbotMessage::create([
             'resident_id' => $request->user()->id,
             'faq_id' => $faq?->id,
@@ -1080,7 +1087,7 @@ class ResidentController extends Controller
             }
             switch ($field['type']) {
                 case 'number':
-                    $fieldRules[] = (float) ($field['step'] ?? 0) === 1.0 ? 'integer' : 'numeric';
+                    $fieldRules[] = 'numeric';
                     if (isset($field['min'])) {
                         $fieldRules[] = 'min:'.$field['min'];
                     }
@@ -1133,9 +1140,7 @@ class ResidentController extends Controller
                     ? 'required'
                     : 'sometimes',
                 'file',
-                ...($key === 'applicant_photo'
-                    ? ['image', 'mimes:jpg,jpeg,png']
-                    : ['mimes:pdf,jpg,jpeg,png']),
+                'mimes:pdf,jpg,jpeg,png',
                 'max:5120',
             ];
         }
@@ -1160,12 +1165,25 @@ class ResidentController extends Controller
             ->contains(fn (array $field) => $field['key'] === $key && ($field['enabled'] ?? true));
     }
 
-    private function botSearchTerms(string $text): array
+    private function botSearchTerms(string $text, string $language = 'en'): array
     {
-        $stopWords = ['a', 'an', 'and', 'are', 'can', 'do', 'does', 'for', 'how', 'i', 'if', 'in', 'is', 'it', 'my', 'of', 'on', 'or', 'the', 'to', 'what', 'when', 'where', 'who', 'why', 'will', 'with'];
+        $stopWords = $language === 'ceb'
+            ? ['ang', 'ug', 'og', 'sa', 'nga', 'mga', 'ba', 'ko', 'ka', 'ni', 'na', 'ay', 'unsa', 'unsay', 'asa', 'kinsa', 'ngano', 'akong', 'imo', 'nako', 'nimo', 'kay', 'lang', 'usab', 'pwede', 'mahimo', 'naa', 'adunay', 'kini', 'kana', 'kung', 'para', 'gikan', 'sama', 'o', 'pa', 'man', 'unsaon', 'kamo', 'ikaw']
+            : ['a', 'an', 'and', 'are', 'can', 'do', 'does', 'for', 'have', 'how', 'i', 'if', 'in', 'is', 'it', 'my', 'of', 'on', 'or', 'the', 'to', 'what', 'when', 'where', 'who', 'why', 'will', 'with'];
+        $synonyms = [];
+        if ($language !== 'ceb') {
+            foreach (self::BOT_TERM_SYNONYMS as $canonical => $variants) {
+                foreach ($variants as $variant) {
+                    $synonyms[$variant] = $canonical;
+                }
+            }
+        }
 
         return array_values(array_filter(
-            array_unique(explode(' ', $this->normalizeBotText($text))),
+            array_unique(array_map(
+                fn(string $term) => $synonyms[$term] ?? $term,
+                explode(' ', $this->normalizeBotText($text)),
+            )),
             fn(string $term) => strlen($term) > 2 && !in_array($term, $stopWords, true),
         ));
     }
@@ -1199,3 +1217,5 @@ class ResidentController extends Controller
         return response()->json(['message' => 'Profile updated.', 'user' => $request->user()->fresh()]);
     }
 }
+
+

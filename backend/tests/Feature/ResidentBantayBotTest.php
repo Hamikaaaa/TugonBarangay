@@ -48,7 +48,79 @@ class ResidentBantayBotTest extends TestCase
             'question' => 'requirements for Barangay Residency',
         ])->assertOk()
             ->assertJsonPath('matched', true)
-            ->assertJsonPath('faq.question', 'What are the requirements for Barangay Residency?');
+            ->assertJsonPath('faq.question', 'What information is needed for Barangay Residency?');
+    }
+
+    public function test_bot_returns_saved_cebuano_answer_for_a_bisaya_suggested_question(): void
+    {
+        $resident = Resident::factory()->create();
+        Sanctum::actingAs($resident);
+        $faq = ChatbotFaq::create([
+            'category' => 'General Information',
+            'question' => 'Where is the barangay office?',
+            'question_ceb' => 'Asa ang opisina sa barangay?',
+            'answer' => 'The office is in Tayud.',
+            'answer_ceb' => 'Ang opisina anaa sa Tayud.',
+            'keywords' => ['office', 'barangay'],
+            'keywords_ceb' => ['opisina', 'barangay'],
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/resident/bantaybot/ask', [
+            'question' => 'Asa ang opisina sa barangay?',
+            'language' => 'ceb',
+            'faq_id' => $faq->id,
+        ])->assertOk()
+            ->assertJsonPath('matched', true)
+            ->assertJsonPath('answer', 'Ang opisina anaa sa Tayud.')
+            ->assertJsonPath('faq.question_ceb', 'Asa ang opisina sa barangay?');
+    }
+
+    public function test_chat_history_includes_both_languages_for_matched_faq_messages(): void
+    {
+        $resident = Resident::factory()->create();
+        Sanctum::actingAs($resident);
+        $faq = ChatbotFaq::create([
+            'category' => 'General Information',
+            'question' => 'Where is the barangay office?',
+            'question_ceb' => 'Asa ang opisina sa barangay?',
+            'answer' => 'The office is in Tayud.',
+            'answer_ceb' => 'Ang opisina anaa sa Tayud.',
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/resident/bantaybot/ask', [
+            'question' => 'Asa ang opisina sa barangay?',
+            'language' => 'ceb',
+            'faq_id' => $faq->id,
+        ])->assertOk()
+            ->assertJsonPath('answer', 'Ang opisina anaa sa Tayud.');
+
+        $this->getJson('/api/resident/bantaybot/messages')
+            ->assertOk()
+            ->assertJsonPath('data.0.answer.faq.question', 'Where is the barangay office?')
+            ->assertJsonPath('data.0.answer.faq.question_ceb', 'Asa ang opisina sa barangay?')
+            ->assertJsonPath('data.0.answer.faq.answer', 'The office is in Tayud.')
+            ->assertJsonPath('data.0.answer.faq.answer_ceb', 'Ang opisina anaa sa Tayud.');
+    }
+
+    public function test_bot_matches_paraphrased_fee_and_complaint_questions_by_intent(): void
+    {
+        $resident = Resident::factory()->create();
+        Sanctum::actingAs($resident);
+        $this->seed(ChatbotFaqSeeder::class);
+
+        $this->postJson('/api/resident/bantaybot/ask', [
+            'question' => 'How much do I have to pay for a residency certificate?',
+        ])->assertOk()
+            ->assertJsonPath('matched', true)
+            ->assertJsonPath('faq.question', 'How much is the Barangay Residency Certificate?');
+
+        $this->postJson('/api/resident/bantaybot/ask', [
+            'question' => 'How can I report a complaint?',
+        ])->assertOk()
+            ->assertJsonPath('matched', true)
+            ->assertJsonPath('faq.question', 'How do I file a complaint?');
     }
 
     public function test_bot_responds_to_common_greetings_as_greetings(): void
@@ -119,6 +191,14 @@ class ResidentBantayBotTest extends TestCase
             ->assertJsonPath('matched', false)
             ->assertJsonPath('faq', null)
             ->assertJsonPath('answer', 'I do not have a confident answer for that question. You can rephrase it or escalate it to barangay staff for follow-up.');
+
+        $this->postJson('/api/resident/bantaybot/ask', [
+            'question' => 'Mahimo ba nimo ipasabut ang quantum teleportation?',
+            'language' => 'ceb',
+        ])->assertOk()
+            ->assertJsonPath('matched', false)
+            ->assertJsonPath('faq', null)
+            ->assertJsonPath('answer', 'Wala koy kasaligan nga tubag niini. Mahimo nimong ipangutana kini sa laing paagi o ipadala sa staff sa barangay para sa tabang.');
     }
 
     public function test_resident_can_escalate_a_question_and_receive_a_reference(): void
@@ -274,3 +354,4 @@ class ResidentBantayBotTest extends TestCase
         ])->assertForbidden();
     }
 }
+
