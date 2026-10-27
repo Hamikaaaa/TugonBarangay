@@ -136,6 +136,7 @@ function AdminLayout({ children, title }) {
 function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) {
   const [openMenuOverride, setOpenMenuOverride] = useState(null);
   const [pendingEscalationCount, setPendingEscalationCount] = useState(null);
+  const [pendingVerificationCount, setPendingVerificationCount] = useState(null);
   const activeNavigationItem = navigation.find((item) =>
     isActiveNavigationItem(item, activePath),
   );
@@ -161,10 +162,30 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
         loading = false;
       }
     };
+    const loadVerificationCount = async () => {
+      if (!token) return;
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/admin/residents/registry-stats", {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        const count = Number(payload.pending_total);
+        if (!cancelled && Number.isFinite(count)) setPendingVerificationCount(count);
+      } catch {
+        // Keep the last known count if the server is temporarily unavailable.
+      }
+    };
     loadEscalationCount();
-    const timer = window.setInterval(loadEscalationCount, 30000);
+    loadVerificationCount();
+    window.addEventListener("resident-verification-updated", loadVerificationCount);
+    const timer = window.setInterval(() => {
+      loadEscalationCount();
+      loadVerificationCount();
+    }, 30000);
     return () => {
       cancelled = true;
+      window.removeEventListener("resident-verification-updated", loadVerificationCount);
       window.clearInterval(timer);
     };
   }, [token]);
@@ -263,6 +284,11 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
                         {pendingEscalationCount > 99 ? "99+" : pendingEscalationCount}
                       </span>
                     )}
+                    {item.label === "Residents & Registry" && pendingVerificationCount > 0 && (
+                      <span aria-label={`${pendingVerificationCount} accounts pending verification`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                        {pendingVerificationCount > 99 ? "99+" : pendingVerificationCount}
+                      </span>
+                    )}
                     <ChevronDown
                       size={15}
                       className={`transition-transform ${openMenu === item.label ? "rotate-180" : ""}`}
@@ -289,6 +315,11 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
                         {child.path === "/admin/chatbot/escalations" && pendingEscalationCount > 0 && (
                           <span aria-label={`${pendingEscalationCount} pending escalated questions`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                             {pendingEscalationCount > 99 ? "99+" : pendingEscalationCount}
+                          </span>
+                        )}
+                        {child.path === "/admin/residents/verification" && pendingVerificationCount > 0 && (
+                          <span aria-label={`${pendingVerificationCount} accounts pending verification`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                            {pendingVerificationCount > 99 ? "99+" : pendingVerificationCount}
                           </span>
                         )}
                       </button>

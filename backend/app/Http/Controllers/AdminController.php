@@ -94,7 +94,28 @@ class AdminController extends Controller
             'per_page' => ['nullable', 'integer', 'between:1,100'],
         ]);
 
-        $query = BarangayRegistry::query();
+        $query = BarangayRegistry::query()
+            ->select('barangay_registry.*')
+            ->selectSub(function ($accountQuery) {
+                $accountQuery->from('residents')
+                    ->selectRaw('COUNT(*)')
+                    ->whereColumn('residents.first_name', 'barangay_registry.first_name')
+                    ->whereColumn('residents.last_name', 'barangay_registry.last_name')
+                    ->whereDate('residents.date_of_birth', '=', DB::raw('barangay_registry.date_of_birth'))
+                    ->whereColumn('residents.sex', 'barangay_registry.sex')
+                    ->whereColumn('residents.purok', 'barangay_registry.purok');
+            }, 'system_account_count')
+            ->selectSub(function ($accountQuery) {
+                $accountQuery->from('residents')
+                    ->select('verification_status')
+                    ->whereColumn('residents.first_name', 'barangay_registry.first_name')
+                    ->whereColumn('residents.last_name', 'barangay_registry.last_name')
+                    ->whereDate('residents.date_of_birth', '=', DB::raw('barangay_registry.date_of_birth'))
+                    ->whereColumn('residents.sex', 'barangay_registry.sex')
+                    ->whereColumn('residents.purok', 'barangay_registry.purok')
+                    ->orderBy('residents.id')
+                    ->limit(1);
+            }, 'system_account_verification_status');
         if (!empty($validated['search'])) {
             $search = trim($validated['search']);
             $query->where(function ($registryQuery) use ($search) {
@@ -124,6 +145,10 @@ class AdminController extends Controller
         $page->getCollection()->transform(function (BarangayRegistry $record) use ($availedIdentityHashes) {
             $identityHash = hash('sha256', 'registry:'.$record->id);
             $record->setAttribute('first_time_jobseeker_available', !$availedIdentityHashes->has($identityHash));
+            $accountCount = (int) $record->system_account_count;
+            $record->setAttribute('system_account_status', $accountCount === 0
+                ? 'no_account'
+                : ($accountCount > 1 ? 'multiple_accounts' : ($record->system_account_verification_status ?: 'pending')));
 
             return $record;
         });
