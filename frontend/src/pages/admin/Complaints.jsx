@@ -6,6 +6,8 @@ import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
 import AddComplaintCategory from "./AddComplaintCategory";
 import ComplaintQueue from "../staff/ComplaintQueue";
+import SummonsSettings from "./SummonsSettings";
+import SummonHistory from "./SummonHistory";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
@@ -30,6 +32,10 @@ function Complaints() {
       ? "resident-complaints"
       : location.pathname.endsWith("/blotter-history")
         ? "blotter-history"
+        : location.pathname.endsWith("/summons-settings")
+          ? "summons-settings"
+        : location.pathname.endsWith("/summon-history")
+          ? "summon-history"
         : "dashboard";
 
   const loadCategories = useCallback(async () => {
@@ -178,6 +184,14 @@ function Complaints() {
       title: "Blotter history",
       description: "Review blotter entries recorded by barangay staff, including complainants, respondents, incident types, and status.",
     },
+    "summons-settings": {
+      title: "Summons settings",
+      description: "Edit the barangay details and wording used when complaint staff prepare a mediation notice.",
+    },
+    "summon-history": {
+      title: "Summon history",
+      description: "Review saved mediation notices and view the template used for each entry.",
+    },
   }[activeSection];
 
   return (
@@ -215,6 +229,12 @@ function Complaints() {
           </ComplaintTab>
           <ComplaintTab to="/admin/complaints/blotter-history" active={activeSection === "blotter-history"}>
             Blotter history
+          </ComplaintTab>
+          <ComplaintTab to="/admin/complaints/summons-settings" active={activeSection === "summons-settings"}>
+            Summons settings
+          </ComplaintTab>
+          <ComplaintTab to="/admin/complaints/summon-history" active={activeSection === "summon-history"}>
+            Summon history
           </ComplaintTab>
         </nav>
 
@@ -433,6 +453,8 @@ function Complaints() {
           {activeSection === "blotter-history" && (
             <ComplaintQueue isAdmin blotterHistory hideAdminHeader />
           )}
+          {activeSection === "summons-settings" && <SummonsSettings />}
+          {activeSection === "summon-history" && <SummonHistory />}
         </main>
       </section>
       {addingCategory && (

@@ -9,10 +9,23 @@ class ChatbotFaq extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['category', 'question', 'answer', 'keywords', 'is_active'];
+    protected $fillable = [
+        'category',
+        'question',
+        'question_ceb',
+        'answer',
+        'answer_ceb',
+        'keywords',
+        'keywords_ceb',
+        'is_active',
+    ];
 
     protected function casts(): array
     {
-        return ['keywords' => 'array', 'is_active' => 'boolean'];
+        return [
+            'keywords' => 'array',
+            'keywords_ceb' => 'array',
+            'is_active' => 'boolean',
+        ];
     }
 }

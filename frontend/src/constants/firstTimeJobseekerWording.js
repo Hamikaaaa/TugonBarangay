@@ -9,18 +9,18 @@ Signed this {{issued_day}} day of {{issued_month}}, {{issued_year}}, in Barangay
 
 This certification is valid only one year from the date of issuance.
 
-{{punong_barangay_name}}
+**{{punong_barangay_name}}**
 Punong Barangay
 
-Date: {{issued_day}} {{issued_month}} {{issued_year}}
+Date:
 
 Witnessed by:
 
 ______________________________
-Barangay Official
+Barangay Official/Designation/Position
 
 ___________________________
-Date
+Date:
 
 {{page_break}}
 
@@ -39,11 +39,13 @@ I, {{full_name}}, {{age}} years old and a resident of Purok {{purok}}, Tayud, Co
 Signed this {{issued_day}} day of {{issued_month}}, {{issued_year}}, in Barangay Tayud, Municipality of Consolacion, Cebu.
 
 ____________________
+**{{full_name}}**
 First Time Jobseeker
 
 Witnessed by:
 
 ________________________
+**{{punong_barangay_name}}**
 Punong Barangay
 
 {{issued_day}} {{issued_month}} {{issued_year}}

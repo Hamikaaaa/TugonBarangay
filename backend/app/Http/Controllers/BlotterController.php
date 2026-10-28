@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\BlotterEntry;
+use App\Models\BarangayDocumentSetting;
 use App\Models\Resident;
+use App\Models\SummonEntry;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class BlotterController extends Controller
 {
@@ -243,29 +246,81 @@ class BlotterController extends Controller
     public function summon(Request $request)
     {
         $validated = $request->validate([
-            'court_city' => ['nullable', 'string', 'max:255'],
-            'court_region' => ['nullable', 'string', 'max:255'],
-            'court_name' => ['nullable', 'string', 'max:255'],
-            'branch' => ['nullable', 'string', 'max:255'],
-            'court_email' => ['nullable', 'email', 'max:255'],
-            'court_hotline' => ['nullable', 'string', 'max:255'],
-            'plaintiff' => ['required', 'string', 'max:255'],
-            'civil_case_no' => ['nullable', 'string', 'max:255'],
-            'cause_of_action' => ['nullable', 'string', 'max:255'],
-            'defendants' => ['required', 'string', 'max:255'],
-            'summoned_to' => ['required', 'string', 'max:255'],
-            'summoned_address' => ['nullable', 'string', 'max:255'],
-            'summon_date' => ['nullable', 'date'],
-            'clerk_name' => ['nullable', 'string', 'max:255'],
-            'clerk_title' => ['nullable', 'string', 'max:255'],
+            'barangay_name' => ['required', 'string', 'max:255'],
+            'municipality' => ['required', 'string', 'max:255'],
+            'province' => ['required', 'string', 'max:255'],
+            'complainant' => ['required', 'string', 'max:255'],
+            'respondent' => ['required', 'string', 'max:255'],
+            'reference_no' => ['nullable', 'string', 'max:255'],
+            'nature_of_dispute' => ['nullable', 'string', 'max:1000'],
+            'respondent_address' => ['nullable', 'string', 'max:500'],
+            'hearing_date' => ['required', 'date'],
+            'hearing_time' => ['required', 'date_format:H:i'],
+            'venue' => ['required', 'string', 'max:500'],
+            'issued_by' => ['nullable', 'string', 'max:255'],
         ]);
 
-        // In a full implementation this would generate/store a summons document
-        // (PDF) linked to a blotter case. For now we acknowledge receipt.
+        $entry = SummonEntry::create([
+            ...$validated,
+            'document_settings' => $request->validate([
+                'document_settings' => ['nullable', 'array'],
+            ])['document_settings'] ?? [],
+            'recorded_by' => $request->user()->id,
+        ]);
+
+        $currentTemplate = BarangayDocumentSetting::where('key', 'barangay_mediation_notice')->first();
+        $disk = Storage::disk('local');
+        if ($currentTemplate?->template_path && $disk->exists($currentTemplate->template_path)) {
+            $extension = pathinfo($currentTemplate->template_name ?: $currentTemplate->template_path, PATHINFO_EXTENSION);
+            $snapshotPath = "document-templates/summon-history/{$entry->id}/template".($extension ? ".{$extension}" : '');
+            if ($disk->copy($currentTemplate->template_path, $snapshotPath)) {
+                $entry->update([
+                    'template_path' => $snapshotPath,
+                    'template_name' => $currentTemplate->template_name,
+                ]);
+            }
+        }
 
         return response()->json([
-            'message' => 'Summons prepared.',
-            'data' => $validated,
+            'message' => 'Summons entry saved.',
+            'data' => $entry,
         ], 201);
+    }
+
+    public function summonEntries()
+    {
+        $entries = SummonEntry::query()
+            ->with('recorder:id,name')
+            ->orderByDesc('hearing_date')
+            ->orderByDesc('id')
+            ->paginate(15);
+
+        return response()->json($entries);
+    }
+
+    public function updateSummonEntry(Request $request, SummonEntry $summonEntry)
+    {
+        $validated = $request->validate([
+            'complainant_attended' => ['sometimes', 'nullable', 'boolean'],
+            'respondent_attended' => ['sometimes', 'nullable', 'boolean'],
+            'status' => ['sometimes', 'string', 'in:scheduled,completed,rescheduled,cancelled'],
+        ]);
+
+        $summonEntry->update($validated);
+
+        return response()->json([
+            'message' => 'Summon entry updated.',
+            'data' => $summonEntry->fresh()->load('recorder:id,name'),
+        ]);
+    }
+
+    public function downloadSummonEntryTemplate(SummonEntry $summonEntry)
+    {
+        $disk = Storage::disk('local');
+        abort_unless($summonEntry->template_path && $disk->exists($summonEntry->template_path), 404);
+
+        return $disk->download($summonEntry->template_path, $summonEntry->template_name ?: 'summons-template', [
+            'Cache-Control' => 'private, no-store',
+        ]);
     }
 }

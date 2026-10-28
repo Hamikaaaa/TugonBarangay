@@ -8,6 +8,7 @@ import {
   Search,
   ShieldCheck,
   Users,
+  UserPlus,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -16,6 +17,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { primaryButtonClass } from "../../utils/buttonStyles";
+import { PUROKS } from "../../constants/puroks";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
@@ -43,6 +45,10 @@ function Residents() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [showRegistryForm, setShowRegistryForm] = useState(false);
+  const [registrySaving, setRegistrySaving] = useState(false);
+  const [registryForm, setRegistryForm] = useState(emptyRegistryForm());
+  const [registryFormErrors, setRegistryFormErrors] = useState({});
 
   const loadDashboardStats = useCallback(async (silent = false) => {
     if (!token || !isDashboard) return;
@@ -171,6 +177,37 @@ function Residents() {
     setSearch(searchInput.trim());
   };
 
+  const submitRegistryResident = async (event) => {
+    event.preventDefault();
+    if (registrySaving) return;
+    setRegistrySaving(true);
+    setRegistryFormErrors({});
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`${API_URL}/admin/barangay-registry`, {
+        method: "POST",
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify(registryForm),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        if (response.status === 422) setRegistryFormErrors(payload.errors || {});
+        else throw new Error(payload.message || "Unable to add resident to the registry.");
+        return;
+      }
+      setShowRegistryForm(false);
+      setRegistryForm(emptyRegistryForm());
+      setNotice(payload.message || "Resident added to the barangay registry.");
+      setPage(1);
+      if (page === 1) await loadRegistry();
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setRegistrySaving(false);
+    }
+  };
+
   const updateVerification = async (resident, action, reason = "") => {
     if (savingId) return;
     setSavingId(resident.id);
@@ -197,6 +234,7 @@ function Residents() {
           ? `${resident.name} has been approved.`
           : `${resident.name}'s registration was rejected.`,
       );
+      window.dispatchEvent(new Event("resident-verification-updated"));
       setRejectingResident(null);
       setRejectionReason("");
       await loadPendingResidents();
@@ -419,7 +457,8 @@ function Residents() {
                   {total.toLocaleString()} {total === 1 ? "record" : "records"} in barangay_registry
                 </p>
               </div>
-              <form onSubmit={applySearch} className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+              <form onSubmit={applySearch} className="flex min-w-0 flex-1 gap-2">
                 <label className="relative min-w-0 flex-1 sm:w-80">
                   <span className="sr-only">
                     Search masterlist by name, address, purok, or mobile
@@ -439,13 +478,17 @@ function Residents() {
                   Search
                 </button>
               </form>
+              <button type="button" onClick={() => { setRegistryFormErrors({}); setShowRegistryForm(true); }} className={`${primaryButtonClass} inline-flex items-center gap-2 px-4`}>
+                <UserPlus className="h-4 w-4" aria-hidden="true" /> Add resident
+              </button>
+              </div>
             </div>
             {loading ? (
               <LoadingRows />
             ) : registry.length ? (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1000px] text-left">
+                  <table className="w-full min-w-[1120px] text-left">
                     <thead className="bg-[#F7F9FC] text-[10px] uppercase tracking-wide text-slate-500">
                       <tr>
                         <th className="px-5 py-3 font-bold">Resident name</th>
@@ -453,6 +496,7 @@ function Residents() {
                         <th className="px-5 py-3 font-bold">Purok</th>
                         <th className="px-5 py-3 font-bold">Address</th>
                         <th className="px-5 py-3 font-bold">Mobile</th>
+                        <th className="px-5 py-3 font-bold">System account</th>
                         <th className="px-5 py-3 font-bold">First-time job seeker</th>
                       </tr>
                     </thead>
@@ -474,6 +518,9 @@ function Residents() {
                           </td>
                           <td className="px-5 py-4 text-sm text-slate-600">
                             {record.mobile_number || "—"}
+                          </td>
+                          <td className="px-5 py-4">
+                            <SystemAccountStatus status={record.system_account_status} count={record.system_account_count} />
                           </td>
                           <td className="px-5 py-4">
                             <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold ${record.first_time_jobseeker_available ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
@@ -574,6 +621,40 @@ function Residents() {
                 {savingId ? "Rejecting..." : "Reject registration"}
               </button>
             </div>
+          </section>
+        </div>
+      )}
+      {showRegistryForm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#071B3D]/55 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !registrySaving) setShowRegistryForm(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="registry-create-title" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-7">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div><h2 id="registry-create-title" className="text-xl font-bold text-[#172B4D]">Add resident to registry</h2><p className="mt-1 text-sm text-slate-500">Enter the resident’s official details for the barangay masterlist.</p></div>
+              <button type="button" aria-label="Close registration form" onClick={() => setShowRegistryForm(false)} disabled={registrySaving} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X className="h-5 w-5" /></button>
+            </div>
+            <form onSubmit={submitRegistryResident} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <RegistryInput label="First name" name="first_name" value={registryForm.first_name} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.first_name?.[0]} required />
+                <RegistryInput label="Middle name" name="middle_name" value={registryForm.middle_name} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.middle_name?.[0]} />
+                <RegistryInput label="Last name" name="last_name" value={registryForm.last_name} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.last_name?.[0]} required />
+                <RegistryInput label="Suffix" name="suffix" value={registryForm.suffix} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.suffix?.[0]} placeholder="Jr., Sr., III" />
+                <RegistryInput label="Date of birth" name="date_of_birth" type="date" value={registryForm.date_of_birth} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.date_of_birth?.[0]} required />
+                <label className="block text-sm font-semibold text-slate-700">Sex
+                  <select name="sex" value={registryForm.sex} onChange={updateRegistryField(setRegistryForm)} required className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10"><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></select>
+                  {registryFormErrors.sex?.[0] && <span className="mt-1 block text-xs font-normal text-red-600">{registryFormErrors.sex[0]}</span>}
+                </label>
+                <label className="block text-sm font-semibold text-slate-700">Purok
+                  <select name="purok" value={registryForm.purok} onChange={updateRegistryField(setRegistryForm)} required className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10"><option value="">Select purok</option>{PUROKS.map((purok) => <option key={purok} value={purok}>{purok}</option>)}</select>
+                  {registryFormErrors.purok?.[0] && <span className="mt-1 block text-xs font-normal text-red-600">{registryFormErrors.purok[0]}</span>}
+                </label>
+                <RegistryInput label="Mobile number" name="mobile_number" type="tel" value={registryForm.mobile_number} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.mobile_number?.[0]} required placeholder="09XXXXXXXXX" />
+                <div className="sm:col-span-2"><RegistryInput label="Address" name="address" value={registryForm.address} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.address?.[0]} /></div>
+              </div>
+              {registryFormErrors.message && <p role="alert" className="text-sm text-red-600">{registryFormErrors.message}</p>}
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button type="button" onClick={() => setShowRegistryForm(false)} disabled={registrySaving} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Cancel</button>
+                <button type="submit" disabled={registrySaving} className={`${primaryButtonClass} px-5 disabled:cursor-wait disabled:opacity-60`}>{registrySaving ? "Saving..." : "Register resident"}</button>
+              </div>
+            </form>
           </section>
         </div>
       )}
@@ -926,6 +1007,23 @@ function DetailsCard({ title, resident, missing = false }) {
   );
 }
 
+function SystemAccountStatus({ status, count }) {
+  const variants = {
+    no_account: { label: "No account", className: "bg-slate-100 text-slate-600" },
+    pending: { label: "Pending verification", className: "bg-amber-50 text-amber-800" },
+    verified: { label: "Verified account", className: "bg-emerald-50 text-emerald-700" },
+    rejected: { label: "Registration rejected", className: "bg-red-50 text-red-700" },
+    multiple_accounts: { label: `${count} matching accounts`, className: "bg-orange-50 text-orange-800" },
+  };
+  const variant = variants[status] || variants.no_account;
+
+  return (
+    <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold ${variant.className}`}>
+      {variant.label}
+    </span>
+  );
+}
+
 function Pagination({ page, lastPage, onChange }) {
   return (
     <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-5">
@@ -980,6 +1078,34 @@ function EmptyState({ title, detail }) {
 
 function authHeaders(token) {
   return { Accept: "application/json", Authorization: `Bearer ${token}` };
+}
+
+function emptyRegistryForm() {
+  return {
+    first_name: "",
+    middle_name: "",
+    last_name: "",
+    suffix: "",
+    date_of_birth: "",
+    sex: "",
+    purok: "",
+    address: "",
+    mobile_number: "",
+  };
+}
+
+function updateRegistryField(setForm) {
+  return (event) => setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
+}
+
+function RegistryInput({ label, name, value, onChange, error, required = false, type = "text", placeholder }) {
+  return (
+    <label className="block text-sm font-semibold text-slate-700">
+      {label}
+      <input name={name} type={type} value={value} onChange={onChange} required={required} placeholder={placeholder} max={type === "date" ? new Date().toISOString().slice(0, 10) : undefined} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10" />
+      {error && <span className="mt-1 block text-xs font-normal text-red-600">{error}</span>}
+    </label>
+  );
 }
 
 function accountNameKey(account) {

@@ -1,0 +1,30 @@
+*   [33m3d4d60f[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge pull request #16 from Hamikaaaa/fix-document-templates
+[31m|[m[32m\[m  
+[31m|[m *   [33m13f30e9[m[33m ([m[1;31morigin/fix-document-templates[m[33m)[m Merge branch 'main' into fix-document-templates
+[31m|[m [33m|[m[31m\[m  
+[31m|[m [33m|[m[31m/[m  
+[31m|[m[31m/[m[33m|[m   
+* [33m|[m   [33m3f78a02[m Merge pull request #15 from Hamikaaaa/fix/document-request-identity-conflict
+[35m|[m[36m\[m [33m\[m  
+[35m|[m * [33m|[m [33mb941ec1[m[33m ([m[1;31morigin/fix/document-request-identity-conflict[m[33m)[m Marlon latest Updates
+[35m|[m * [33m|[m [33m73f586a[m Fix blank character certificate preview
+[35m|[m * [33m|[m [33m10b771a[m Allow staff to preview document templates
+[35m|[m * [33m|[m [33mb00cde7[m Allow previewing document templates from history
+[35m|[m * [33m|[m [33m08c4dfe[m Resolve frontend conflict artifacts
+[35m|[m * [33m|[m [33mc112aa6[m Fix document request identity conflict resolution
+[35m|[m[35m/[m [33m/[m  
+[35m|[m * [33m0a76f6c[m[33m ([m[1;32mfix-document-templates[m[33m)[m unfinished maica updates after marlon identity conflict
+[35m|[m [36m|[m * [33m4df113c[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Save local document changes
+[35m|[m [36m|[m[35m/[m  
+[35m|[m[35m/[m[36m|[m   
+* [36m|[m   [33m810ed62[m Merge pull request #14 from Hamikaaaa/staff-document-request-moduleThree
+[1;32m|[m[1;33m\[m [36m\[m  
+[1;32m|[m * [36m\[m   [33m5e2dfd9[m[33m ([m[1;31morigin/staff-document-request-moduleThree[m[33m)[m Merge branch 'main' into staff-document-request-moduleThree
+[1;32m|[m [1;34m|[m[1;32m\[m [36m\[m  
+[1;32m|[m [1;34m|[m[1;32m/[m [36m/[m  
+[1;32m|[m[1;32m/[m[1;34m|[m [36m|[m   
+* [1;34m|[m [36m|[m   [33mee3152b[m Merge pull request #13 from Hamikaaaa/fix-document-templates
+[1;36m|[m[36m\[m [1;34m\[m [36m\[m  
+[1;36m|[m [36m|[m [1;34m|[m[36m/[m  
+[1;36m|[m [36m|[m[36m/[m[1;34m|[m   
+[1;36m|[m * [1;34m|[m [33m5d93c65[m Jamaica Changes on document request

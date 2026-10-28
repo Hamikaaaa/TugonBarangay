@@ -1,58 +1,130 @@
-import { useMemo, useState } from "react";
-import { Building, Mail, Phone, Printer, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Download, FileText, Printer, X } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import useComplaintStaffNavigation from "../../hooks/useComplaintStaffNavigation";
+import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import StaffLayout from "./StaffLayout";
+import { DEFAULT_SUMMONS_SETTINGS } from "../../constants/summonsSettings";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
-function authHeaders(token) {
-  return {
-    Accept: "application/json",
-    Authorization: `Bearer ${token}`,
-  };
-}
-
-const DEFAULT_FORM = {
-  courtCity: "Pasig",
-  courtRegion: "NATIONAL CAPITAL JUDICIAL REGION",
-  courtName: "REGIONAL TRIAL COURT",
-  branch: "",
-  courtEmail: "",
-  courtHotline: "",
-  plaintiff: "",
-  civilCaseNo: "",
-  causeOfAction: "Sum of Money With Damages and Attorney's Fees",
-  defendants: "",
-  summonedTo: "",
-  summonedAddress: "Barangay Tinabalan, Palompon, Leyte",
-  summonDate: new Date().toISOString().slice(0, 10),
-  clerkName: "",
-  clerkTitle: "Clerk of Court V",
+const INITIAL_FORM = {
+  complainant: "",
+  respondent: "",
+  referenceNo: "",
+  natureOfDispute: "",
+  respondentAddress: "",
+  hearingDate: new Date().toISOString().slice(0, 10),
+  hearingTime: "",
+  venue: DEFAULT_SUMMONS_SETTINGS.default_venue,
+  issuedBy: "",
 };
 
 function formatDisplayDate(value) {
-  if (!value) return "";
+  if (!value) return "[date]";
   const date = new Date(`${value}T00:00:00`);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, {
+  return date.toLocaleDateString("en-PH", {
     year: "numeric",
     month: "long",
     day: "numeric",
+    timeZone: "Asia/Manila",
   });
+}
+
+function formatDisplayTime(value) {
+  if (!value) return "[time]";
+  const [hours, minutes] = String(value).split(":");
+  const parsedHours = Number(hours);
+  if (!Number.isInteger(parsedHours) || parsedHours < 0 || parsedHours > 23 || !/^\d{2}$/.test(minutes || "")) return value;
+  const suffix = parsedHours >= 12 ? "PM" : "AM";
+  return `${parsedHours % 12 || 12}:${minutes} ${suffix}`;
+}
+
+function renderNoticeText(template, settings) {
+  return String(template || "").replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_match, key) => (
+    settings[key] ?? ""
+  ));
 }
 
 function SummonForm() {
   const { token, user } = useAuth();
   const navigate = useNavigate();
-
-  const [form, setForm] = useState({
-    ...DEFAULT_FORM,
-    clerkName: user?.name || "",
-  });
+  const navigationItems = useComplaintStaffNavigation();
+  const [settings, setSettings] = useState(DEFAULT_SUMMONS_SETTINGS);
+  const [form, setForm] = useState(() => ({ ...INITIAL_FORM, issuedBy: user?.name || "" }));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-  const [printing, setPrinting] = useState(false);
+  const [paperTemplateUrl, setPaperTemplateUrl] = useState("");
+  const [paperTemplateRatio, setPaperTemplateRatio] = useState("1 / 1");
+  const [templateLoading, setTemplateLoading] = useState(false);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    let active = true;
+    fetch(`${API_URL}/staff/blotter/summon-settings`, {
+      headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+    })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || "Unable to load notice settings.");
+        return payload.data;
+      })
+      .then((data) => {
+        if (!active || !data) return;
+        setSettings({ ...DEFAULT_SUMMONS_SETTINGS, ...data });
+        if (data.uploaded_template_name) {
+          setTemplateLoading(true);
+          fetch(`${API_URL}/staff/blotter/summon-template`, {
+            headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+          }).then(async (response) => {
+            if (!response.ok) throw new Error("Unable to load the uploaded notice template.");
+            return response.blob();
+          }).then((blob) => {
+            if (!active) return;
+            if (/\.jpe?g$/i.test(data.uploaded_template_name)) {
+              const objectUrl = URL.createObjectURL(blob);
+              const image = new Image();
+              image.onload = () => {
+                if (active) {
+                  setPaperTemplateRatio(`${image.naturalWidth} / ${image.naturalHeight}`);
+                  setPaperTemplateUrl(objectUrl);
+                  setTemplateLoading(false);
+                } else {
+                  URL.revokeObjectURL(objectUrl);
+                }
+              };
+              image.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                if (active) {
+                  setError("Unable to read the uploaded notice template.");
+                  setTemplateLoading(false);
+                }
+              };
+              image.src = objectUrl;
+            } else {
+              setTemplateLoading(false);
+            }
+          }).catch((templateError) => {
+            if (active) {
+              setError(templateError.message);
+              setTemplateLoading(false);
+            }
+          });
+        }
+        setForm((current) => ({
+          ...current,
+          venue: current.venue === INITIAL_FORM.venue ? (data.default_venue || current.venue) : current.venue,
+        }));
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message);
+      });
+    return () => { active = false; };
+  }, [token]);
+
+  useEffect(() => () => { if (paperTemplateUrl) URL.revokeObjectURL(paperTemplateUrl); }, [paperTemplateUrl]);
 
   const updateField = (event) => {
     const { name, value } = event.target;
@@ -60,413 +132,174 @@ function SummonForm() {
     setError("");
   };
 
-  const handlePrint = () => {
-    setPrinting(true);
-    window.print();
-    setPrinting(false);
-  };
-
-  const toSnakeCase = (object) => {
-    const result = {};
-    for (const [key, value] of Object.entries(object)) {
-      result[key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)] = value;
-    }
-    return result;
-  };
+  const canPrint = useMemo(
+    () => Boolean(form.complainant.trim() && form.respondent.trim() && form.hearingDate && form.hearingTime),
+    [form.complainant, form.respondent, form.hearingDate, form.hearingTime],
+  );
 
   const handleSave = async () => {
-    if (!token) return;
+    if (!token || submitting) return;
     setSubmitting(true);
     setError("");
     try {
       const response = await fetch(`${API_URL}/staff/blotter/summon`, {
         method: "POST",
         headers: {
-          ...authHeaders(token),
+          Accept: "application/json",
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(toSnakeCase(form)),
+        body: JSON.stringify({
+          barangay_name: settings.barangay_name,
+          municipality: settings.municipality,
+          province: settings.province,
+          ...Object.fromEntries(Object.entries(form).map(([key, value]) => [
+            key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
+            value,
+          ])),
+          document_settings: settings,
+        }),
       });
       const payload = await response.json();
-      if (!response.ok) {
-        throw new Error(payload.message || "Unable to save summons.");
-      }
-      navigate("/staff/blotter");
-    } catch (err) {
-      setError(err.message);
+      if (!response.ok) throw new Error(payload.message || "Unable to save the summons notice.");
+      navigate("/staff/blotter/summons");
+    } catch (saveError) {
+      setError(saveError.message);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const canPrint = useMemo(() => {
-    return Boolean(form.plaintiff && form.defendants && form.summonedTo);
-  }, [form.plaintiff, form.defendants, form.summonedTo]);
-
   return (
     <StaffLayout
-      title="Summons"
-      navigationItems={[]}
+      title="Barangay Summons"
+      navigationItems={navigationItems}
       activePath="/staff/blotter/summon"
       onNavigate={navigate}
     >
-      <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#2455D6]">
-            Legal process
-          </p>
-          <h1 className="mt-0.5 text-xl font-bold tracking-tight text-[#172B4D] sm:text-2xl">
-            Summons
-          </h1>
-          <p className="mt-1 text-xs text-slate-500">
-            Prepare a court summons to be served to the defendant.
-          </p>
-        </div>
-
-        {error && (
-          <div
-            role="alert"
-            className="mb-5 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700"
-          >
-            <span>{error}</span>
-            <button
-              type="button"
-              onClick={() => setError("")}
-              aria-label="Dismiss error"
-              className="flex h-5 w-5 items-center justify-center rounded-full hover:bg-red-100"
-            >
-              <X size={12} />
+      <style>{`@media print { @page { margin: 0.25in; } body * { visibility: hidden !important; } #barangay-summons, #barangay-summons * { visibility: visible !important; } #barangay-summons { position: absolute; inset: 0; width: 100%; margin: 0; border: 0; border-radius: 0; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; break-inside: avoid; } #barangay-summons .summons-template-image { display: block !important; } .no-print { display: none !important; } }`}</style>
+      <div className="mx-auto w-full max-w-[1600px] space-y-6 px-5 pb-10 pt-6 sm:px-7 lg:px-9">
+        <AdminPageHeader
+          eyebrow="Katarungang Pambarangay"
+          title="Notice to Appear"
+          description="Prepare a barangay mediation notice for the parties involved in a reported dispute."
+        >
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => navigate("/staff/blotter")} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20">
+              <X size={15} aria-hidden="true" /> Cancel
+            </button>
+            <button type="button" onClick={() => window.print()} disabled={!canPrint || templateLoading} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#2455D6] shadow-sm transition hover:bg-[#EEF4FF] disabled:cursor-not-allowed disabled:opacity-50">
+              <Printer size={15} aria-hidden="true" /> Print notice
+            </button>
+            {settings.uploaded_template_name && !/\.jpe?g$/i.test(settings.uploaded_template_name) && <button type="button" onClick={async () => {
+              try {
+                const response = await fetch(`${API_URL}/staff/blotter/summon-template`, { headers: { Authorization: `Bearer ${token}` } });
+                if (!response.ok) throw new Error("Unable to download the uploaded template.");
+                const url = URL.createObjectURL(await response.blob());
+                const link = document.createElement("a"); link.href = url; link.download = settings.uploaded_template_name; link.click(); URL.revokeObjectURL(url);
+              } catch (downloadError) { setError(downloadError.message); }
+            }} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#2455D6] shadow-sm"><Download size={15} /> Download template</button>}
+            <button type="button" onClick={handleSave} disabled={submitting} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#E52B32] px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-[#C9232B] disabled:cursor-wait disabled:opacity-60">
+              <FileText size={15} aria-hidden="true" /> {submitting ? "Saving..." : "Save notice"}
             </button>
           </div>
+        </AdminPageHeader>
+
+        {error && (
+          <div role="alert" className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-700">
+            <span>{error}</span>
+            <button type="button" onClick={() => setError("")} aria-label="Dismiss error"><X size={14} /></button>
+          </div>
         )}
 
-        {/* Summons document template */}
-        <div
-          className={`relative bg-white p-10 sm:p-14 shadow-sm border border-slate-200 rounded-2xl ${
-            printing ? "hidden" : ""
-          }`}
-        >
-          <div className="flex justify-between items-end mb-8">
-            <div>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={submitting}
-                className="inline-flex items-center gap-2 rounded-xl border border-transparent bg-[#2455D6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#2455D6]/90 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {submitting ? "Saving..." : "Save summons"}
-              </button>
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(320px,0.8fr)_minmax(0,1.2fr)]">
+          <section className="no-print overflow-hidden rounded-2xl border border-[#E6ECF5] bg-white shadow-[0_8px_28px_rgba(18,63,112,0.05)]">
+            <div className="border-b border-[#E6ECF5] px-5 py-4">
+              <h2 className="text-sm font-bold text-[#172B4D]">Meeting details</h2>
+              <p className="mt-1 text-xs text-slate-500">Complete the parties and mediation schedule.</p>
             </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => navigate("/staff/blotter")}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
-              >
-                <X size={14} aria-hidden="true" />
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handlePrint}
-                disabled={!canPrint || printing}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
-                  canPrint
-                    ? "border-transparent bg-gradient-to-r from-[#2455D6] via-[#7138E8] to-[#E52B32] text-white shadow-lg hover:-translate-y-0.5"
-                    : "border-slate-200 text-slate-400"
-                } disabled:opacity-50 disabled:cursor-not-allowed`}
-              >
-                <Printer size={14} aria-hidden="true" />
-                Print summons
-              </button>
+            <div className="grid gap-4 p-5 sm:grid-cols-2">
+              <SummonField label="Complainant" name="complainant" value={form.complainant} onChange={updateField} required placeholder="Full name of complainant" />
+              <SummonField label="Respondent" name="respondent" value={form.respondent} onChange={updateField} required placeholder="Full name of respondent" />
+              <SummonField label="Blotter reference" name="referenceNo" value={form.referenceNo} onChange={updateField} placeholder="Optional reference number" />
+              <SummonField label="Nature of dispute" name="natureOfDispute" value={form.natureOfDispute} onChange={updateField} placeholder="Brief description" />
+              <SummonField label="Respondent address" name="respondentAddress" value={form.respondentAddress} onChange={updateField} placeholder="Purok, street, or sitio" />
+              <SummonField label="Meeting date" name="hearingDate" type="date" value={form.hearingDate} onChange={updateField} required />
+              <SummonField label="Meeting time" name="hearingTime" type="time" value={form.hearingTime} onChange={updateField} required />
+              <SummonField label="Meeting venue" name="venue" value={form.venue} onChange={updateField} required />
+              <div className="sm:col-span-2"><SummonField label="Punong Barangay / Lupon Chairperson" name="issuedBy" value={form.issuedBy} onChange={updateField} placeholder="Name of authorized signatory" /></div>
             </div>
-          </div>
-
-          {/* Court letterhead */}
-          <div className="text-center mb-10">
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-700">
-              Republic of the Philippines
-            </p>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-700">
-              National Capital Judicial Region
-            </p>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-700">
-              Regional Trial Court
-            </p>
-            <p className="text-xs font-bold uppercase tracking-widest text-slate-700">
-              City of {form.courtCity}, Metro Manila
-            </p>
-            <div className="mt-3 flex flex-col sm:flex-row sm:justify-center gap-4 text-[10px] font-medium text-slate-600">
-              <span className="flex items-center gap-1">
-                <Building size={12} /> Branch {form.branch || "xxx"}
-              </span>
-              <span className="flex items-center gap-1">
-                <Mail size={12} /> {form.courtEmail || "xxxxxxx"}
-              </span>
-              <span className="flex items-center gap-1">
-                <Phone size={12} /> {form.courtHotline || "0917xxxxxxx"}
-              </span>
-            </div>
-          </div>
-
-          {/* Case caption */}
-          <div className="flex items-baseline justify-between gap-4 mb-6 border-b border-slate-200 pb-4">
-            <div className="flex flex-col gap-1">
-              <p className="text-xs font-bold text-slate-700">{form.plaintiff || "xxxxx"}</p>
-              <p className="text-[10px] italic text-slate-500">Plaintiff,</p>
-            </div>
-            <div className="flex flex-col items-center gap-1">
-              <p className="text-[10px] text-slate-500">-versus-</p>
-            </div>
-            <div className="text-right min-w-0">
-              <p className="text-xs font-bold text-slate-700 truncate">
-                Civil Case No. {form.civilCaseNo || "030"}
-              </p>
-              <p className="mt-1 text-[10px] text-slate-600 leading-tight">
-                For: {form.causeOfAction || "Sum of Money With Damages and Attorney's Fees"}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-baseline justify-between gap-4 mb-8 border-b border-slate-200 pb-4">
-            <div className="flex items-end gap-2">
-              <p className="text-xs font-bold text-slate-700">{form.defendants || "xxxxx"},</p>
-              <p className="text-[10px] italic text-slate-500">Defendants.</p>
-            </div>
-            <div className="h-4 border-t border-black w-full mx-2 flex items-center">
-              <span className="-translate-y-1/2 bg-white px-1 text-[10px] text-slate-400">
-                x............................x
-              </span>
-            </div>
-          </div>
-
-          <div className="text-center mb-8">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-slate-700">
-              Summons
-            </h2>
-          </div>
-
-          <div className="mb-8">
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-              TO:
-            </p>
-            <p className="text-xs text-slate-700 mt-1">
-              {form.summonedTo || "xxxxxx"}<br />
-              {form.summonedAddress || "Barangay Tinabalan, Palompon, Leyte"}
-            </p>
-          </div>
-
-          <div className="mb-8">
-            <p className="text-xs font-bold text-slate-700 uppercase tracking-wide">
-              Greetings:
-            </p>
-            <p className="mt-2 text-xs text-slate-700 leading-relaxed whitespace-pre-line">
-              Pursuant to Section 1, Rule 11 of the Rules of Court, as amended,
-              you are hereby directed to respond to the case filed against you within
-              thirty (30) calendar days after service of herein Summons together
-              with a copy of the Complaint and its Annexes.
-
-              In the preparation, service, and filing of the Answer, please be guided
-              by the following:
-
-              1. The Answer must be signed by the party or counsel representing
-              him/her;
-              2. The Answer must be served to the plaintiff and filed with the Court
-              personally or by registered mail with the corresponding electronic
-              mail address of the Court within thirty (30) calendar days after
-              service of herein Summons;
-              3. Failure to file your Answer within the period stated may lead to your
-              default and allow the presentation of the plaintiff's evidence ex parte;
-              4. You are reminded of the provision in the IBP-OCA Memorandum Policy
-              Guidelines dated 12 March 2020 to observe restraint in filing a Motion
-              to Dismiss and instead allege the grounds thereof as Affirmative
-              Defenses in your Answer.
-            </p>
-          </div>
-
-          <div className="mb-8">
-            <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">
-              The plaintiff's representatives, {form.plaintiff || "xxxxx"}, are duly
-              deputized by the Court to serve this Summons upon your presentation of
-              competent evidence of identity.
-            </p>
-          </div>
-
-          {/* Date and signature */}
-          <div className="mt-12 flex justify-between">
-            <div className="text-right">
-              <p className="text-[10px] text-slate-500 uppercase tracking-wide">
-                City of {form.courtCity || "xxxxxx"}, Metro Manila,
-              </p>
-              <p className="text-xs font-bold text-slate-700">
-                {formatDisplayDate(form.summonDate) || "2 January 2025"}
-              </p>
-            </div>
-            <div className="text-center">
-              <div className="h-1 w-24 border-b border-black mx-auto mb-2" />
-              <p className="text-[10px] font-bold text-slate-700 uppercase tracking-wide">
-                {form.clerkName || "xxxxxxxxxxxx"}
-              </p>
-              <p className="text-[10px] text-slate-500">{form.clerkTitle}</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Editable form fields (shown when not printing) */}
-        {!printing && (
-          <section className="mt-10 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                Case details
-              </h3>
-            </div>
-            <div className="grid gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div className="col-span-2">
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Plaintiff <span className="text-red-500">*</span>
-                </label>
-                <input
-                  name="plaintiff"
-                  value={form.plaintiff}
-                  onChange={updateField}
-                  placeholder="e.g. Juan Dela Cruz"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Defendants <span className="text-red-500">*</span>
-                </label>
-                <input
-                  name="defendants"
-                  value={form.defendants}
-                  onChange={updateField}
-                  placeholder="e.g. Maria Santos"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Civil Case No.
-                </label>
-                <input
-                  name="civilCaseNo"
-                  value={form.civilCaseNo}
-                  onChange={updateField}
-                  placeholder="030"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Cause of Action
-                </label>
-                <input
-                  name="causeOfAction"
-                  value={form.causeOfAction}
-                  onChange={updateField}
-                  placeholder="Sum of Money With Damages and Attorney's Fees"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Branch
-                </label>
-                <input
-                  name="branch"
-                  value={form.branch}
-                  onChange={updateField}
-                  placeholder="xxx"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Court Email
-                </label>
-                <input
-                  name="courtEmail"
-                  value={form.courtEmail}
-                  onChange={updateField}
-                  type="email"
-                  placeholder="court@example.com"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Hotline
-                </label>
-                <input
-                  name="courtHotline"
-                  value={form.courtHotline}
-                  onChange={updateField}
-                  placeholder="0917xxxxxxx"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Summon To <span className="text-red-500">*</span>
-                </label>
-                <input
-                  name="summonedTo"
-                  value={form.summonedTo}
-                  onChange={updateField}
-                  placeholder="Name of person being summoned"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Address / Barangay
-                </label>
-                <input
-                  name="summonedAddress"
-                  value={form.summonedAddress}
-                  onChange={updateField}
-                  placeholder="Barangay Tinabalan, Palompon, Leyte"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Date
-                </label>
-                <input
-                  name="summonDate"
-                  type="date"
-                  value={form.summonDate}
-                  onChange={updateField}
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-[10px] font-bold text-slate-700 mb-1">
-                  Clerk of Court
-                </label>
-                <input
-                  name="clerkName"
-                  value={form.clerkName}
-                  onChange={updateField}
-                  placeholder="Clerk of Court V"
-                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
-                />
-              </div>
-            </div>
-
-            <div className="border-t border-slate-200 bg-slate-50 px-4 py-3">
-              <p className="text-[10px] text-slate-500">
-                Fields marked <span className="text-red-500 font-bold">*</span> are
-                required before printing. The court header and legal greetings text are
-                pre-defined.
-              </p>
-            </div>
+            <p className="border-t border-[#E6ECF5] bg-slate-50 px-5 py-3 text-xs text-slate-500">Confirm the meeting schedule and authorized signatory before printing. This notice is not a court summons.</p>
           </section>
-        )}
+
+          <article id="barangay-summons" style={paperTemplateUrl ? { aspectRatio: paperTemplateRatio } : undefined} className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${paperTemplateUrl ? "relative mx-auto w-full max-w-[900px] overflow-hidden" : "p-6 sm:p-10"}`}>
+            {paperTemplateUrl && <img src={paperTemplateUrl} alt="" aria-hidden="true" className="summons-template-image pointer-events-none absolute inset-0 z-0 h-full w-full object-fill" />}
+            <div className={paperTemplateUrl ? "absolute inset-x-[6%] top-[19%] bottom-[17%] z-10 flex flex-col" : ""}>
+            {!paperTemplateUrl && <header className="border-b-2 border-[#123F70] pb-5 text-center">
+                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-slate-600">Republic of the Philippines</p>
+                <p className="mt-1 text-sm font-bold uppercase tracking-wide text-[#172B4D]">Province of {settings.province}</p>
+                <p className="text-sm font-bold uppercase tracking-wide text-[#172B4D]">Municipality of {settings.municipality}</p>
+                <h2 className="mt-2 text-lg font-extrabold uppercase tracking-wide text-[#123F70]">Barangay {settings.barangay_name}</h2>
+                <p className="text-xs font-semibold text-slate-600">{settings.office_heading}</p>
+            </header>}
+
+            <div className={paperTemplateUrl ? "py-1 text-center" : "py-7 text-center"}>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#2455D6]">Katarungang Pambarangay</p>
+              <h1 className={`mt-1 font-extrabold uppercase tracking-wide text-[#172B4D] ${paperTemplateUrl ? "text-lg" : "text-xl"}`}>{settings.notice_title}</h1>
+              <p className="mt-1 text-xs text-slate-500">{settings.notice_subtitle}</p>
+            </div>
+
+            <div className={`grid gap-2 rounded-xl bg-white/90 shadow-sm sm:grid-cols-2 ${paperTemplateUrl ? "mb-2 p-2.5 text-xs" : "mb-6 p-4 text-sm"}`}>
+              <DocumentDetail label="Complainant" value={form.complainant || "[Complainant name]"} />
+              <DocumentDetail label="Respondent" value={form.respondent || "[Respondent name]"} />
+              <DocumentDetail label="Blotter reference" value={form.referenceNo || "Not provided"} />
+              <DocumentDetail label="Nature of dispute" value={form.natureOfDispute || "Not provided"} />
+            </div>
+
+            <p className={`text-slate-700 ${paperTemplateUrl ? "text-xs leading-5" : "text-sm leading-7"}`}>
+              {renderNoticeText(settings.opening_text, settings)}
+            </p>
+
+            <div className={`grid gap-2 rounded-xl border border-[#DCE6F3] bg-white/90 sm:grid-cols-2 ${paperTemplateUrl ? "my-2 p-2.5 text-xs" : "my-6 p-4 text-sm"}`}>
+              <DocumentDetail label="Date" value={formatDisplayDate(form.hearingDate)} />
+              <DocumentDetail label="Time" value={formatDisplayTime(form.hearingTime)} />
+              <div className="sm:col-span-2"><DocumentDetail label="Venue" value={form.venue || "[Barangay hall / venue]"} /></div>
+              {form.respondentAddress && <div className="sm:col-span-2"><DocumentDetail label="Respondent address" value={form.respondentAddress} /></div>}
+            </div>
+
+            <p className={`text-slate-700 ${paperTemplateUrl ? "text-xs leading-5" : "text-sm leading-7"}`}>{renderNoticeText(settings.closing_text, settings)}</p>
+
+            <div className={`flex justify-end ${paperTemplateUrl ? "mt-auto pt-3" : "mt-12"}`}>
+              <div className="min-w-56 text-center">
+                <div className="mb-2 border-b border-slate-700" />
+                <p className={`font-bold uppercase text-[#172B4D] ${paperTemplateUrl ? "text-xs" : "text-sm"}`}>{form.issuedBy || "[Authorized signatory]"}</p>
+                <p className="mt-1 text-[10px] text-slate-600">{settings.signatory_title}</p>
+                {!paperTemplateUrl && <p className="mt-1 text-xs text-slate-500">Barangay {settings.barangay_name}</p>}
+              </div>
+            </div>
+            </div>
+          </article>
+        </div>
       </div>
     </StaffLayout>
+  );
+}
+
+function SummonField({ label, name, value, onChange, required = false, type = "text", placeholder }) {
+  return (
+    <label className="block text-xs font-semibold text-[#42526B]">
+      {label}{required && <span className="ml-1 text-red-500">*</span>}
+      <input name={name} type={type} value={value} onChange={onChange} required={required} placeholder={placeholder} className="mt-1.5 min-h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal text-slate-700 outline-none transition focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" />
+    </label>
+  );
+}
+
+function DocumentDetail({ label, value }) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 font-semibold text-[#172B4D]">{value}</p>
+    </div>
   );
 }
 

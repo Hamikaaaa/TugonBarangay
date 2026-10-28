@@ -212,6 +212,40 @@ function StaffDashboard() {
     }
   };
 
+  const savePreviewDocument = async (content) => {
+    if (!previewRequest || !token) {
+      throw new Error("Select a document request first.");
+    }
+
+    const response = await fetch(
+      `${API_URL}/staff/document-requests/${previewRequest.id}/generate`,
+      {
+        method: "POST",
+        headers: {
+          ...authHeaders(token),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          document_content: content,
+          staff_remarks: staffRemarks,
+        }),
+      },
+    );
+    const payload = await response.json();
+    if (!response.ok) {
+      throw new Error(payload.message || "Unable to save document edits.");
+    }
+
+    setPreviewRequest(payload.data);
+    setSelectedRequest(payload.data);
+    setRequests((current) =>
+      current.map((item) =>
+        item.id === payload.data.id ? { ...item, ...payload.data } : item,
+      ),
+    );
+    setNotice("Document edits saved.");
+  };
+
   const parseDocumentContent = () => {
     try {
       return JSON.parse(documentContent) || {};
@@ -503,7 +537,11 @@ function StaffDashboard() {
       </main>
 
       {previewRequest && (
-        <DocumentPreviewModal request={previewRequest} onClose={() => setPreviewRequest(null)} />
+        <DocumentPreviewModal
+          request={previewRequest}
+          onClose={() => setPreviewRequest(null)}
+          onSave={savePreviewDocument}
+        />
       )}
     </div>
   );
@@ -522,11 +560,11 @@ function StaffSidebar({ activeDocumentType, onSelect, onLogout, open, onClose, u
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,88vw)] flex-col overflow-y-auto bg-[#123F70] px-5 py-6 text-white shadow-2xl transition-transform duration-300 lg:w-72 lg:translate-x-0 lg:shadow-none ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,88vw)] flex-col overflow-hidden bg-[#123F70] px-5 py-6 text-white shadow-2xl transition-transform duration-300 lg:w-72 lg:translate-x-0 lg:shadow-none ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="flex items-center gap-3 border-b border-white/10 px-2 pb-5">
+        <div className="flex shrink-0 items-center gap-3 border-b border-white/10 px-2 pb-5">
           <img src="/images/logo-white-version.png" alt="TugonBarangay" className="h-12 w-12 object-contain" />
           <div>
             <h1 className="text-lg font-bold tracking-tight">
@@ -546,7 +584,7 @@ function StaffSidebar({ activeDocumentType, onSelect, onLogout, open, onClose, u
           </button>
         </div>
 
-        <div className="mt-7">
+        <div className="sidebar-scroll mt-7 min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-200/60">
             Document types
           </p>
@@ -579,7 +617,7 @@ function StaffSidebar({ activeDocumentType, onSelect, onLogout, open, onClose, u
           </nav>
         </div>
 
-        <div className="mt-auto pt-6">
+        <div className="mt-auto shrink-0 pt-6">
           <div className="mb-4 rounded-xl bg-white/10 p-3">
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-bold text-[#2455D6]">

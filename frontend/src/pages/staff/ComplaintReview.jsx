@@ -2,7 +2,7 @@ import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext";
 import ComplaintQueue from "./ComplaintQueue";
 import StaffLayout from "./StaffLayout";
-import useBlotterNavigation from "../../hooks/useBlotterNavigation";
+import useComplaintStaffNavigation from "../../hooks/useComplaintStaffNavigation";
 
 function ComplaintReview() {
   const { complaintId } = useParams();
@@ -10,7 +10,7 @@ function ComplaintReview() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const status = location.state?.status;
-  const blotterNavigation = useBlotterNavigation();
+  const navigationItems = useComplaintStaffNavigation();
 
   if (user?.designation !== "Complaint Management Officer") {
     return <Navigate to="/unauthorized" replace />;
@@ -19,15 +19,7 @@ function ComplaintReview() {
   return (
     <StaffLayout
       title="Complaint Details"
-      navigationItems={[
-        { label: "Dashboard", path: "/staff/dashboard" },
-        blotterNavigation,
-        { label: "Pending", path: "/staff/complaints?status=pending" },
-        { label: "In Progress", path: "/staff/complaints?status=in_progress" },
-        { label: "Resolved", path: "/staff/complaints?status=resolved" },
-        { label: "Rejected", path: "/staff/complaints?status=rejected" },
-        { label: "Closed", path: "/staff/complaints?status=closed" },
-      ]}
+      navigationItems={navigationItems}
       activePath={status ? `/staff/complaints?status=${status}` : ""}
       onNavigate={navigate}
     >

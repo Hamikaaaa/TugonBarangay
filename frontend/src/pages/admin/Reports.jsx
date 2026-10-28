@@ -16,7 +16,7 @@ import { useAuth } from "../../context/AuthContext";
 const API_URL = "http://127.0.0.1:8000/api";
 const SERVICE_SERIES = [
   { key: "document_requests", label: "Document requests", color: "#2455D6" },
-  { key: "complaints", label: "Complaints", color: "#7138E8" },
+  { key: "complaints", label: "Complaints, blotters & summons", color: "#7138E8" },
   { key: "chatbot_escalations", label: "Bot escalations", color: "#E52B32" },
 ];
 
@@ -115,7 +115,7 @@ function Reports() {
       report.summary.feedback.average_rating,
     ]);
     rows.push([]);
-    rows.push(["Outcome summary", "Total", "Completed / resolved", "Open / pending", "Rejected"]);
+    rows.push(["Outcome summary", "Total", "Completed / resolved", "Open / pending", "Rejected / cancelled"]);
     rows.push([
       "Document requests",
       report.summary.document_requests.total,
@@ -124,11 +124,11 @@ function Reports() {
       report.summary.document_requests.rejected,
     ]);
     rows.push([
-      "Complaints",
+      "Complaints, blotters & summons",
       report.summary.complaints.total,
       report.summary.complaints.resolved,
       report.summary.complaints.open,
-      "",
+      report.summary.complaints.rejected,
     ]);
     rows.push([
       "BantayBot escalations",
@@ -138,8 +138,18 @@ function Reports() {
       "",
     ]);
     rows.push([]);
-    rows.push(["Additional measure", "Value"]);
+    rows.push(["Complaint, blotter & summon details", "Value"]);
     rows.push(["Average feedback rating", report.summary.feedback.average_rating]);
+    rows.push(["Resident complaints", report.summary.complaints.resident_complaints]);
+    rows.push(["Blotter entries", report.summary.complaints.blotter_entries]);
+    rows.push(["Summon notices", report.summary.complaints.summon_notices]);
+    rows.push(["Summon complainants attended", report.summary.complaints.complainant_attended]);
+    rows.push(["Summon respondents attended", report.summary.complaints.respondent_attended]);
+    rows.push(["Summon complainants absent", report.summary.complaints.complainant_absent]);
+    rows.push(["Summon respondents absent", report.summary.complaints.respondent_absent]);
+    rows.push(["Complainant attendance unmarked", report.summary.complaints.complainant_attendance_unmarked]);
+    rows.push(["Respondent attendance unmarked", report.summary.complaints.respondent_attendance_unmarked]);
+    rows.push(["Summons with both parties attended", report.summary.complaints.both_attended]);
     rows.push(["Complaint category", "Count"]);
     report.complaint_categories.forEach(({ category, count }) =>
       rows.push([category, count]),
@@ -158,13 +168,23 @@ function Reports() {
       ...report.monthly.map((item) => [item.label, ...SERVICE_SERIES.map(({ key }) => item[key]), item.new_residents, item.feedback, item.feedback_average_rating ?? ""]),
       ["Selected period total", ...SERVICE_SERIES.map(({ key }) => totals[key]), totals.new_residents, totals.feedback, report.summary.feedback.average_rating],
       [], ["Service outcomes"],
-      ["Service", "Total", "Completed / resolved", "Open / pending", "Rejected"],
+      ["Service", "Total", "Completed / resolved", "Open / pending", "Rejected / cancelled"],
       ["Document requests", report.summary.document_requests.total, report.summary.document_requests.completed, "", report.summary.document_requests.rejected],
-      ["Complaints", report.summary.complaints.total, report.summary.complaints.resolved, report.summary.complaints.open, ""],
+      ["Complaints, blotters & summons", report.summary.complaints.total, report.summary.complaints.resolved, report.summary.complaints.open, report.summary.complaints.rejected],
       ["BantayBot escalations", report.summary.chatbot_escalations.total, report.summary.chatbot_escalations.replied, report.summary.chatbot_escalations.pending, ""],
-      [], ["Resident feedback"],
+      [], ["Additional complaint, blotter & summon details"],
       ["Feedback responses", report.summary.feedback.total],
       ["Average rating", report.summary.feedback.average_rating],
+      ["Resident complaints", report.summary.complaints.resident_complaints],
+      ["Blotter entries", report.summary.complaints.blotter_entries],
+      ["Summon notices", report.summary.complaints.summon_notices],
+      ["Summon complainants attended", report.summary.complaints.complainant_attended],
+      ["Summon respondents attended", report.summary.complaints.respondent_attended],
+      ["Summon complainants absent", report.summary.complaints.complainant_absent],
+      ["Summon respondents absent", report.summary.complaints.respondent_absent],
+      ["Complainant attendance unmarked", report.summary.complaints.complainant_attendance_unmarked],
+      ["Respondent attendance unmarked", report.summary.complaints.respondent_attendance_unmarked],
+      ["Summons with both parties attended", report.summary.complaints.both_attended],
       [], ["Complaint categories"],
       ["Category", "Count"],
       ...report.complaint_categories.map(({ category, count }) => [category, count]),
@@ -320,7 +340,7 @@ function Reports() {
               <SummaryCard
                 title="Service interactions"
                 value={totals.document_requests + totals.complaints + totals.chatbot_escalations}
-                detail="Requests, complaints, and bot escalations"
+                detail="Requests, complaints, blotters, summons, and bot escalations"
                 icon={Activity}
                 tone="blue"
               />
@@ -338,7 +358,7 @@ function Reports() {
                   report.summary.complaints.resolved +
                   report.summary.chatbot_escalations.replied
                 }
-                detail="Across document, complaint, and bot services"
+                detail="Across document, complaint, blotter, summons, and bot services"
                 icon={CheckCircle2}
                 tone="coral"
               />
@@ -448,11 +468,12 @@ function Reports() {
                     rejected={report.summary.document_requests.rejected}
                   />
                   <OutcomeRow
-                    label="Complaints"
+                    label="Complaints, blotters & summons"
                     total={report.summary.complaints.total}
                     complete={report.summary.complaints.resolved}
                     pending={report.summary.complaints.open}
-                    rejected={null}
+                    rejected={report.summary.complaints.rejected}
+                    detail={`${report.summary.complaints.resident_complaints} resident complaints · ${report.summary.complaints.blotter_entries} blotter entries · ${report.summary.complaints.summon_notices} summon notices; ${report.summary.complaints.both_attended} hearings had both parties present.`}
                   />
                   <OutcomeRow
                     label="BantayBot escalations"
@@ -678,7 +699,7 @@ function SummaryCard({ title, value, detail, icon: Icon, tone }) {
   );
 }
 
-function OutcomeRow({ label, total, complete, pending, rejected }) {
+function OutcomeRow({ label, total, complete, pending, rejected, completeLabel = "completed", pendingLabel = "pending/open", rejectedLabel = "rejected", detail = "" }) {
   return (
     <div className="rounded-xl bg-[#F7F9FC] p-3">
       <div className="flex items-center justify-between gap-3">
@@ -687,19 +708,20 @@ function OutcomeRow({ label, total, complete, pending, rejected }) {
       </div>
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-700">
-          {complete} completed
+          {complete} {completeLabel}
         </span>
         {pending !== null && (
           <span className="inline-flex items-center rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-700">
-            {pending} pending/open
+            {pending} {pendingLabel}
           </span>
         )}
         {rejected !== null && (
           <span className="inline-flex items-center rounded-lg bg-[#FFF0F0] px-2.5 py-1.5 text-xs font-semibold text-[#E45757]">
-            {rejected} rejected
+            {rejected} {rejectedLabel}
           </span>
         )}
       </div>
+      {detail && <p className="mt-2 text-[10px] leading-4 text-slate-500">{detail}</p>}
     </div>
   );
 }
