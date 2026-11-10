@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import RegistrationVerified from "./pages/RegistrationVerified";
 import ResidentDashboard from "./pages/ResidentDashboard";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -37,6 +38,10 @@ function App() {
           <Route
             path="/login"
             element={<Login />}
+          />
+          <Route
+            path="/registration/verified"
+            element={<RegistrationVerified />}
           />
           <Route
             path="/register"

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { REGISTRATION_VERIFIED_STORAGE_KEY } from "../utils/registrationVerification";
 
 function Login() {
   const { login } = useAuth();
@@ -15,12 +16,128 @@ function Login() {
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [recoveryStage, setRecoveryStage] = useState(null);
+  const [resetId, setResetId] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [resetToken, setResetToken] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key === REGISTRATION_VERIFIED_STORAGE_KEY && event.newValue) {
+        setMessage("Registration is complete. You may now log in.");
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   const handleChange = (e) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const handleRecoverySubmit = async (event) => {
+    event.preventDefault();
+    setMessage("");
+    setError("");
+    setIsLoading(true);
+
+    try {
+      if (recoveryStage === "request") {
+        const response = await fetch("http://127.0.0.1:8000/api/password/forgot", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ email: formData.email }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.errors?.email?.[0] || data.message || "Unable to request a password reset.");
+          return;
+        }
+
+        setResetId(data.reset_id);
+        setRecoveryStage("code");
+        setMessage(data.message);
+      } else if (recoveryStage === "code") {
+        const response = await fetch("http://127.0.0.1:8000/api/password/forgot/verify", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({ reset_id: resetId, code: resetCode }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.message || "Unable to verify the code.");
+          return;
+        }
+
+        setResetToken(data.reset_token);
+        setRecoveryStage("password");
+        setMessage(data.message);
+      } else if (recoveryStage === "password") {
+        const response = await fetch("http://127.0.0.1:8000/api/password/forgot/reset", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            reset_id: resetId,
+            reset_token: resetToken,
+            password: newPassword,
+            password_confirmation: confirmNewPassword,
+          }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          setError(data.errors?.password?.[0] || data.message || "Unable to change the password.");
+          return;
+        }
+
+        setRecoveryStage(null);
+        setResetId("");
+        setResetCode("");
+        setResetToken("");
+        setNewPassword("");
+        setConfirmNewPassword("");
+        setFormData((current) => ({ ...current, password: "" }));
+        setMessage(data.message);
+      }
+    } catch {
+      setError("Unable to connect to the server. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const startPasswordRecovery = () => {
+    setRecoveryStage("request");
+    setMessage("");
+    setError("");
+  };
+
+  const cancelPasswordRecovery = () => {
+    setRecoveryStage(null);
+    setResetId("");
+    setResetCode("");
+    setResetToken("");
+    setNewPassword("");
+    setConfirmNewPassword("");
+    setMessage("");
+    setError("");
   };
 
   const handleSubmit = async (e) => {
@@ -327,20 +444,164 @@ function Login() {
           {/* Heading */}
           <div className="mb-8">
             <p className="mb-2 text-sm font-medium text-[#41658A]">
-              Welcome back, Tugonizen!
+              {recoveryStage ? "Account recovery" : "Welcome back, Tugonizen!"}
             </p>
 
             <h2 className="text-3xl font-bold tracking-tight text-[#172B4D]">
-              Sign in
+              {recoveryStage ? "Forgot password?" : "Sign in"}
             </h2>
 
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Access your TugonBarangay citizen account.
+              {recoveryStage
+                ? "Verify your account email before choosing a new password."
+                : "Access your TugonBarangay citizen account."}
             </p>
           </div>
 
           {/* Login Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form
+            onSubmit={recoveryStage ? handleRecoverySubmit : handleSubmit}
+            className="space-y-5"
+            noValidate={Boolean(recoveryStage)}
+          >
+            {recoveryStage ? (
+              <>
+                <div>
+                  <h3 className="text-xl font-bold text-[#172B4D]">
+                    {recoveryStage === "request"
+                      ? "Reset your password"
+                      : recoveryStage === "code"
+                        ? "Verify your email"
+                        : "Choose a new password"}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">
+                    {recoveryStage === "request"
+                      ? "Enter the email address associated with your account."
+                      : recoveryStage === "code"
+                        ? "If an account exists for this address, a 5-digit code and password-change warning were sent to your email. The code expires in 5 minutes."
+                        : "Your email code is verified. Enter a new password for your account."}
+                  </p>
+                </div>
+
+                {recoveryStage === "request" && (
+                  <div>
+                    <label
+                      htmlFor="recovery-email"
+                      className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#55708F]"
+                    >
+                      Email Address
+                    </label>
+                    <input
+                      id="recovery-email"
+                      type="email"
+                      value={formData.email}
+                      onChange={(event) =>
+                        setFormData((current) => ({
+                          ...current,
+                          email: event.target.value,
+                        }))
+                      }
+                      placeholder="Enter your account email"
+                      required
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                    />
+                  </div>
+                )}
+
+                {recoveryStage === "code" && (
+                  <div>
+                    <label
+                      htmlFor="reset-code"
+                      className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#55708F]"
+                    >
+                      5-digit email code
+                    </label>
+                    <input
+                      id="reset-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      maxLength={5}
+                      value={resetCode}
+                      onChange={(event) =>
+                        setResetCode(event.target.value.replace(/\D/g, "").slice(0, 5))
+                      }
+                      placeholder="00000"
+                      required
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-center text-lg tracking-[0.5em] text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                    />
+                  </div>
+                )}
+
+                {recoveryStage === "password" && (
+                  <>
+                    <div>
+                      <label
+                        htmlFor="new-password"
+                        className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#55708F]"
+                      >
+                        New Password
+                      </label>
+                      <input
+                        id="new-password"
+                        type="password"
+                        autoComplete="new-password"
+                        value={newPassword}
+                        onChange={(event) => setNewPassword(event.target.value)}
+                        required
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="confirm-new-password"
+                        className="mb-2 block text-xs font-semibold uppercase tracking-wider text-[#55708F]"
+                      >
+                        Confirm New Password
+                      </label>
+                      <input
+                        id="confirm-new-password"
+                        type="password"
+                        autoComplete="new-password"
+                        value={confirmNewPassword}
+                        onChange={(event) => setConfirmNewPassword(event.target.value)}
+                        required
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm text-slate-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                      />
+                    </div>
+                    <p className="text-xs leading-5 text-slate-500">
+                      Use at least 8 characters with uppercase and lowercase letters, a number, and a symbol.
+                    </p>
+                  </>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={
+                    isLoading ||
+                    (recoveryStage === "code" && resetCode.length !== 5)
+                  }
+                  className="flex w-full items-center justify-center rounded-xl bg-[#2455D6] px-5 py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  {isLoading
+                    ? "Please wait..."
+                    : recoveryStage === "request"
+                      ? "Send verification code"
+                      : recoveryStage === "code"
+                        ? "Verify code"
+                        : "Change password"}
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelPasswordRecovery}
+                  disabled={isLoading}
+                  className="w-full text-sm font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  Back to sign in
+                </button>
+              </>
+            ) : (
+              <>
             {/* Email */}
             <div>
               <label
@@ -413,16 +674,6 @@ function Login() {
                   Password
                 </label>
 
-                <button
-                  type="button"
-                  className="
-                    text-xs font-semibold
-                    text-blue-600
-                    hover:text-blue-700
-                  "
-                >
-                  Forgot password?
-                </button>
               </div>
 
               <div className="relative">
@@ -586,19 +837,34 @@ function Login() {
                 </>
               )}
             </button>
+              </>
+            )}
           </form>
 
           {/* Register */}
-          <p className="mt-7 text-center text-sm text-slate-500">
-            Don't have a citizen account?{" "}
-            <button
-              type="button"
-              onClick={() => navigate("/register")}
-              className="font-semibold text-blue-600 hover:text-blue-700 hover:underline"
-            >
-              Register here
-            </button>
-          </p>
+          {!recoveryStage && (
+            <>
+              <p className="mt-7 text-center text-sm text-slate-500">
+                Don't have a citizen account?{" "}
+                <button
+                  type="button"
+                  onClick={() => navigate("/register")}
+                  className="font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  Register here
+                </button>
+              </p>
+              <p className="mt-3 text-center text-sm">
+                <button
+                  type="button"
+                  onClick={startPasswordRecovery}
+                  className="font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+                >
+                  Forgot password?
+                </button>
+              </p>
+            </>
+          )}
 
           {/* Footer */}
           <div className="mt-12 flex items-center justify-center gap-2 text-center text-[11px] text-slate-400">
