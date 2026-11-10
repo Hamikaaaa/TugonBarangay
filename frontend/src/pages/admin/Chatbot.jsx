@@ -142,6 +142,20 @@ function Chatbot() {
     };
   }, [escalationPage, reloadEscalations, request]);
 
+  useEffect(() => {
+    const refreshLiveChat = () => {
+      if (document.visibilityState !== "visible") return;
+      setReloadFaqs((current) => current + 1);
+      setReloadEscalations((current) => current + 1);
+    };
+    const timer = window.setInterval(refreshLiveChat, 5000);
+    document.addEventListener("visibilitychange", refreshLiveChat);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshLiveChat);
+    };
+  }, []);
+
   const visibleFaqs = useMemo(() => {
     const term = faqSearch.trim().toLowerCase();
     if (!term) return faqs;
@@ -251,6 +265,7 @@ function Chatbot() {
     <AdminLayout title="Chatbot">
       <div className="space-y-6 pt-6">
         <AdminPageHeader
+          actionsOnly
           eyebrow={`BantayBot · ${section === "dashboard" ? "Overview" : section === "questions" ? "Knowledge base" : "Staff follow-up"}`}
           title={
             section === "dashboard"
@@ -540,7 +555,7 @@ function Chatbot() {
                   <button
                     type="submit"
                     disabled={faqSaving}
-                    className={primaryButtonClass}
+                    className={`${primaryButtonClass} !bg-none !bg-[#2455D6]`}
                   >
                     <Save className="h-4 w-4" aria-hidden="true" />
                     {faqSaving ? "Saving..." : "Save question"}

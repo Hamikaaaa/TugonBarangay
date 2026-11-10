@@ -228,6 +228,7 @@ function BantayBot({ token, userId }) {
   const [chatLoading, setChatLoading] = useState(true);
   const [chatError, setChatError] = useState("");
   const [reloadChatHistory, setReloadChatHistory] = useState(0);
+  const [reloadFaqs, setReloadFaqs] = useState(0);
   const [asking, setAsking] = useState(false);
   const [escalating, setEscalating] = useState(false);
   const [escalation, setEscalation] = useState(null);
@@ -269,7 +270,7 @@ function BantayBot({ token, userId }) {
     return () => {
       active = false;
     };
-  }, [token]);
+  }, [reloadFaqs, token]);
 
   useEffect(() => {
     let active = true;
@@ -325,6 +326,21 @@ function BantayBot({ token, userId }) {
       active = false;
     };
   }, [escalationPage, reloadEscalations, token, userId]);
+
+  useEffect(() => {
+    const refreshLiveChat = () => {
+      if (document.visibilityState !== "visible" || asking) return;
+      setReloadFaqs((current) => current + 1);
+      setReloadChatHistory((current) => current + 1);
+      setReloadEscalations((current) => current + 1);
+    };
+    const timer = window.setInterval(refreshLiveChat, 5000);
+    document.addEventListener("visibilitychange", refreshLiveChat);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshLiveChat);
+    };
+  }, [asking]);
 
   const visibleFaqs = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();

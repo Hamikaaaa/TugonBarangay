@@ -79,7 +79,7 @@ function Feedback() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") loadFeedback(true);
-    }, 10000);
+    }, 5000);
     return () => window.clearInterval(timer);
   }, [loadFeedback]);
 
@@ -98,6 +98,7 @@ function Feedback() {
     <AdminLayout title="Feedback">
       <section className="space-y-6 pt-6">
         <AdminPageHeader
+          actionsOnly
           eyebrow="Resident voice"
           title="Feedback overview"
           description="Review resident ratings and comments about barangay services."
@@ -207,7 +208,7 @@ function Feedback() {
                 </label>
                 <button
                   type="submit"
-                  className={primaryButtonClass}
+                  className={`${primaryButtonClass} !bg-none !bg-[#2455D6]`}
                 >
                   Search
                 </button>

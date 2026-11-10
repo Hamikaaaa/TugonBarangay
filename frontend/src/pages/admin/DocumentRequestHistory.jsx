@@ -81,10 +81,10 @@ function DocumentRequestHistory() {
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible" && !selectedRequest) refreshDashboard(pagination.current_page, true);
-    }, 10000);
+      if (document.visibilityState === "visible") refreshDashboard(pagination.current_page, true);
+    }, 5000);
     return () => window.clearInterval(timer);
-  }, [pagination.current_page, refreshDashboard, selectedRequest]);
+  }, [pagination.current_page, refreshDashboard]);
 
   const openRequest = async (requestId) => {
     setError("");
@@ -104,6 +104,7 @@ function DocumentRequestHistory() {
     <AdminLayout title="Document Request History">
       <section className="space-y-6 pt-6">
         <AdminPageHeader
+          actionsOnly
           eyebrow="Read-only oversight"
           title="Document request history"
           description="Search past requests, inspect submitted information and processing history, and view generated document copies."

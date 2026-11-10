@@ -34,7 +34,7 @@ function ResidentLayout({ children, view, onNavigate }) {
     refresh();
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") refresh();
-    }, 10000);
+    }, 5000);
     return () => { active = false; window.clearInterval(timer); };
   }, [token]);
 
@@ -47,6 +47,9 @@ function ResidentLayout({ children, view, onNavigate }) {
         firstName={firstName}
         onLogout={logout}
         unreadCount={dashboard.unread_notifications || 0}
+        notifications={dashboard.notifications || []}
+        token={token}
+        onNotificationsChanged={refreshDashboard}
       />
 
       <main className="mx-auto w-full max-w-[1440px] flex-1 px-5 pb-12 pt-8 sm:px-8 lg:px-12">

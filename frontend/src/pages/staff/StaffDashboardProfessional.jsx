@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
   Archive,
   BadgeCheck,
@@ -23,7 +23,6 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import DocumentPreviewModal from "./DocumentPreviewModal";
 import FeeAssessment from "../../components/document/FeeAssessment";
-import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import StaffLayout from "./StaffLayout";
 
 const API_URL = "http://127.0.0.1:8000/api";
@@ -119,10 +118,9 @@ const WORKFLOW_GUIDANCE = {
   rejected: "This request was rejected and is closed. No further action is available.",
 };
 
-function StaffDashboardProfessional({ documentType = "" }) {
+function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
   const { token } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
   const [documentTypes, setDocumentTypes] = useState(
     () => readCachedDocumentTypes() || DEFAULT_DOCUMENT_TYPES,
   );
@@ -188,8 +186,50 @@ function StaffDashboardProfessional({ documentType = "" }) {
     };
   }, [token]);
 
+  useEffect(() => {
+    if (!requestId || !token) return undefined;
+    let active = true;
+    let initialLoad = true;
+    let fetching = false;
+    const refreshRequest = async () => {
+      if (fetching || document.visibilityState !== "visible") return;
+      fetching = true;
+      try {
+        const response = await fetch(`${API_URL}/staff/document-requests/${requestId}`, {
+          headers: authHeaders(token),
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || "Unable to load this document request.");
+        if (!active) return;
+        const request = payload.data;
+        setSelectedRequest(request);
+        if (initialLoad) {
+          setStaffRemarks(request.staff_remarks || "");
+          setRejectionReason(request.rejection_reason || "");
+        }
+        setError("");
+      } catch (requestError) {
+        if (active) setError(requestError.message);
+      } finally {
+        if (initialLoad) {
+          initialLoad = false;
+          if (active) setLoading(false);
+        }
+        fetching = false;
+      }
+    };
+    refreshRequest();
+    const timer = window.setInterval(refreshRequest, 5000);
+    document.addEventListener("visibilitychange", refreshRequest);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshRequest);
+    };
+  }, [requestId, token]);
+
   const loadRequests = useCallback(async (page = requestPage, silent = false) => {
-    if (!token) return;
+    if (!token || requestId) return;
     if (!silent) { setLoading(true); setError(""); }
 
     try {
@@ -211,6 +251,10 @@ function StaffDashboardProfessional({ documentType = "" }) {
       if (!response.ok) throw new Error(payload.message || "Unable to load document requests.");
       const nextRequests = payload.data || [];
       setRequests((current) => JSON.stringify(current) === JSON.stringify(nextRequests) ? current : nextRequests);
+      setSelectedRequest((current) => {
+        if (!current) return current;
+        return nextRequests.find((request) => request.id === current.id) || current;
+      });
       setRequestPage(payload.current_page || page);
       setRequestLastPage(payload.last_page || 1);
       setRequestTotal(payload.total || 0);
@@ -223,7 +267,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [activeDocumentType, dateFrom, dateTo, debouncedSearch, requestPage, statusFilter, token]);
+  }, [activeDocumentType, dateFrom, dateTo, debouncedSearch, requestId, requestPage, statusFilter, token]);
 
   const loadDashboardSummary = useCallback(async () => {
     if (!token) return;
@@ -257,12 +301,17 @@ function StaffDashboardProfessional({ documentType = "" }) {
   }, [loadDashboardSummary]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
+    const refresh = () => {
       if (document.visibilityState !== "visible" || submitting || previewRequest) return;
       loadDashboardSummary();
       loadRequests(requestPage, true);
-    }, 10000);
-    return () => window.clearInterval(timer);
+    };
+    const timer = window.setInterval(refresh, 5000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [loadDashboardSummary, loadRequests, previewRequest, requestPage, submitting]);
 
   const counts = useMemo(() => {
@@ -293,41 +342,9 @@ function StaffDashboardProfessional({ documentType = "" }) {
     navigate(nextDocumentType ? `/staff/document-types/${encodeURIComponent(nextDocumentType)}` : "/staff/dashboard");
   };
 
-  const selectRequest = (request) => {
-    setSelectedRequest(request);
-    setStaffRemarks(request.staff_remarks || "");
-    setRejectionReason(request.rejection_reason || "");
-  };
-
   const viewRequest = (request) => {
-    const targetDocumentType = request.document_type || request.document_type_label;
-    const matchesActiveType = documentType && targetDocumentType === documentType;
-
-    if (!matchesActiveType) {
-      navigate(`/staff/document-types/${encodeURIComponent(targetDocumentType)}`, {
-        state: { selectedRequestId: request.id },
-      });
-      return;
-    }
-
-    selectRequest(request);
-    window.requestAnimationFrame(() => {
-      document.getElementById("staff-request-details")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
+    navigate(`/staff/document-requests/${request.id}`);
   };
-
-  useEffect(() => {
-    const selectedRequestId = location.state?.selectedRequestId;
-    if (!selectedRequestId || !Array.isArray(requests)) return;
-
-    const nextSelectedRequest = requests.find((request) => request.id === Number(selectedRequestId));
-    if (nextSelectedRequest) {
-      selectRequest(nextSelectedRequest);
-      window.requestAnimationFrame(() => {
-        document.getElementById("staff-request-details")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
-  }, [location.state?.selectedRequestId, requests]);
 
   const quickFilter = (nextStatus) => {
     setStatusFilter(nextStatus);
@@ -502,18 +519,8 @@ function StaffDashboardProfessional({ documentType = "" }) {
       }}
     >
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
-          <div className="mb-7">
-            <AdminPageHeader
-              eyebrow="Document request management"
-              title={documentType ? `${activeDocumentLabel} requests` : "Document request dashboard"}
-              description={
-                documentType
-                  ? `Review resident applications and process ${activeDocumentLabel} requests.`
-                  : "Review, process, and prepare resident documents from one central workspace."
-              }
-            />
-          </div>
-
+          {!requestId && (
+            <>
           <section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label={`${activeDocumentLabel || "All document"} request workload`}>
             <SummaryCard label="Pending Requests" value={counts.pending} icon={Clock3} color="amber" note="Awaiting initial review" onClick={() => quickFilter("pending")} />
             <SummaryCard label="Under Review" value={counts.under_review} icon={Search} color="blue" note="Requirements being checked" onClick={() => quickFilter("under_review")} />
@@ -640,6 +647,8 @@ function StaffDashboardProfessional({ documentType = "" }) {
               </div>
             )}
           </section>
+            </>
+          )}
 
           {selectedRequest ? (
             <section id="staff-request-details" className="mt-5 scroll-mt-24 overflow-hidden rounded-2xl border border-[#E6ECF5] bg-white shadow-[0_8px_28px_rgba(18,63,112,0.05)]">
@@ -652,7 +661,24 @@ function StaffDashboardProfessional({ documentType = "" }) {
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting || (requiresPermitInspection(selectedRequest) && !hasApprovedPermitInspection(selectedRequest))} className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-40"><Eye size={14} /> {requiresPermitInspection(selectedRequest) && !hasApprovedPermitInspection(selectedRequest) ? "Inspection report and go-ahead required" : selectedRequest.document_content ? "Preview document" : selectedRequest.status === "processing" ? "Generate and preview" : "Preview template"}</button>
+                  {requestId && <button type="button" onClick={() => navigate(`/staff/document-types/${encodeURIComponent(selectedRequest.document_type)}`)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50"><ChevronLeft size={14} /> Back to requests</button>}
+                  {requiresPermitInspection(selectedRequest) && !hasApprovedPermitInspection(selectedRequest) ? (
+                    <button type="button" disabled className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white opacity-40"><Eye size={14} /> Inspection report and go-ahead required</button>
+                  ) : (
+                    <a
+                      href={`/staff/document-requests/${selectedRequest.id}/preview`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(event) => {
+                        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                        event.preventDefault();
+                        openPreview(selectedRequest);
+                      }}
+                      className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30"
+                    >
+                      <Eye size={14} /> {selectedRequest.document_content ? "Preview document" : selectedRequest.status === "processing" ? "Generate and preview" : "Preview template"}
+                    </a>
+                  )}
                 </div>
               </div>
 
@@ -661,7 +687,7 @@ function StaffDashboardProfessional({ documentType = "" }) {
                   <RequestDetails request={selectedRequest} token={token} onFeeUpdated={handleFeeUpdated} />
                   {requiresPermitInspection(selectedRequest) && (
                     <PermitInspectionPanel
-                      key={selectedRequest.id}
+                      key={`${selectedRequest.id}-${selectedRequest.details?.inspection_report?.assessed_fee ?? ""}-${selectedRequest.details?.fee_assessed ? selectedRequest.fee : ""}`}
                       request={selectedRequest}
                       token={token}
                       onSaved={(updatedRequest) => {
@@ -821,6 +847,10 @@ function StaffDashboardProfessional({ documentType = "" }) {
                 </aside>
               </div>
             </section>
+          ) : requestId ? (
+            <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500">
+              {error || "Loading document request..."}
+            </section>
           ) : (
             <section className="mt-5 rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center">
               <span className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-slate-100 text-slate-400"><FileText size={20} /></span>
@@ -853,10 +883,6 @@ function PermitInspectionPanel({ request, token, onSaved }) {
   const [error, setError] = useState("");
   const editable = request.status === "processing";
   const saved = Boolean(existing.file_path);
-
-  useEffect(() => {
-    setAssessedFee(String(existing.assessed_fee ?? (request.details?.fee_assessed ? request.fee : "")));
-  }, [existing.assessed_fee, request.details?.fee_assessed, request.fee]);
 
   const saveReport = async (event) => {
     event.preventDefault();
@@ -974,14 +1000,12 @@ function InspectionCamera({ onCapture, onClose, filePrefix = "permit" }) {
   const [stream, setStream] = useState(null);
   const [cameraError, setCameraError] = useState("");
   const [capturing, setCapturing] = useState(false);
+  const cameraUnavailable = !navigator.mediaDevices?.getUserMedia;
 
   useEffect(() => {
     let cancelled = false;
     let activeStream = null;
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setCameraError("Camera access is unavailable here. Use HTTPS or localhost, or choose a file instead.");
-      return undefined;
-    }
+    if (!navigator.mediaDevices?.getUserMedia) return undefined;
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } }, audio: false })
       .then((cameraStream) => {
         if (cancelled) {
@@ -1042,7 +1066,7 @@ function InspectionCamera({ onCapture, onClose, filePrefix = "permit" }) {
   return (
     <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
       <video ref={videoRef} autoPlay muted playsInline aria-label="Inspection report camera preview" className="max-h-[480px] w-full rounded-lg bg-slate-900 object-contain" />
-      {cameraError && <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{cameraError}</p>}
+      {(cameraError || cameraUnavailable) && <p role="alert" className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">{cameraError || "Camera access is unavailable here. Use HTTPS or localhost, or choose a file instead."}</p>}
       <div className="mt-3 flex flex-wrap justify-end gap-2">
         <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600">Close camera</button>
         <button type="button" onClick={capture} disabled={!stream || capturing} className="inline-flex items-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white disabled:opacity-50"><Camera size={14} /> {capturing ? "Capturing…" : "Capture scan"}</button>
@@ -1185,6 +1209,60 @@ function decodeDocumentType(documentType) {
   } catch {
     return null;
   }
+}
+
+export function StaffDocumentRequestPage() {
+  const { requestId } = useParams();
+  return <StaffDashboardProfessional requestId={requestId} />;
+}
+
+export function StaffDocumentPreviewPage() {
+  const { requestId } = useParams();
+  const navigate = useNavigate();
+  const { token } = useAuth();
+  const [request, setRequest] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!token) return undefined;
+    let active = true;
+    fetch(`${API_URL}/staff/document-requests/${requestId}`, {
+      headers: authHeaders(token),
+    })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || "Unable to load this document preview.");
+        if (active) setRequest(payload.data);
+      })
+      .catch((loadError) => {
+        if (active) setError(loadError.message);
+      });
+    return () => {
+      active = false;
+    };
+  }, [requestId, token]);
+
+  if (error) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#F5F7FB] p-6">
+        <p role="alert" className="rounded-xl border border-red-200 bg-white px-5 py-4 text-sm font-semibold text-red-700">{error}</p>
+      </main>
+    );
+  }
+
+  if (!request) {
+    return <main className="flex min-h-screen items-center justify-center bg-[#F5F7FB] text-sm font-semibold text-slate-500">Loading document preview...</main>;
+  }
+
+  return (
+    <main className="min-h-screen w-full">
+      <DocumentPreviewModal
+        request={request}
+        onClose={() => navigate(`/staff/document-requests/${requestId}`, { replace: true })}
+        fullPage
+      />
+    </main>
+  );
 }
 
 function RequestDetails({ request, token, onFeeUpdated }) {
@@ -1385,4 +1463,3 @@ function authHeaders(token) {
 }
 
 export default StaffDashboardProfessional;
-

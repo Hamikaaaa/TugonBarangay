@@ -599,6 +599,46 @@ class ResidentController extends Controller
         ], 201);
     }
 
+    public function resubmitComplaint(Request $request, Complaint $complaint)
+    {
+        $updatedComplaint = DB::transaction(function () use ($request, $complaint): ?Complaint {
+            $ownedComplaint = Complaint::query()
+                ->where('resident_id', $request->user()->id)
+                ->lockForUpdate()
+                ->findOrFail($complaint->id);
+
+            if ($ownedComplaint->status !== 'resolved') {
+                return null;
+            }
+
+            $ownedComplaint->status = 'resubmitted';
+            $ownedComplaint->status_updated_at = now();
+            $ownedComplaint->resolved_at = null;
+            $ownedComplaint->save();
+
+            $caseReference = 'CMP-'.str_pad((string) $ownedComplaint->id, 5, '0', STR_PAD_LEFT);
+            ResidentNotification::create([
+                'resident_id' => $ownedComplaint->resident_id,
+                'type' => 'complaint_status_updated',
+                'title' => "Complaint {$caseReference} resubmitted",
+                'message' => "Your complaint {$caseReference} has been resubmitted for staff review because the issue remains unresolved.",
+            ]);
+
+            return $ownedComplaint;
+        });
+
+        if (!$updatedComplaint) {
+            return response()->json([
+                'message' => 'Only resolved complaints can be resubmitted.',
+            ], 409);
+        }
+
+        return response()->json([
+            'message' => 'Your complaint has been resubmitted for staff review.',
+            'complaint' => $updatedComplaint->fresh(),
+        ]);
+    }
+
     private function assessComplaintPriority(array $complaint): string
     {
         $report = mb_strtolower(implode(' ', [
@@ -1217,5 +1257,4 @@ class ResidentController extends Controller
         return response()->json(['message' => 'Profile updated.', 'user' => $request->user()->fresh()]);
     }
 }
-
 

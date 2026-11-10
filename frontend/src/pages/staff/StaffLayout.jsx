@@ -1,12 +1,23 @@
 import { useEffect, useState } from "react";
-import { Archive, CalendarDays, CheckCircle2, Clock3, FileText, LayoutDashboard, LoaderCircle, LogOut, Menu, MessageSquareWarning, X, XCircle } from "lucide-react";
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, FileText, LayoutDashboard, LoaderCircle, LogOut, Menu, MessageSquareWarning, RotateCcw, X, XCircle } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 
 function StaffLayout({ title, navigationItems, notificationCounts = {}, activePath, onNavigate, children }) {
   const { user, token, logout } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => window.localStorage.getItem("staffSidebarCollapsed") === "true",
+  );
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
-  const [pendingComplaintCount, setPendingComplaintCount] = useState(0);
+  const [complaintCounts, setComplaintCounts] = useState({ pending: 0, resubmitted: 0 });
+
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((collapsed) => {
+      const nextCollapsed = !collapsed;
+      window.localStorage.setItem("staffSidebarCollapsed", String(nextCollapsed));
+      return nextCollapsed;
+    });
+  };
 
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentDateTime(new Date()), 60000);
@@ -22,16 +33,26 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         });
         const payload = await response.json();
-        if (active && response.ok) setPendingComplaintCount(Number(payload.counts?.pending || 0));
+        if (active && response.ok) {
+          setComplaintCounts({
+            pending: Number(payload.counts?.pending || 0),
+            resubmitted: Number(payload.counts?.resubmitted || 0),
+          });
+        }
       } catch { /* Keep the latest count during a temporary connection issue. */ }
     };
     refresh();
     window.addEventListener("staff-complaint-updated", refresh);
-    const timer = window.setInterval(refresh, 10000);
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const timer = window.setInterval(refreshWhenVisible, 5000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
     return () => {
       active = false;
       window.removeEventListener("staff-complaint-updated", refresh);
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, [token, user?.designation]);
 
@@ -46,14 +67,17 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
         />
       )}
 
-      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,88vw)] flex-col overflow-hidden bg-[#123F70] px-5 py-6 text-white shadow-2xl transition-transform duration-300 lg:w-72 lg:translate-x-0 lg:shadow-none ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
-        <div className="shrink-0 border-b border-white/10 px-2 pb-5">
-          <div className="flex items-center gap-3">
+      <aside className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,88vw)] flex-col overflow-hidden bg-[#123F70] px-5 py-6 text-white shadow-2xl transition-[width,transform,padding] duration-300 lg:translate-x-0 lg:shadow-none ${sidebarCollapsed ? "lg:w-20 lg:px-3" : "lg:w-72"} ${sidebarOpen ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className={`shrink-0 border-b border-white/10 pb-5 ${sidebarCollapsed ? "px-0" : "px-2"}`}>
+          <div className={`flex items-center gap-3 ${sidebarCollapsed ? "lg:flex-col" : ""}`}>
             <img src="/images/logo-white-version.png" alt="TugonBarangay" className="h-12 w-12 object-contain" />
-            <div>
+            <div className={sidebarCollapsed ? "lg:hidden" : ""}>
               <p className="text-lg font-bold tracking-tight">Tugon<span className="text-[#FF6B6B]">Barangay</span></p>
               <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.15em] text-white/70">Staff Portal</p>
             </div>
+            <button type="button" onClick={toggleSidebarCollapsed} className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-blue-100 transition hover:bg-white/10 hover:text-white lg:flex ${sidebarCollapsed ? "" : "ml-auto"}`} aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+              {sidebarCollapsed ? <ChevronRight size={18} aria-hidden="true" /> : <ChevronLeft size={18} aria-hidden="true" />}
+            </button>
             <button type="button" onClick={() => setSidebarOpen(false)} className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-white/80 hover:bg-white/10 lg:hidden" aria-label="Close navigation">
               <X size={18} />
             </button>
@@ -61,7 +85,7 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
         </div>
 
         <nav className="sidebar-scroll mt-7 min-h-0 flex-1 overflow-y-auto overscroll-contain" aria-label="Staff workspace">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/60">Workspace</p>
+          <p className={`mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-white/60 ${sidebarCollapsed ? "lg:hidden" : ""}`}>Workspace</p>
           <div className="space-y-1">
             {navigationItems.map((item, index) => {
               const active = activePath === item.path;
@@ -70,21 +94,21 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
                 ? FileText
                 : item.label === "Pending"
                   ? Clock3
+                  : item.label === "Resubmitted"
+                ? RotateCcw
                   : item.label === "In Progress"
                     ? LoaderCircle
                     : item.label === "Resolved"
                       ? CheckCircle2
                       : item.label === "Rejected"
                         ? XCircle
-                        : item.label === "Closed"
-                          ? Archive
                     : item.label === "Complaints"
                       ? MessageSquareWarning
                       : LayoutDashboard);
               return (
                 <div key={item.path}>
                   {showGroup && (
-                    <p className="mb-2 mt-4 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/50 first:mt-0">
+                    <p className={`mb-2 mt-4 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/50 first:mt-0 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
                       {item.group}
                     </p>
                   )}
@@ -95,21 +119,24 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
                       setSidebarOpen(false);
                     }}
                     aria-current={active ? "page" : undefined}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${active ? "bg-white text-[#123F70] shadow-lg" : "text-white/85 hover:bg-white/10"}`}
+                    title={sidebarCollapsed ? item.label : undefined}
+                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""} ${active ? "bg-white text-[#123F70] shadow-lg" : "text-white/85 hover:bg-white/10"}`}
                   >
                     <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-[#EAF1FF] text-[#2455D6]" : "bg-white/10 text-white/85"}`}>
                       <Icon size={15} />
                     </span>
-                    <span className="min-w-0 flex-1 whitespace-normal break-words leading-5">{item.label}</span>
+                    <span className={`min-w-0 flex-1 whitespace-normal break-words leading-5 ${sidebarCollapsed ? "lg:hidden" : ""}`}>{item.label}</span>
                     {user?.designation === "Document Request Officer" && notificationCounts[item.path] > 0 && (
+                      <span className={sidebarCollapsed ? "lg:hidden" : ""}>
                       <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white" aria-label={`${notificationCounts[item.path]} pending requests`}>
                         {notificationCounts[item.path] > 99 ? "99+" : notificationCounts[item.path]}
                       </span>
+                      </span>
                     )}
-                    {item.label === "Pending" && pendingComplaintCount > 0 && user?.designation === "Complaint Management Officer" && (
-                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white" aria-label={`${pendingComplaintCount} pending complaints`}>{pendingComplaintCount > 99 ? "99+" : pendingComplaintCount}</span>
+                    {["Pending", "Resubmitted"].includes(item.label) && complaintCounts[item.label.toLowerCase()] > 0 && user?.designation === "Complaint Management Officer" && (
+                      <span className={sidebarCollapsed ? "lg:hidden" : ""}><span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white" aria-label={`${complaintCounts[item.label.toLowerCase()]} ${item.label.toLowerCase()} complaints`}>{complaintCounts[item.label.toLowerCase()] > 99 ? "99+" : complaintCounts[item.label.toLowerCase()]}</span></span>
                     )}
-                    {active && (
+                    {active && !sidebarCollapsed && (
                       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#FF6B6B]" />
                     )}
                   </button>
@@ -120,23 +147,23 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
         </nav>
 
         <div className="mt-auto shrink-0 pt-6">
-          <div className="rounded-xl bg-white/10 p-3">
-            <div className="flex items-center gap-3">
+          <div className={`rounded-xl bg-white/10 ${sidebarCollapsed ? "flex justify-center p-2 lg:mb-4" : "p-3"}`} title={sidebarCollapsed ? `${user?.name || "Staff"} — ${user?.designation || "Staff"}` : undefined}>
+            <div className={`flex items-center gap-3 ${sidebarCollapsed ? "lg:justify-center" : ""}`}>
               <span className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-bold text-[#2455D6]">{(user?.name || "S").charAt(0)}</span>
-              <div className="min-w-0">
+              <div className={`min-w-0 ${sidebarCollapsed ? "lg:hidden" : ""}`}>
                 <p className="truncate text-xs font-bold">{user?.name || "Staff"}</p>
                 <p className="truncate text-[10px] text-white/65">{user?.designation || "Staff"}</p>
               </div>
             </div>
           </div>
-          <button type="button" onClick={logout} className="mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-[#FFD0D0] transition hover:bg-[#FF6B6B]/15">
+          <button type="button" onClick={logout} title={sidebarCollapsed ? "Logout" : undefined} className={`mt-2 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-[#FFD0D0] transition hover:bg-[#FF6B6B]/15 ${sidebarCollapsed ? "lg:justify-center lg:px-0" : ""}`}>
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#FF6B6B]/15"><LogOut size={15} aria-hidden="true" /></span>
-            Logout
+            <span className={sidebarCollapsed ? "lg:hidden" : ""}>Logout</span>
           </button>
         </div>
       </aside>
 
-      <main className="min-w-0 lg:pl-72">
+      <main className={`min-w-0 transition-[padding] duration-300 ${sidebarCollapsed ? "lg:pl-20" : "lg:pl-72"}`}>
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 px-5 py-4 backdrop-blur sm:px-7 lg:px-9">
           <div className="flex items-center justify-between gap-5">
             <div className="flex min-w-0 items-center gap-3">
@@ -178,10 +205,6 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
                     })} PHT
                   </time>
                 </div>
-              </div>
-              <div className="hidden text-right lg:block">
-                <p className="max-w-[220px] truncate text-sm font-bold text-[#172B4D]">{user?.name || "Staff"}</p>
-                <p className="mt-0.5 text-[10px] text-[#55708F]">{user?.designation || "Staff"}</p>
               </div>
             </div>
           </div>

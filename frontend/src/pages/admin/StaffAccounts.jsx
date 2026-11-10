@@ -146,6 +146,7 @@ function StaffAccounts() {
     <AdminLayout title="Staff Accounts">
       <div className="space-y-6 pt-6">
         <AdminPageHeader
+          actionsOnly
           eyebrow="Staff administration · Access management"
           title="Staff accounts"
           description="Create and manage Document Request Officers and Complaint Management Officers. Disabled accounts cannot sign in or continue using active sessions."

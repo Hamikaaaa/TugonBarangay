@@ -53,7 +53,7 @@ function AdminDocumentRequestsDashboard() {
   useEffect(() => {
     const timer = window.setInterval(() => {
       if (document.visibilityState === "visible") loadDashboard(true);
-    }, 10000);
+    }, 5000);
     return () => window.clearInterval(timer);
   }, [loadDashboard]);
 
@@ -73,6 +73,7 @@ function AdminDocumentRequestsDashboard() {
     <AdminLayout title="Document Request Dashboard">
       <section className="space-y-6 pt-6">
         <AdminPageHeader
+          actionsOnly
           eyebrow="Document request oversight"
           title="Document request dashboard"
           description="Track request volume, processing status, staff workload, and activity across every document type."

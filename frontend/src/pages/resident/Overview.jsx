@@ -1,11 +1,11 @@
-import { Bot, Check, CircleAlert, FileText, UserRound } from "lucide-react";
+import { Bot, Check, CircleAlert, FileText } from "lucide-react";
 import { RequestRow } from "../../components/resident/ResidentUI";
 
 /* Same brand gradient as the Login button */
 const BRAND_GRADIENT =
   "bg-gradient-to-r from-[#2455D6] via-[#7138E8] to-[#E52B32]";
 
-function Overview({ firstName, verified, dashboard, onNavigate, user, token }) {
+function Overview({ firstName, verified, dashboard, onNavigate, token }) {
   const stats = dashboard?.stats || {};
   const requests = dashboard?.requests || [];
 
@@ -155,9 +155,9 @@ function Overview({ firstName, verified, dashboard, onNavigate, user, token }) {
       ===================================================== */}
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         {/* =================================================
-            PROFILE CARD
+            OFFICE HOURS
         ================================================= */}
-        <div className="group relative flex min-h-[310px] flex-col justify-between overflow-hidden rounded-[28px] bg-gradient-to-br from-[#123F70] via-[#2455D6] to-[#7138E8] p-6 text-white shadow-[0_14px_34px_rgba(36,85,214,0.20)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(36,85,214,0.25)]">
+        <div className="group relative h-fit self-start overflow-hidden rounded-[28px] bg-gradient-to-br from-[#123F70] via-[#2455D6] to-[#7138E8] p-6 text-white shadow-[0_14px_34px_rgba(36,85,214,0.20)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(36,85,214,0.25)]">
           {/* Decorative circles */}
           <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full border-[30px] border-white/10 transition duration-500 group-hover:scale-110" />
 
@@ -165,28 +165,8 @@ function Overview({ firstName, verified, dashboard, onNavigate, user, token }) {
 
           <div className="pointer-events-none absolute right-8 top-8 h-2 w-2 rounded-full bg-white/40" />
 
-          {/* Avatar */}
-          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-white/20 bg-white/15 text-2xl font-bold shadow-lg backdrop-blur-sm">
-            <UserRound
-              className="h-7 w-7"
-              strokeWidth={1.7}
-              aria-hidden="true"
-            />
-          </div>
-
-          {/* Profile details */}
           <div className="relative">
-            <p className="text-2xl font-bold tracking-tight">
-              Resident profile
-            </p>
-
-            <p className="mt-1 text-sm text-white/70">
-              {user?.purok
-                ? `${user.purok}, Consolacion`
-                : "Consolacion resident"}
-            </p>
-
-            <div className="mt-6 rounded-2xl border border-white/15 bg-white/10 px-4 py-4 backdrop-blur-sm">
+            <div className="rounded-2xl border border-white/15 bg-white/10 px-4 py-4 backdrop-blur-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/60">
                 Barangay office hours
               </p>

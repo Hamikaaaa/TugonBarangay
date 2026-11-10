@@ -1,5 +1,6 @@
-import { Bell } from "lucide-react";
-import { useState } from "react";
+import { Bell, ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { residentApi } from "../../services/residentApi";
 
 const navItems = [
   ["dashboard", "Overview"],
@@ -14,11 +15,76 @@ function ResidentNav({
   firstName,
   onLogout,
   unreadCount = 0,
+  notifications = [],
+  token,
+  onNotificationsChanged,
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [markingAll, setMarkingAll] = useState(false);
+  const [busyNotificationId, setBusyNotificationId] = useState(null);
+  const [notificationError, setNotificationError] = useState("");
+  const notificationsRef = useRef(null);
   const navigate = (nextView) => {
     onNavigate(nextView);
     setMenuOpen(false);
+  };
+
+  useEffect(() => {
+    if (!notificationsOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!notificationsRef.current?.contains(event.target)) {
+        setNotificationsOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setNotificationsOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [notificationsOpen]);
+
+  const markAllRead = async () => {
+    setMarkingAll(true);
+    setNotificationError("");
+    try {
+      await residentApi("/resident/notifications/read-all", token, {
+        method: "PATCH",
+      });
+      await onNotificationsChanged();
+    } catch (error) {
+      setNotificationError(error.message);
+    } finally {
+      setMarkingAll(false);
+    }
+  };
+
+  const openNotification = async (item) => {
+    setNotificationError("");
+    if (!item.read_at) {
+      setBusyNotificationId(item.id);
+      try {
+        await residentApi(`/resident/notifications/${item.id}`, token, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ read: true }),
+        });
+        await onNotificationsChanged();
+      } catch (error) {
+        setNotificationError(error.message);
+        setBusyNotificationId(null);
+        return;
+      }
+      setBusyNotificationId(null);
+    }
+    setNotificationsOpen(false);
+    navigate("notifications");
   };
 
   return (
@@ -57,19 +123,109 @@ function ResidentNav({
 
         {/* Actions */}
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => navigate("notifications")}
-            className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/70 text-[#123F70] ring-1 ring-slate-200 transition hover:bg-white hover:ring-[#2455D6]"
-            aria-label="Notifications"
-          >
-            <Bell className="h-5 w-5" aria-hidden="true" />
-            {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
-                {unreadCount > 99 ? "99+" : unreadCount}
-              </span>
+          <div className="relative" ref={notificationsRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setNotificationError("");
+                setNotificationsOpen((open) => !open);
+              }}
+              className="relative flex h-10 w-10 items-center justify-center rounded-full bg-white/70 text-[#123F70] ring-1 ring-slate-200 transition hover:bg-white hover:ring-[#2455D6]"
+              aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"}
+              aria-expanded={notificationsOpen}
+              aria-controls="resident-notifications-panel"
+            >
+              <Bell className="h-5 w-5" aria-hidden="true" />
+              {unreadCount > 0 && (
+                <span className="absolute -right-1 -top-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
+            </button>
+
+            {notificationsOpen && (
+              <section
+                id="resident-notifications-panel"
+                className="absolute right-0 z-50 mt-3 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-xl"
+                aria-label="Notifications"
+              >
+                <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                  <h2 className="text-lg font-bold text-[#172B4D]">
+                    Notifications
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={markAllRead}
+                    disabled={unreadCount === 0 || markingAll}
+                    className="text-xs font-semibold text-[#2455D6] hover:underline disabled:cursor-not-allowed disabled:text-slate-400 disabled:no-underline"
+                  >
+                    {markingAll ? "Updating..." : "Mark all as read"}
+                  </button>
+                </div>
+
+                {notificationError && (
+                  <p role="alert" className="bg-red-50 px-4 py-2 text-xs text-red-700">
+                    {notificationError}
+                  </p>
+                )}
+
+                {notifications.length ? (
+                  <ul className="max-h-[min(60vh,24rem)] overflow-y-auto py-1">
+                    {notifications.map((item) => {
+                      const isUnread = !item.read_at;
+                      const isBusy = busyNotificationId === item.id;
+                      return (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            onClick={() => openNotification(item)}
+                            disabled={isBusy || markingAll}
+                            className={`flex w-full items-start gap-3 px-4 py-3 text-left transition hover:bg-[#F2F6FC] disabled:opacity-60 ${
+                              isUnread ? "bg-blue-50/60" : ""
+                            }`}
+                          >
+                            <span
+                              className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                                isUnread ? "bg-[#2455D6]" : "bg-slate-200"
+                              }`}
+                              aria-label={isUnread ? "Unread" : "Read"}
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className={`block truncate text-sm text-slate-800 ${isUnread ? "font-bold" : "font-semibold"}`}>
+                                {item.title}
+                              </span>
+                              <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-slate-500">
+                                {item.message}
+                              </span>
+                              <span className="mt-1 block text-[11px] text-slate-400">
+                                {new Date(item.created_at).toLocaleString()}
+                              </span>
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                ) : (
+                  <p className="px-4 py-8 text-center text-sm text-slate-500">
+                    You’re all caught up.
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setNotificationsOpen(false);
+                    navigate("notifications");
+                  }}
+                  className="flex w-full items-center justify-center gap-1 border-t border-slate-100 px-4 py-3 text-sm font-bold text-[#2455D6] transition hover:bg-slate-50"
+                >
+                  See all notifications
+                  <ChevronRight className="h-4 w-4" aria-hidden="true" />
+                </button>
+              </section>
             )}
-          </button>
+          </div>
 
           <button
             type="button"

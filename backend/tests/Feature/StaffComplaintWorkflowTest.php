@@ -75,13 +75,15 @@ class StaffComplaintWorkflowTest extends TestCase
         $this->assertDatabaseHas('notifications', [
             'resident_id' => $this->resident->id,
             'type' => 'complaint_status_updated',
-            'message' => "The status of your complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT)." is now Resolved.\n\nStaff remarks: Inspection complete.\n\nCase resolution: The drainage was cleared.",
+            'message' => "The status of your complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT)." is now Resolved and closed.\n\nStaff remarks: Inspection complete.\n\nCase resolution: The drainage was cleared.",
         ]);
         Sanctum::actingAs($this->resident);
         $this->getJson('/api/resident/notifications')
             ->assertOk()
-            ->assertJsonPath('data.0.type', 'complaint_status_updated')
-            ->assertJsonPath('data.0.message', "The status of your complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT)." is now Resolved.\n\nStaff remarks: Inspection complete.\n\nCase resolution: The drainage was cleared.");
+            ->assertJsonFragment([
+                'type' => 'complaint_status_updated',
+                'message' => "The status of your complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT)." is now Resolved and closed.\n\nStaff remarks: Inspection complete.\n\nCase resolution: The drainage was cleared.",
+            ]);
 
         $this->assertDatabaseHas('complaints', [
             'id' => $this->complaint->id,
@@ -89,6 +91,7 @@ class StaffComplaintWorkflowTest extends TestCase
             'staff_remarks' => 'Inspection complete.',
             'resolution_details' => 'The drainage was cleared.',
         ]);
+        $this->assertNotNull($this->complaint->fresh()->resolved_at);
     }
 
     public function test_complaint_status_update_notifies_resident_with_staff_remarks(): void
@@ -120,8 +123,53 @@ class StaffComplaintWorkflowTest extends TestCase
         $this->getJson('/api/staff/complaints/'.$this->complaint->id)
             ->assertOk()
             ->assertJsonPath('data.id', $this->complaint->id)
+            ->assertJsonPath('data.status', 'in_progress')
             ->assertJsonPath('data.category', 'Road and Public')
             ->assertJsonPath('data.user.name', $this->resident->name);
+
+        $this->assertDatabaseHas('notifications', [
+            'resident_id' => $this->resident->id,
+            'type' => 'complaint_status_updated',
+            'message' => "The status of your complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT)." is now In progress.",
+        ]);
+        $this->assertDatabaseHas('complaints', [
+            'id' => $this->complaint->id,
+            'status' => 'in_progress',
+        ]);
+    }
+
+    public function test_reopening_complaint_detail_does_not_duplicate_in_progress_notification(): void
+    {
+        Sanctum::actingAs($this->complaintOfficer);
+
+        $this->getJson('/api/staff/complaints/'.$this->complaint->id)->assertOk();
+        $this->getJson('/api/staff/complaints/'.$this->complaint->id)->assertOk();
+
+        $this->assertDatabaseCount('notifications', 1);
+    }
+
+    public function test_opening_a_resubmitted_complaint_returns_it_to_in_progress(): void
+    {
+        $this->complaint->update([
+            'status' => 'resubmitted',
+            'resolved_at' => now(),
+        ]);
+        Sanctum::actingAs($this->complaintOfficer);
+
+        $this->getJson('/api/staff/complaints/'.$this->complaint->id)
+            ->assertOk()
+            ->assertJsonPath('data.status', 'in_progress');
+
+        $this->assertDatabaseHas('complaints', [
+            'id' => $this->complaint->id,
+            'status' => 'in_progress',
+            'resolved_at' => null,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'resident_id' => $this->resident->id,
+            'type' => 'complaint_status_updated',
+            'message' => 'Your resubmitted complaint CMP-'.str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT).' is now In progress and under review.',
+        ]);
     }
 
     public function test_open_urgent_complaints_are_first_and_terminal_complaints_move_below_active_cases(): void
@@ -269,10 +317,19 @@ class StaffComplaintWorkflowTest extends TestCase
             'status' => 'resolved',
         ])->assertUnprocessable();
 
+        $this->patchJson('/api/staff/complaints/'.$this->complaint->id.'/status', [
+            'status' => 'resolved',
+            'resolution_details' => 'The issue was addressed.',
+        ])->assertStatus(409);
+
         $this->complaint->update(['status' => 'resolved']);
         $this->patchJson('/api/staff/complaints/'.$this->complaint->id.'/status', [
             'status' => 'in_progress',
         ])->assertStatus(409);
+
+        $this->patchJson('/api/staff/complaints/'.$this->complaint->id.'/status', [
+            'status' => 'closed',
+        ])->assertUnprocessable();
     }
 
     public function test_admin_can_oversee_complaints_but_staff_cannot_use_admin_routes(): void

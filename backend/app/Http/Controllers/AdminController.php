@@ -242,7 +242,7 @@ class AdminController extends Controller
         $pendingDocuments = DocumentRequest::query()
             ->whereIn('status', ['pending', 'under_review']);
         $openComplaints = Complaint::query()
-            ->whereIn('status', ['pending', 'in_progress']);
+            ->whereIn('status', ['pending', 'resubmitted', 'in_progress']);
         $pendingEscalations = ChatbotEscalation::query()
             ->where('status', 'pending');
 

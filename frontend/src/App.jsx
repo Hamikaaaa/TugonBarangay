@@ -7,7 +7,11 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import PublicOnlyRoute from "./components/PublicOnlyRoute";
 import { AuthProvider } from "./context/AuthContext";
 import StaffHome from "./pages/staff/StaffHome";
-import { StaffDocumentTypePage } from "./pages/staff/StaffDashboardProfessional";
+import {
+  StaffDocumentPreviewPage,
+  StaffDocumentRequestPage,
+  StaffDocumentTypePage,
+} from "./pages/staff/StaffDashboardProfessional";
 import ComplaintManagement from "./pages/staff/ComplaintManagement";
 import ComplaintReview from "./pages/staff/ComplaintReview";
 import BlotterManagement from "./pages/staff/BlotterManagement";
@@ -73,6 +77,24 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Document Request Officer"]}>
                 <StaffDocumentTypePage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/staff/document-requests/:requestId/preview"
+            element={
+              <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Document Request Officer"]}>
+                <StaffDocumentPreviewPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/staff/document-requests/:requestId"
+            element={
+              <ProtectedRoute allowedRoles={["staff"]} allowedDesignations={["Document Request Officer"]}>
+                <StaffDocumentRequestPage />
               </ProtectedRoute>
             }
           />
@@ -189,6 +211,22 @@ function App() {
 
           <Route
             path="/admin/document-types"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <DocumentTypes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/document-types/new"
+            element={
+              <ProtectedRoute allowedRoles={["admin"]}>
+                <DocumentTypes />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/document-types/:documentTypeId/edit"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
                 <DocumentTypes />
