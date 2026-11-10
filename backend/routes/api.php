@@ -8,7 +8,12 @@ use App\Http\Controllers\SummonsSettingsController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
-Route::post('/register', [AuthController::class, 'register']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+Route::post('/register/verify-code', [AuthController::class, 'verifyRegistrationCode'])->middleware('throttle:10,1');
+Route::post('/register/resend-code', [AuthController::class, 'resendRegistrationCode'])->middleware('throttle:10,1');
+Route::post('/password/forgot', [AuthController::class, 'requestPasswordReset'])->middleware('throttle:5,1');
+Route::post('/password/forgot/verify', [AuthController::class, 'verifyPasswordResetCode'])->middleware('throttle:10,1');
+Route::post('/password/forgot/reset', [AuthController::class, 'resetPassword'])->middleware('throttle:5,1');
 Route::post('/login', [AuthController::class, 'login']);
 
 Route::get('/user', function (Request $request) {

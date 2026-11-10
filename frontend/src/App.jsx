@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import ServiceLanding from "./pages/ServiceLanding";
+import RegistrationVerified from "./pages/RegistrationVerified";
 import ResidentDashboard from "./pages/ResidentDashboard";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -33,6 +34,10 @@ function App() {
         <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<Navigate to="/?auth=login" replace />} />
+          <Route
+            path="/registration/verified"
+            element={<RegistrationVerified />}
+          />
           <Route path="/register" element={<Navigate to="/?auth=signup" replace />} />
 
           {/* Resident Route */}

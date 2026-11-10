@@ -7,6 +7,24 @@
 <a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
 </p>
 
+## Registration verification
+
+Registration is completed only after the registrant verifies the selected email
+address or phone number. Email verification uses the configured Laravel mail
+transport. SMS verification uses Twilio; configure `TWILIO_ACCOUNT_SID`,
+`TWILIO_AUTH_TOKEN`, and `TWILIO_FROM_NUMBER` in the backend environment.
+For email delivery, configure Laravel's mail settings (`MAIL_MAILER`, `MAIL_HOST`,
+`MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SCHEME`, and
+`MAIL_FROM_ADDRESS`).
+Set `APP_URL` to the backend origin and `FRONTEND_URL` to the frontend origin
+so verification links and confirmation pages use the correct application
+addresses. Verification codes and links expire after five minutes, and a new
+verification message can be requested every 90 seconds.
+
+Password recovery uses a separate five-digit email code that expires after
+five minutes. The account password is changed only after code verification and
+submission of a valid new password.
+
 ## About Laravel
 
 Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:

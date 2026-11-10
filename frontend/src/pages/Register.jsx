@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { PUROKS } from "../constants/puroks";
@@ -18,7 +18,7 @@ const formSteps = [
   },
   {
     title: "Secure Your Account",
-    description: "Create your password and complete your registration.",
+    description: "Create a password, then verify your contact to complete registration.",
     label: "Account Setup",
     icon: "lock",
   },
@@ -41,6 +41,13 @@ function Register({ isModal = false }) {
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirmation, setShowPasswordConfirmation] =
     useState(false);
+  const [showVerificationChoice, setShowVerificationChoice] = useState(false);
+  const [verificationMethod, setVerificationMethod] = useState("email");
+  const [pendingVerification, setPendingVerification] = useState(null);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [verificationLoading, setVerificationLoading] = useState(false);
+  const [resendLoading, setResendLoading] = useState(false);
+  const [verificationNow, setVerificationNow] = useState(null);
 
   const [formData, setFormData] = useState({
     first_name: "",
@@ -56,6 +63,13 @@ function Register({ isModal = false }) {
     password: "",
     password_confirmation: "",
   });
+
+  useEffect(() => {
+    if (!pendingVerification) return undefined;
+
+    const timer = window.setInterval(() => setVerificationNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [pendingVerification]);
 
   const update = (event) => {
     const { name, value } = event.target;
@@ -200,6 +214,8 @@ function Register({ isModal = false }) {
   const submit = async (event) => {
     event.preventDefault();
 
+    if (pendingVerification || showVerificationChoice) return;
+
     // Never validate or submit unless the user is on the final step.
     // This prevents an early submit (e.g. pressing Enter, or the
     // Continue click being treated as a submit) from triggering
@@ -221,6 +237,11 @@ function Register({ isModal = false }) {
       return;
     }
 
+    setShowVerificationChoice(true);
+  };
+
+  const beginVerification = async () => {
+    setError("");
     setLoading(true);
 
     try {
@@ -230,7 +251,10 @@ function Register({ isModal = false }) {
           Accept: "application/json",
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify({
+          ...formData,
+          verification_method: verificationMethod,
+        }),
       });
 
       const data = await response.json();
@@ -246,6 +270,7 @@ function Register({ isModal = false }) {
         setError(responseError);
 
         if (registryMismatch) {
+          setShowVerificationChoice(false);
           window.setTimeout(() => {
             setStep(0);
             setFieldErrors({});
@@ -257,11 +282,10 @@ function Register({ isModal = false }) {
         return;
       }
 
+      setShowVerificationChoice(false);
+      setPendingVerification(data.verification);
+      setVerificationCode("");
       setMessage(data.message);
-
-      setTimeout(() => {
-        navigate("/login");
-      }, 1400);
     } catch {
       setError("Unable to connect to the server.");
     } finally {
@@ -269,8 +293,109 @@ function Register({ isModal = false }) {
     }
   };
 
+  const verifyCode = async () => {
+    setError("");
+    setVerificationLoading(true);
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/register/verify-code",
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            verification_id: pendingVerification.id,
+            code: verificationCode,
+          }),
+        },
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Unable to verify the code.");
+        return;
+      }
+
+      setPendingVerification(null);
+      setMessage(data.message);
+      window.setTimeout(() => navigate("/login"), 1800);
+    } catch {
+      setError("Unable to connect to the server.");
+    } finally {
+      setVerificationLoading(false);
+    }
+  };
+
+  const resendCode = async () => {
+    setError("");
+    setResendLoading(true);
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/api/register/resend-code",
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            verification_id: pendingVerification.id,
+          }),
+        },
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.message || "Unable to resend the verification code.");
+        if (data.resend_at) {
+          setPendingVerification((current) => ({
+            ...current,
+            resend_at: data.resend_at,
+          }));
+        }
+        return;
+      }
+
+      setPendingVerification(data.verification);
+      setVerificationCode("");
+      setMessage(data.message);
+    } catch {
+      setError("Unable to connect to the server.");
+    } finally {
+      setResendLoading(false);
+    }
+  };
+
   const currentStep = formSteps[step];
   const showPasswordErrors = step === 2 && passwordValidationAttempted;
+  const resendSeconds = pendingVerification
+    ? verificationNow === null
+      ? 90
+      : Math.max(
+        0,
+        Math.ceil(
+          (new Date(pendingVerification.resend_at).getTime() -
+            verificationNow) /
+            1000,
+        ),
+        )
+    : 0;
+  const expirySeconds = pendingVerification
+    ? verificationNow === null
+      ? 300
+      : Math.max(
+        0,
+        Math.ceil(
+          (new Date(pendingVerification.expires_at).getTime() -
+            verificationNow) /
+            1000,
+        ),
+        )
+    : 0;
 
   return (
     <div className={isModal ? "register-modal-compact w-full bg-white" : "min-h-screen w-full bg-[#F4F7FB] lg:flex"}>
@@ -486,11 +611,19 @@ function Register({ isModal = false }) {
             <div className="flex items-start justify-between gap-5">
               <div>
                 <h2 className="text-[30px] font-bold tracking-tight text-[#142A46] sm:text-[36px]">
-                  {currentStep.title}
+                  {pendingVerification
+                    ? "Verify your contact"
+                    : showVerificationChoice
+                      ? "Choose a verification method"
+                      : currentStep.title}
                 </h2>
 
                 <p className="mt-2 text-sm text-slate-500">
-                  {currentStep.description}
+                  {pendingVerification
+                    ? "Complete contact verification to finish creating your account."
+                    : showVerificationChoice
+                      ? "Choose whether to verify by email or phone. We’ll send the verification after you choose."
+                      : currentStep.description}
                 </p>
               </div>
             </div>
@@ -514,6 +647,150 @@ function Register({ isModal = false }) {
               FORM CARD
           ================================================== */}
           <form onSubmit={submit} noValidate className="p-0">
+            {pendingVerification ? (
+              <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <div>
+                  <h3 className="text-xl font-bold text-[#142A46]">
+                    {pendingVerification.channel === "sms"
+                      ? "Enter your verification code"
+                      : "Verify your email"}
+                  </h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">
+                    {pendingVerification.channel === "sms"
+                      ? `We sent a 5-digit code to ${pendingVerification.destination}. Enter it below to complete registration.`
+                      : `We sent a verification email to ${pendingVerification.destination}. Click the VERIFY! button in that email to complete registration.`}
+                  </p>
+                </div>
+
+                {pendingVerification.channel === "sms" && (
+                  <>
+                    <label className="block text-sm font-semibold text-slate-700">
+                      5-digit verification code
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={5}
+                        value={verificationCode}
+                        onChange={(event) =>
+                          setVerificationCode(
+                            event.target.value.replace(/\D/g, "").slice(0, 5),
+                          )
+                        }
+                        className="mt-2 h-14 w-full rounded-2xl border border-slate-200 bg-[#FBFCFE] px-4 text-center text-xl tracking-[0.5em] outline-none focus:border-[#2455D6] focus:ring-4 focus:ring-[#2455D6]/10"
+                        placeholder="00000"
+                      />
+                    </label>
+                    <p className="text-xs text-slate-500">
+                      {expirySeconds === 0
+                        ? "This code has expired. Request a new one to continue."
+                        : `This code expires in ${Math.floor(
+                            expirySeconds / 60,
+                          )}:${String(expirySeconds % 60).padStart(2, "0")}.`}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={verifyCode}
+                      disabled={verificationLoading || verificationCode.length !== 5}
+                      className="flex h-14 w-full items-center justify-center rounded-xl bg-[#2455D6] text-sm font-bold text-white shadow-md transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {verificationLoading ? "Verifying..." : "Verify code"}
+                    </button>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={resendCode}
+                  disabled={resendLoading || resendSeconds > 0}
+                  className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm font-semibold text-[#2455D6] transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                >
+                  {resendLoading
+                    ? "Sending..."
+                    : resendSeconds > 0
+                      ? `Resend available in ${Math.floor(
+                          resendSeconds / 60,
+                        )}:${String(resendSeconds % 60).padStart(2, "0")}`
+                      : "Resend verification"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPendingVerification(null);
+                    setMessage("");
+                    setError("");
+                  }}
+                  className="w-full text-sm font-semibold text-slate-500 hover:text-slate-700"
+                >
+                  Edit registration details
+                </button>
+              </div>
+            ) : showVerificationChoice ? (
+              <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <fieldset>
+                  <legend className="text-sm font-semibold text-slate-700">
+                    Verify using
+                  </legend>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    {[
+                      ["email", "Email", "Receive a verification link by email"],
+                      ["sms", "Phone number", "Receive a 5-digit code by SMS"],
+                    ].map(([value, label, description]) => (
+                      <label
+                        key={value}
+                        className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
+                          verificationMethod === value
+                            ? "border-[#2455D6] bg-blue-50"
+                            : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="verification_method"
+                          value={value}
+                          checked={verificationMethod === value}
+                          onChange={() => setVerificationMethod(value)}
+                          className="mt-1 accent-[#2455D6]"
+                        />
+                        <span>
+                          <span className="block text-sm font-bold text-slate-700">
+                            {label}
+                          </span>
+                          <span className="mt-1 block text-xs font-normal text-slate-500">
+                            {description}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <button
+                  type="button"
+                  onClick={beginVerification}
+                  disabled={loading}
+                  className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#2455D6] text-sm font-bold text-white shadow-md transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {loading
+                    ? "Sending verification..."
+                    : verificationMethod === "sms"
+                      ? "Send verification code"
+                      : "Send verification email"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowVerificationChoice(false);
+                    setError("");
+                  }}
+                  disabled={loading}
+                  className="w-full text-sm font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-50"
+                >
+                  Back to registration
+                </button>
+              </div>
+            ) : (
+              <>
             {/* STEP 1 */}
             {step === 0 && (
               <div className="grid gap-5 sm:grid-cols-2">
@@ -619,6 +896,7 @@ function Register({ isModal = false }) {
                   placeholder="you@example.com"
                   required
                 />
+
               </div>
             )}
 
@@ -799,6 +1077,8 @@ function Register({ isModal = false }) {
                 </button>
               )}
             </div>
+              </>
+            )}
           </form>
 
           {/* Login footer */}

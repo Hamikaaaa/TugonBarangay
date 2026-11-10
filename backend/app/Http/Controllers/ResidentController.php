@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ChatbotFaq;
 use App\Models\ChatbotEscalation;
+use App\Models\ChatbotFaq;
 use App\Models\ChatbotMessage;
 use App\Models\Complaint;
 use App\Models\DocumentRequest;
 use App\Models\DocumentRequestEvent;
 use App\Models\DocumentType;
 use App\Models\Feedback;
+use App\Models\Resident;
 use App\Models\ResidentNotification;
 use App\Support\ResidentIdentityKey;
 use Carbon\Carbon;
@@ -168,21 +169,30 @@ class ResidentController extends Controller
 
     public function requests(Request $request)
     {
-        return DocumentRequest::where('resident_id', $request->user()->id)
+        $residentId = $request->user()->id;
+        $requests = DocumentRequest::where('resident_id', $residentId)
             ->with('type')
             ->latest()
             ->paginate(10);
+        $activeRequestCount = $this->activeDocumentRequestCount($residentId);
+
+        return response()->json(array_merge($requests->toArray(), [
+            'active_request_count' => $activeRequestCount,
+            'request_limit' => 3,
+            'available_request_slots' => max(0, 3 - $activeRequestCount),
+        ]));
     }
 
     public function viewRequestRequirement(Request $request, DocumentRequest $documentRequest, string $requirement)
     {
         abort_unless((int) $documentRequest->resident_id === (int) $request->user()->id, 404);
         $file = $documentRequest->details['requirements'][$requirement] ?? null;
-        abort_unless(is_array($file) && !empty($file['path']), 404);
+        abort_unless(is_array($file) && ! empty($file['path']), 404);
         $disk = Storage::disk('local');
         abort_unless($disk->exists($file['path']), 404);
 
         $filename = $file['original_name'] ?? basename($file['path']);
+
         return $disk->response($file['path'], $filename, [
             'Cache-Control' => 'private, no-store',
             'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $filename).'"',
@@ -232,8 +242,8 @@ class ResidentController extends Controller
             $documentFields = self::DOCUMENT_FORM_FIELDS[$documentType];
             $requirements = self::DOCUMENT_REQUIREMENTS[$documentType];
             $allFieldKeys = array_merge($applicantFields, array_keys($documentFields));
-            $rules['form_fields'] = ['required', 'array:' . implode(',', $allFieldKeys)];
-            $rules['requirements'] = ['sometimes', 'array:' . implode(',', array_keys($requirements))];
+            $rules['form_fields'] = ['required', 'array:'.implode(',', $allFieldKeys)];
+            $rules['requirements'] = ['sometimes', 'array:'.implode(',', array_keys($requirements))];
 
             foreach ($applicantFields as $key) {
                 $rules["form_fields.{$key}"] = self::APPLICANT_FIELD_RULES[$key];
@@ -282,8 +292,14 @@ class ResidentController extends Controller
 
         try {
             $documentRequest = DB::transaction(function () use ($request, $validated, $requirements, $userId, $fee, $configuredType, $jobseekerIdentityHash, &$storedPaths) {
+                Resident::whereKey($userId)->lockForUpdate()->firstOrFail();
+                abort_if(
+                    $this->activeDocumentRequestCount($userId) >= 3,
+                    409,
+                    'You can have up to 3 active document requests at a time. A new request is allowed after staff generate a preview for one of your existing requests.',
+                );
+
                 if ($configuredType?->one_time) {
-                    \App\Models\Resident::whereKey($userId)->lockForUpdate()->firstOrFail();
                     if ($validated['document_type'] === 'First-Time Jobseeker Certification') {
                         abort_if(
                             DocumentRequest::where('resident_id', $userId)
@@ -293,7 +309,7 @@ class ResidentController extends Controller
                             409,
                             'You have already availed this one-time certificate. You cannot request it again.',
                         );
-                        abort_if(!$jobseekerIdentityHash, 422, 'Your resident profile must include your full name and date of birth to request this certificate.');
+                        abort_if(! $jobseekerIdentityHash, 422, 'Your resident profile must include your full name and date of birth to request this certificate.');
                         $claimed = DB::table('first_time_jobseeker_availments')->insertOrIgnore([
                             'identity_hash' => $jobseekerIdentityHash,
                             'claimed_at' => now(),
@@ -315,7 +331,7 @@ class ResidentController extends Controller
                 foreach ($requirements as $index => $requirement) {
                     $key = $requirement['key'] ?? $index;
                     $file = $request->file("requirements.{$key}");
-                    if (!$file) {
+                    if (! $file) {
                         continue;
                     }
 
@@ -374,6 +390,14 @@ class ResidentController extends Controller
         ], 201);
     }
 
+    private function activeDocumentRequestCount(int $residentId): int
+    {
+        return DocumentRequest::where('resident_id', $residentId)
+            ->whereNull('document_generated_at')
+            ->whereNotIn('status', ['rejected', 'completed'])
+            ->count();
+    }
+
     public function resubmitRequest(Request $request, DocumentRequest $documentRequest)
     {
         abort_unless($documentRequest->resident_id === $request->user()->id, 404);
@@ -402,9 +426,9 @@ class ResidentController extends Controller
         $existingRequirements = $documentRequest->details['requirements'] ?? [];
         $allFieldKeys = array_merge($applicantFields, array_keys($documentFields));
         $rules = [
-            'form_fields' => ['required', 'array:' . implode(',', $allFieldKeys)],
+            'form_fields' => ['required', 'array:'.implode(',', $allFieldKeys)],
             'notes' => ['nullable', 'string', 'max:2000'],
-            'requirements' => ['sometimes', 'array:' . implode(',', array_keys($requirements))],
+            'requirements' => ['sometimes', 'array:'.implode(',', array_keys($requirements))],
         ];
 
         if ($configuredType) {
@@ -412,7 +436,7 @@ class ResidentController extends Controller
                 $applicantFields,
                 $documentFields,
             );
-            $rules['form_fields'] = ['required', 'array:' . implode(',', $allFieldKeys)];
+            $rules['form_fields'] = ['required', 'array:'.implode(',', $allFieldKeys)];
             $rules = array_merge($rules, $this->configuredDocumentRules(
                 array_values(array_filter(
                     $configuredType->applicant_fields ?? [],
@@ -438,7 +462,7 @@ class ResidentController extends Controller
 
             foreach ($requirements as $key => $requirement) {
                 $fileRules = [
-                    $requirement['required'] && !isset($existingRequirements[$key]['path'])
+                    $requirement['required'] && ! isset($existingRequirements[$key]['path'])
                         ? 'required'
                         : 'sometimes',
                     'file',
@@ -476,11 +500,11 @@ class ResidentController extends Controller
         $replacedPaths = [];
 
         try {
-            DB::transaction(function () use ($request, $documentRequest, $requirements, $validated, $configuredType, &$details, &$storedPaths, &$replacedPaths) {
+            DB::transaction(function () use ($request, $documentRequest, $requirements, $configuredType, &$details, &$storedPaths, &$replacedPaths) {
                 foreach ($requirements as $index => $requirement) {
                     $key = $requirement['key'] ?? $index;
                     $file = $request->file("requirements.{$key}");
-                    if (!$file) {
+                    if (! $file) {
                         continue;
                     }
 
@@ -627,7 +651,7 @@ class ResidentController extends Controller
             return $ownedComplaint;
         });
 
-        if (!$updatedComplaint) {
+        if (! $updatedComplaint) {
             return response()->json([
                 'message' => 'Only resolved complaints can be resubmitted.',
             ], 409);
@@ -655,7 +679,7 @@ class ResidentController extends Controller
             preg_match_all($pattern, $report, $matches, PREG_OFFSET_CAPTURE);
 
             foreach ($matches[0] as [$indicator, $offset]) {
-                if (!$this->priorityIndicatorIsNegated($report, $offset)) {
+                if (! $this->priorityIndicatorIsNegated($report, $offset)) {
                     return 'urgent';
                 }
             }
@@ -676,7 +700,7 @@ class ResidentController extends Controller
             preg_match_all($pattern, $report, $matches, PREG_OFFSET_CAPTURE);
 
             foreach ($matches[0] as [$indicator, $offset]) {
-                if (!$this->priorityIndicatorIsNegated($report, $offset)) {
+                if (! $this->priorityIndicatorIsNegated($report, $offset)) {
                     return 'urgent';
                 }
             }
@@ -711,7 +735,7 @@ class ResidentController extends Controller
         $stream = $disk->readStream($path);
         abort_unless(is_resource($stream), 404);
         $extension = pathinfo($path, PATHINFO_EXTENSION);
-        $filename = 'complaint-evidence-' . $complaint->id . ($extension ? ".{$extension}" : '');
+        $filename = 'complaint-evidence-'.$complaint->id.($extension ? ".{$extension}" : '');
         $mimeType = mime_content_type($disk->path($path)) ?: 'application/octet-stream';
 
         return response()->streamDownload(function () use ($stream): void {
@@ -767,7 +791,7 @@ class ResidentController extends Controller
             ->oldest('created_at')
             ->oldest('id')
             ->get()
-            ->map(fn(ChatbotMessage $message) => [
+            ->map(fn (ChatbotMessage $message) => [
                 'id' => $message->id,
                 'question' => $message->question,
                 'sent_at' => $message->created_at?->toISOString(),
@@ -824,11 +848,11 @@ class ResidentController extends Controller
         }
 
         $faqs = ChatbotFaq::where('is_active', true)->get();
-        $faq = !empty($validated['faq_id'])
+        $faq = ! empty($validated['faq_id'])
             ? $faqs->firstWhere('id', (int) $validated['faq_id'])
             : null;
 
-        if (!$faq) {
+        if (! $faq) {
             $faq = $faqs->first(function (ChatbotFaq $candidate) use ($normalizedQuestion, $language) {
                 $candidateQuestion = $language === 'ceb'
                     ? ($candidate->question_ceb ?: $candidate->question)
@@ -838,7 +862,7 @@ class ResidentController extends Controller
             });
         }
 
-        if (!$faq) {
+        if (! $faq) {
             $queryTerms = $this->botSearchTerms($normalizedQuestion, $language);
             if (count($queryTerms) > 1) {
                 $match = $faqs->map(function (ChatbotFaq $candidate) use ($queryTerms, $language) {
@@ -914,7 +938,7 @@ class ResidentController extends Controller
                 'faq_category' => $validated['category'] ?? null,
                 'status' => 'pending',
             ]);
-            $reference = 'BOT-' . str_pad((string) $escalation->id, 5, '0', STR_PAD_LEFT);
+            $reference = 'BOT-'.str_pad((string) $escalation->id, 5, '0', STR_PAD_LEFT);
 
             ResidentNotification::create([
                 'resident_id' => $request->user()->id,
@@ -928,7 +952,7 @@ class ResidentController extends Controller
 
         return response()->json([
             'message' => 'Your question was recorded for barangay follow-up.',
-            'reference' => 'BOT-' . str_pad((string) $escalation->id, 5, '0', STR_PAD_LEFT),
+            'reference' => 'BOT-'.str_pad((string) $escalation->id, 5, '0', STR_PAD_LEFT),
             'escalation' => $escalation,
         ], 201);
     }
@@ -1016,14 +1040,14 @@ class ResidentController extends Controller
 
         abort_unless($chatbotEscalation->status === 'pending', 409);
 
-        DB::transaction(function () use ($request, $validated, $chatbotEscalation) {
+        DB::transaction(function () use ($validated, $chatbotEscalation) {
             $chatbotEscalation->update([
                 'staff_reply' => $validated['staff_reply'],
                 'status' => 'replied',
                 'replied_at' => now(),
             ]);
 
-            $reference = 'BOT-' . str_pad((string) $chatbotEscalation->id, 5, '0', STR_PAD_LEFT);
+            $reference = 'BOT-'.str_pad((string) $chatbotEscalation->id, 5, '0', STR_PAD_LEFT);
             ResidentNotification::create([
                 'resident_id' => $chatbotEscalation->resident_id,
                 'type' => 'bantaybot_escalation_replied',
@@ -1100,20 +1124,21 @@ class ResidentController extends Controller
             'requirements' => ['sometimes', 'array'],
         ];
         if ($keys) {
-            $rules['form_fields'][] = 'array:' . implode(',', $keys);
+            $rules['form_fields'][] = 'array:'.implode(',', $keys);
         }
         $requirementKeys = array_column($requirements, 'key');
         if ($requirementKeys) {
-            $rules['requirements'][] = 'array:' . implode(',', $requirementKeys);
+            $rules['requirements'][] = 'array:'.implode(',', $requirementKeys);
         }
 
         foreach ($fields as $field) {
             $key = $field['key'];
             $requiredWhen = $field['requiredWhen'] ?? null;
             $showWhen = $field['showWhen'] ?? null;
-            $isVisible = !$showWhen || $this->conditionMatches($showWhen, $formValues);
-            if (!$isVisible) {
+            $isVisible = ! $showWhen || $this->conditionMatches($showWhen, $formValues);
+            if (! $isVisible) {
                 $rules["form_fields.{$key}"] = ['prohibited'];
+
                 continue;
             }
             $isRequired = $requiredWhen
@@ -1122,7 +1147,7 @@ class ResidentController extends Controller
             $isRequired = $isRequired && $isVisible;
             $required = $isRequired ? 'required' : 'sometimes';
             $fieldRules = [$required];
-            if (!$isRequired) {
+            if (! $isRequired) {
                 $fieldRules[] = 'nullable';
             }
             switch ($field['type']) {
@@ -1166,17 +1191,18 @@ class ResidentController extends Controller
 
         foreach ($requirements as $requirement) {
             $key = $requirement['key'];
-            $isVisible = !isset($requirement['showWhen'])
+            $isVisible = ! isset($requirement['showWhen'])
                 || $this->conditionMatches($requirement['showWhen'], $formValues);
             $isConditionallyRequired = isset($requirement['requiredWhen'])
                 && $this->conditionMatches($requirement['requiredWhen'], $formValues);
-            if (!$isVisible) {
+            if (! $isVisible) {
                 $rules["requirements.{$key}"] = ['prohibited'];
+
                 continue;
             }
             $rules["requirements.{$key}"] = [
                 (($requirement['required'] ?? false) || $isConditionallyRequired)
-                    && (!$correction || empty($existingRequirements[$key]['path']))
+                    && (! $correction || empty($existingRequirements[$key]['path']))
                     ? 'required'
                     : 'sometimes',
                 'file',
@@ -1221,10 +1247,10 @@ class ResidentController extends Controller
 
         return array_values(array_filter(
             array_unique(array_map(
-                fn(string $term) => $synonyms[$term] ?? $term,
+                fn (string $term) => $synonyms[$term] ?? $term,
                 explode(' ', $this->normalizeBotText($text)),
             )),
-            fn(string $term) => strlen($term) > 2 && !in_array($term, $stopWords, true),
+            fn (string $term) => strlen($term) > 2 && ! in_array($term, $stopWords, true),
         ));
     }
 
@@ -1257,4 +1283,3 @@ class ResidentController extends Controller
         return response()->json(['message' => 'Profile updated.', 'user' => $request->user()->fresh()]);
     }
 }
-

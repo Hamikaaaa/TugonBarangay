@@ -85,7 +85,7 @@ const STATUS_META = {
   pending: { label: "Pending", className: "bg-[#FFF7E7] text-[#805900] ring-[#F1D9A8]", icon: Clock3 },
   under_review: { label: "Under Review", className: "bg-[#EEF4FF] text-[#2455D6] ring-[#D9E6FF]", icon: Search },
   processing: { label: "Processing", className: "bg-[#EAF1FF] text-[#123F70] ring-[#D9E6FF]", icon: Settings2 },
-  for_correction: { label: "For Correction", className: "bg-[#FFF0EE] text-[#C74444] ring-[#F2D4D0]", icon: CircleAlert },
+  for_correction: { label: "For Correction", className: "bg-violet-50 text-violet-700 ring-violet-200", icon: CircleAlert },
   ready_for_release: { label: "Ready for Release", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", icon: FileCheck2 },
   completed: { label: "Completed", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", icon: CheckCircle2 },
   rejected: { label: "Rejected", className: "bg-[#FFF0EE] text-[#C74444] ring-[#F2D4D0]", icon: CircleAlert },
@@ -525,7 +525,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
             <SummaryCard label="Pending Requests" value={counts.pending} icon={Clock3} color="amber" note="Awaiting initial review" onClick={() => quickFilter("pending")} />
             <SummaryCard label="Under Review" value={counts.under_review} icon={Search} color="blue" note="Requirements being checked" onClick={() => quickFilter("under_review")} />
             <SummaryCard label="Processing" value={counts.processing} icon={Settings2} color="blue" note="Document being prepared" onClick={() => quickFilter("processing")} />
-            <SummaryCard label="For Correction" value={counts.for_correction} icon={CircleAlert} color="red" note="Waiting for resident update" onClick={() => quickFilter("for_correction")} />
+            <SummaryCard label="For Correction" value={counts.for_correction} icon={CircleAlert} color="violet" note="Waiting for resident update" onClick={() => quickFilter("for_correction")} />
             <SummaryCard label="Ready for Release" value={counts.ready_for_release} icon={FileCheck2} color="emerald" note="Awaiting resident pickup" onClick={() => quickFilter("ready_for_release")} />
           </section>
 
