@@ -18,6 +18,7 @@ class Resident extends Account
         'address',
         'mobile_number',
         'email',
+        'mobile_verified_at',
         'password',
         'profile_photo',
         'verification_status',

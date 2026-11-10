@@ -358,7 +358,7 @@ function statusClass(status) {
   return {
     pending: "bg-amber-50 text-amber-700",
     processing: "bg-blue-50 text-blue-700",
-    for_correction: "bg-orange-50 text-orange-700",
+    for_correction: "bg-violet-50 text-violet-700",
     ready_for_release: "bg-emerald-50 text-emerald-700",
     completed: "bg-emerald-50 text-emerald-700",
     rejected: "bg-red-50 text-red-700",

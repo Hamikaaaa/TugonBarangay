@@ -98,6 +98,9 @@ function getFriendlyRequestError(error, document) {
   if (normalized.includes("already requested") || normalized.includes("one-time")) {
     return "This certificate has already been requested or issued for your account.";
   }
+  if (normalized.includes("up to 3 active document requests")) {
+    return "You already have 3 active document requests. Staff must generate a preview for one of them before you can submit another request.";
+  }
   if (normalized.includes("date_of_birth") || normalized.includes("date of birth")) {
     return "Enter a valid date of birth. It must be today or an earlier date.";
   }
@@ -664,6 +667,7 @@ function Documents({ requests, token, onRefresh, user }) {
     last_page: 1,
     total: 0,
   });
+  const [requestCapacity, setRequestCapacity] = useState(null);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [reloadHistory, setReloadHistory] = useState(0);
@@ -787,6 +791,11 @@ function Documents({ requests, token, onRefresh, user }) {
           current_page: result.current_page || 1,
           last_page: result.last_page || 1,
           total: result.total || 0,
+        });
+        setRequestCapacity({
+          active: result.active_request_count || 0,
+          limit: result.request_limit || 3,
+          available: result.available_request_slots ?? 3,
         });
       })
       .catch((error) => {
@@ -1009,6 +1018,17 @@ function Documents({ requests, token, onRefresh, user }) {
           : `Request submitted. Your Request ID is ${data.request.id}.`,
       );
       setMessageTone("success");
+      if (!editingRequest) {
+        setRequestCapacity((current) =>
+          current
+            ? {
+                ...current,
+                active: Math.min(current.limit, current.active + 1),
+                available: Math.max(0, current.available - 1),
+              }
+            : current,
+        );
+      }
       if (!editingRequest && selectedDocument.one_time) {
         setCatalogTypes((current) =>
           (current || []).map((type) => type.value === documentType
@@ -1069,6 +1089,9 @@ function Documents({ requests, token, onRefresh, user }) {
       setSubmitting(false);
     }
   };
+  const requestLimitReached =
+    requestCapacity !== null && requestCapacity.available === 0;
+
   return (
     <div className="space-y-6 pb-8">
       <header className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/70 px-6 py-7 shadow-[0_8px_28px_rgba(18,63,112,0.05)] backdrop-blur-sm sm:px-8">
@@ -1095,6 +1118,11 @@ function Documents({ requests, token, onRefresh, user }) {
                 Request official barangay documents and track every submission
                 in one place.
               </p>
+              {requestCapacity && (
+                <p className="mt-2 text-xs font-semibold text-[#55708F]">
+                  Active requests: {requestCapacity.active} of {requestCapacity.limit}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1111,6 +1139,26 @@ function Documents({ requests, token, onRefresh, user }) {
 
       {!showHistory && (
       <section className="rounded-[26px] border border-slate-200/80 bg-white/90 p-6 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm sm:p-8">
+        {!editingRequest && requestLimitReached ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+            <h2 className="text-lg font-bold text-amber-900">
+              You have reached the 3-request limit
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-amber-800">
+              You can submit another request after staff generate a preview for
+              one of your active requests. Check your request history for
+              updates.
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowHistory(true)}
+              className="mt-4 rounded-xl bg-[#2455D6] px-5 py-3 text-sm font-bold text-white transition hover:bg-[#1D46B5]"
+            >
+              View request history
+            </button>
+          </div>
+        ) : (
+        <>
         <div>
           <h2 className="text-lg font-bold tracking-tight text-[#172B4D]">
             {editingRequest
@@ -1627,6 +1675,8 @@ function Documents({ requests, token, onRefresh, user }) {
                 : "Submit request"}
           </button>
         </form>
+        </>
+        )}
       </section>
       )}
 

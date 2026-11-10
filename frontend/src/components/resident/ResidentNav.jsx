@@ -19,15 +19,18 @@ function ResidentNav({
   token,
   onNotificationsChanged,
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [markingAll, setMarkingAll] = useState(false);
   const [busyNotificationId, setBusyNotificationId] = useState(null);
   const [notificationError, setNotificationError] = useState("");
   const notificationsRef = useRef(null);
+  const profileMenuRef = useRef(null);
   const navigate = (nextView) => {
     onNavigate(nextView);
-    setMenuOpen(false);
+    setProfileMenuOpen(false);
+    setMobileMenuOpen(false);
   };
 
   useEffect(() => {
@@ -49,6 +52,26 @@ function ResidentNav({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [notificationsOpen]);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return undefined;
+
+    const handlePointerDown = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") setProfileMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [profileMenuOpen]);
 
   const markAllRead = async () => {
     setMarkingAll(true);
@@ -227,32 +250,53 @@ function ResidentNav({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate("profile")}
-            className="hidden items-center gap-2 rounded-full bg-white/70 py-1 pl-1 pr-4 ring-1 ring-slate-200 transition hover:bg-white hover:ring-[#2455D6] sm:flex"
-          >
-            <Avatar name={firstName} />
-            <span className="max-w-28 truncate text-sm font-semibold text-[#172B4D]">
-              {firstName}
-            </span>
-          </button>
+          <div className="relative hidden sm:block" ref={profileMenuRef}>
+            <button
+              type="button"
+              onClick={() => setProfileMenuOpen((open) => !open)}
+              className="flex items-center gap-2 rounded-full bg-white/70 py-1 pl-1 pr-4 ring-1 ring-slate-200 transition hover:bg-white hover:ring-[#2455D6]"
+              aria-label="User menu"
+              aria-expanded={profileMenuOpen}
+            >
+              <Avatar name={firstName} />
+              <span className="max-w-28 truncate text-sm font-semibold text-[#172B4D]">
+                {firstName}
+              </span>
+            </button>
+
+            {profileMenuOpen && (
+              <div className="absolute right-0 z-50 mt-2 w-48 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    navigate("profile");
+                  }}
+                  className="flex w-full items-center justify-start px-4 py-3 text-left text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                >
+                  My profile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setProfileMenuOpen(false);
+                    onLogout();
+                  }}
+                  className="flex w-full items-center justify-start px-4 py-3 text-left text-sm font-semibold text-[#E52B32] transition hover:bg-red-50"
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+          </div>
 
           <button
             type="button"
-            onClick={onLogout}
-            className="hidden rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 transition hover:bg-red-50 hover:text-[#E52B32] sm:block"
-          >
-            Sign out
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setMenuOpen((open) => !open)}
+            onClick={() => setMobileMenuOpen((open) => !open)}
             className="flex h-10 w-10 items-center justify-center rounded-full bg-white/70 text-[#123F70] ring-1 ring-slate-200 lg:hidden"
             aria-label="Open navigation"
           >
-            {menuOpen ? (
+            {mobileMenuOpen ? (
               <span className="text-2xl leading-none">×</span>
             ) : (
               <span className="text-xl">☰</span>
@@ -262,7 +306,7 @@ function ResidentNav({
       </div>
 
       {/* Mobile menu */}
-      {menuOpen && (
+      {mobileMenuOpen && (
         <nav
           className="border-t border-white/80 bg-white/90 px-5 py-3 backdrop-blur-xl lg:hidden"
           aria-label="Resident navigation"
@@ -277,17 +321,17 @@ function ResidentNav({
                 key={id}
                 label={label}
                 active={view === id}
-                onClick={() => navigate(id)}
+                onClick={() => {
+                  if (id === "profile") {
+                    setMobileMenuOpen(false);
+                    navigate("profile");
+                    return;
+                  }
+                  navigate(id);
+                }}
                 mobile
               />
             ))}
-            <button
-              type="button"
-              onClick={onLogout}
-              className="w-full rounded-full px-4 py-2.5 text-left text-sm font-semibold text-[#E52B32] transition hover:bg-red-50"
-            >
-              Sign out
-            </button>
           </div>
         </nav>
       )}
