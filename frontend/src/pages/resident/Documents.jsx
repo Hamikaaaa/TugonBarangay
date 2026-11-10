@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Camera, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import {
   inputClass,
@@ -641,6 +641,7 @@ function Documents({ requests, token, onRefresh, user }) {
   const [formFields, setFormFields] = useState(() =>
     getApplicantDefaults(user),
   );
+  const [previousUser, setPreviousUser] = useState(user);
   const [notes, setNotes] = useState("");
   const [editingRequest, setEditingRequest] = useState(null);
   const [requirementFiles, setRequirementFiles] = useState({});
@@ -666,9 +667,17 @@ function Documents({ requests, token, onRefresh, user }) {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [reloadHistory, setReloadHistory] = useState(0);
+  const [showHistory, setShowHistory] = useState(false);
   const formRef = useRef(null);
   const photoPreviewUrlRef = useRef(null);
   const cameraRequestRef = useRef(0);
+
+  if (user !== previousUser) {
+    setPreviousUser(user);
+    if (!documentType && !editingRequest) {
+      setFormFields(getApplicantDefaults(user));
+    }
+  }
 
   useEffect(() => () => {
     cameraStream?.getTracks().forEach((track) => track.stop());
@@ -739,18 +748,12 @@ function Documents({ requests, token, onRefresh, user }) {
   };
 
   useEffect(() => {
-    if (!documentType && !editingRequest) {
-      setFormFields(getApplicantDefaults(user));
-    }
-  }, [documentType, editingRequest, user]);
-
-  useEffect(() => {
     let active = true;
     residentApi("/resident/document-types", token)
       .then((result) => {
         if (active) setCatalogTypes(result.data || []);
       })
-      .catch((error) => {
+      .catch(() => {
         if (active) {
           setCatalogTypes([]);
           setMessage("We couldn't load document types. Refresh the page and try again.");
@@ -797,6 +800,21 @@ function Documents({ requests, token, onRefresh, user }) {
       active = false;
     };
   }, [historyPage, reloadHistory, token]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        setReloadHistory((current) => current + 1);
+      }
+    };
+    const timer = window.setInterval(refresh, 5000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
+
   const availableDocuments = useMemo(() => {
     if (catalogTypes === null) return DOCUMENT_TYPES.map(mapConfiguredDocumentType);
     return catalogTypes.map(mapConfiguredDocumentType);
@@ -877,7 +895,10 @@ function Documents({ requests, token, onRefresh, user }) {
     clearRequirementFiles();
     setMessage("");
     setMessageTone("info");
-    formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setShowHistory(false);
+    requestAnimationFrame(() =>
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   };
 
   const cancelCorrection = () => {
@@ -1079,18 +1100,16 @@ function Documents({ requests, token, onRefresh, user }) {
 
           <button
             type="button"
-            onClick={() =>
-              document
-                .getElementById("new-document-request")
-                ?.scrollIntoView({ behavior: "smooth" })
-            }
-            className={primaryButtonClass}
+            onClick={() => setShowHistory((current) => !current)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-70"
           >
-            Start a document request <span aria-hidden="true">→</span>
+            {showHistory ? "New document request" : "Documents history"}{" "}
+            <span aria-hidden="true">→</span>
           </button>
         </div>
       </header>
 
+      {!showHistory && (
       <section className="rounded-[26px] border border-slate-200/80 bg-white/90 p-6 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm sm:p-8">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-[#172B4D]">
@@ -1599,7 +1618,7 @@ function Documents({ requests, token, onRefresh, user }) {
           <button
             type="submit"
             disabled={submitting || oneTimeAlreadyRequested}
-            className={`${primaryButtonClass} mt-5`}
+            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {submitting
               ? "Submitting..."
@@ -1609,7 +1628,9 @@ function Documents({ requests, token, onRefresh, user }) {
           </button>
         </form>
       </section>
+      )}
 
+      {showHistory && (
       <section className="overflow-hidden rounded-[26px] border border-slate-200/80 bg-white/90 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm">
         <div className="border-b border-slate-100 px-6 py-5 sm:px-8">
           <h2 className="text-lg font-bold tracking-tight text-[#172B4D]">
@@ -1710,6 +1731,7 @@ function Documents({ requests, token, onRefresh, user }) {
           </div>
         )}
       </section>
+      )}
       {permitCertificationOpen && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/55 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPermitCertificationOpen(false); }}>
         <section role="dialog" aria-modal="true" aria-labelledby="permit-certification-title" className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl">
           <div className="flex items-start justify-between gap-4">

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { ArrowDown, ArrowUp, GripVertical } from "lucide-react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
@@ -81,25 +82,19 @@ const clampLayout = (layout = {}) => ({
 
 function DocumentTypes() {
   const { token } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const { documentTypeId } = useParams();
+  const isNewRoute = location.pathname === "/admin/document-types/new";
+  const isEditorRoute = isNewRoute || Boolean(documentTypeId);
   const [types, setTypes] = useState([]);
-  const [draft, setDraft] = useState(null);
+  const [draft, setDraft] = useState(() => isNewRoute ? blankType() : null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState(location.state?.notice || "");
   const [deletingTypeId, setDeletingTypeId] = useState(null);
   const [downloadingTemplateId, setDownloadingTemplateId] = useState(null);
-  const [editorOpenCount, setEditorOpenCount] = useState(0);
-  const editorRef = useRef(null);
-
-  useEffect(() => {
-    if (!editorOpenCount) return undefined;
-    const frame = window.requestAnimationFrame(() => {
-      editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [editorOpenCount]);
-
   const loadTypes = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -109,21 +104,93 @@ function DocumentTypes() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to load document types.");
-      setTypes(payload.data || []);
+      const loadedTypes = payload.data || [];
+      setTypes(loadedTypes);
+      return loadedTypes;
     } catch (loadError) {
       setError(loadError.message);
+      return null;
     } finally {
       setLoading(false);
     }
   }, [token]);
 
   useEffect(() => {
-    if (token) {
-      // Fetching the catalog synchronizes this page with the admin API.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      loadTypes();
-    }
-  }, [loadTypes, token]);
+    if (!token) return undefined;
+    let active = true;
+    // Loading the catalog synchronizes this route with the admin API.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadTypes().then(async (loadedTypes) => {
+      if (!active || !loadedTypes) return;
+      if (isNewRoute) return;
+      if (!documentTypeId) {
+        setDraft(null);
+        return;
+      }
+
+      const type = loadedTypes.find(
+        (item) => String(item.id) === documentTypeId,
+      );
+      if (!type) {
+        setDraft(null);
+        setError("The requested document type could not be found.");
+        return;
+      }
+
+      const savedWording = type.template?.trim() || "";
+      const useBusinessDefault =
+        type.value === "Business Permit" &&
+        isLegacyBusinessClearanceWording(savedWording);
+      setError("");
+      setDraft({
+        ...type,
+        fee: String(type.fee),
+        template:
+          savedWording && !useBusinessDefault
+            ? savedWording
+            : defaultDocumentWording(type),
+        document_layout: clampLayout(type.document_layout),
+        templateFile: null,
+        templatePreviewUrl: "",
+        remove_template: false,
+        applicant_fields: (type.applicant_fields || []).map((field) => ({
+          enabled: true,
+          ...field,
+        })),
+        fields: (type.fields || []).map((field) => ({
+          enabled: true,
+          ...field,
+        })),
+        requirements: (type.requirements || []).map((requirement) => ({
+          enabled: true,
+          ...requirement,
+        })),
+      });
+
+      if (!type.uploaded_template_name || !/\.jpe?g$/i.test(type.uploaded_template_name)) return;
+      try {
+        const response = await fetch(`${API_URL}/admin/document-types/${type.id}/template`, {
+          headers: authHeaders(token),
+        });
+        if (!response.ok) return;
+        const previewUrl = URL.createObjectURL(await response.blob());
+        if (active) {
+          setDraft((current) =>
+            current?.id === type.id
+              ? { ...current, templatePreviewUrl: previewUrl }
+              : current,
+          );
+        } else {
+          URL.revokeObjectURL(previewUrl);
+        }
+      } catch {
+        // The current image remains available through the download button if preview fails.
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [documentTypeId, isNewRoute, loadTypes, token]);
 
   const saveType = async (event) => {
     event.preventDefault();
@@ -176,10 +243,14 @@ function DocumentTypes() {
           throw new Error(templateResult.message || "The document type was saved, but its uploaded template could not be updated.");
         }
       }
-      setNotice(result.message || "Document type saved.");
+      const successMessage = result.message || "Document type saved.";
       if (draft.templatePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(draft.templatePreviewUrl);
       setDraft(null);
-      await loadTypes();
+      setNotice(successMessage);
+      navigate("/admin/document-types", {
+        replace: true,
+        state: { notice: successMessage },
+      });
     } catch (saveError) {
       setError(saveError.message);
     } finally {
@@ -290,34 +361,8 @@ function DocumentTypes() {
     }));
   };
 
-  const openEditType = async (type) => {
-    if (draft?.templatePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(draft.templatePreviewUrl);
-    const savedWording = type.template?.trim() || "";
-    const useBusinessDefault = type.value === "Business Permit" && isLegacyBusinessClearanceWording(savedWording);
-    setDraft({
-      ...type,
-      fee: String(type.fee),
-      template: savedWording && !useBusinessDefault ? savedWording : defaultDocumentWording(type),
-      document_layout: clampLayout(type.document_layout),
-      templateFile: null,
-      templatePreviewUrl: "",
-      remove_template: false,
-      applicant_fields: (type.applicant_fields || []).map((field) => ({ enabled: true, ...field })),
-      fields: (type.fields || []).map((field) => ({ enabled: true, ...field })),
-      requirements: (type.requirements || []).map((requirement) => ({ enabled: true, ...requirement })),
-    });
-    setEditorOpenCount((count) => count + 1);
-    if (!type.uploaded_template_name || !/\.jpe?g$/i.test(type.uploaded_template_name)) return;
-    try {
-      const response = await fetch(`${API_URL}/admin/document-types/${type.id}/template`, {
-        headers: authHeaders(token),
-      });
-      if (!response.ok) return;
-      const previewUrl = URL.createObjectURL(await response.blob());
-      setDraft((current) => current?.id === type.id ? { ...current, templatePreviewUrl: previewUrl } : current);
-    } catch {
-      // The current image remains available through the download button if preview fails.
-    }
+  const openEditType = (type) => {
+    navigate(`/admin/document-types/${type.id}/edit`);
   };
 
   const chooseTemplate = (file) => {
@@ -334,7 +379,7 @@ function DocumentTypes() {
 
   const closeEditor = () => {
     if (draft?.templatePreviewUrl?.startsWith("blob:")) URL.revokeObjectURL(draft.templatePreviewUrl);
-    setDraft(null);
+    navigate("/admin/document-types");
   };
 
   const removeEntry = (section, index) => {
@@ -367,35 +412,62 @@ function DocumentTypes() {
   };
 
   return (
-    <AdminLayout title="Document Types">
+    <AdminLayout title={isEditorRoute ? (isNewRoute ? "Add Document Type" : "Edit Document Type") : "Document Types"}>
       <section className="space-y-6 pt-6">
-        <AdminPageHeader
-          eyebrow="Resident service configuration"
-          title="Document types"
-          description="Add and update the documents residents can request, the details they must provide, and the design used for each document."
-        >
-          <button
-            type="button"
-            onClick={() => {
-              setDraft(blankType());
-              setEditorOpenCount((count) => count + 1);
-            }}
-            className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#2455D6] shadow-lg transition hover:-translate-y-0.5 hover:bg-[#EEF4FF] hover:shadow-xl active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            Add document type
-          </button>
-        </AdminPageHeader>
+        {isEditorRoute ? (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-[#41658A]">
+                  Resident service configuration
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-[#172B4D]">
+                  {isNewRoute ? "Add document type" : "Edit document type"}
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Set what residents see and what they need to submit.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeEditor}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:border-[#2455D6] hover:text-[#2455D6]"
+              >
+                Back to document types
+              </button>
+            </div>
+            {error && <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+          </>
+        ) : (
+          <>
+            <AdminPageHeader
+              actionsOnly
+              eyebrow="Resident service configuration"
+              title="Document types"
+              description="Add and update the documents residents can request, the details they must provide, and the design used for each document."
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setDraft(blankType());
+                  setError("");
+                  navigate("/admin/document-types/new");
+                }}
+                className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#2455D6] shadow-lg transition hover:-translate-y-0.5 hover:bg-[#EEF4FF] hover:shadow-xl active:translate-y-0 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Add document type
+              </button>
+            </AdminPageHeader>
+            <DocumentRequestTabs />
+            {error && <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
+            {notice && <p role="status" className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
+          </>
+        )}
 
-        <DocumentRequestTabs />
-
-        {error && <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
-        {notice && <p role="status" className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{notice}</p>}
-
-        {draft && (
-          <form ref={editorRef} onSubmit={saveType} className="scroll-mt-6 space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+        {isEditorRoute && (draft ? (
+          <form onSubmit={saveType} className="space-y-6 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
             <div className="flex items-center justify-between">
-              <div><h3 className="text-lg font-bold text-[#172B4D]">{draft.id ? "Edit document" : "Add a document"}</h3><p className="mt-1 text-sm text-slate-500">Set what residents see and what they need to submit.</p></div>
-              <button type="button" onClick={closeEditor} className="rounded-lg px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800">Close</button>
+              <div><h3 className="text-lg font-bold text-[#172B4D]">{draft.id ? "Edit document" : "Add a document"}</h3><p className="mt-1 text-sm text-slate-500">Configure the document request form and printed document.</p></div>
             </div>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <label className="sm:col-span-2">
@@ -599,9 +671,19 @@ function DocumentTypes() {
             </div>
             <button disabled={saving} className={primaryButtonClass}>{saving ? "Saving..." : "Save document"}</button>
           </form>
-        )}
+        ) : loading ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+            Loading document details...
+          </div>
+        ) : error ? (
+          <p role="alert" className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+        ) : (
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
+            Preparing document editor...
+          </div>
+        ))}
 
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {!isEditorRoute && <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           {loading ? <p className="p-6 text-sm text-slate-500">Loading document types...</p> : (
             <div className="divide-y divide-slate-100">
               {types.map((type) => (
@@ -639,7 +721,7 @@ function DocumentTypes() {
               ))}
             </div>
           )}
-        </div>
+        </div>}
       </section>
     </AdminLayout>
   );

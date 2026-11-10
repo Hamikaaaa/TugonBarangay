@@ -782,7 +782,7 @@ function Register() {
                   key="continue-button"
                   type="button"
                   onClick={nextStep}
-                  className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#2455D6] via-[#4A3FD1] to-[#E52F3F] text-sm font-bold text-white shadow-md transition hover:brightness-105"
+                  className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-[#2455D6] text-sm font-bold text-white shadow-md transition hover:bg-[#1D46B5]"
                 >
                   Continue
                   <span className="text-lg">→</span>
@@ -792,7 +792,7 @@ function Register() {
                   key="submit-button"
                   type="submit"
                   disabled={loading}
-                  className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#2455D6] via-[#4A3FD1] to-[#E52F3F] text-sm font-bold text-white shadow-md transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex h-14 flex-1 items-center justify-center gap-2 rounded-xl bg-[#2455D6] text-sm font-bold text-white shadow-md transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {loading ? "Creating account..." : "Create Account"}
                   {!loading && <span className="text-lg">→</span>}

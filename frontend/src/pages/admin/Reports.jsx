@@ -32,10 +32,12 @@ function Reports() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadReport = useCallback(async () => {
+  const loadReport = useCallback(async (silent = false) => {
     if (!token) return;
-    setLoading(true);
-    setError("");
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
     try {
       const response = await fetch(
         `${API_URL}/admin/reports?months=${months}&from=${fromDate}&to=${toDate}`,
@@ -63,6 +65,18 @@ function Reports() {
     // Refresh the cross-service summary when the selected period changes.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadReport();
+  }, [loadReport]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") loadReport(true);
+    };
+    const timer = window.setInterval(refresh, 5000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
   }, [loadReport]);
 
   const totals = useMemo(() => {
@@ -249,6 +263,7 @@ function Reports() {
     <AdminLayout title="Reports and Analytics">
       <section className="space-y-6 pt-6">
         <AdminPageHeader
+          actionsOnly
           eyebrow="Barangay-wide insights"
           title="Reports and analytics"
           description="Compare service activity and community growth over time. This report combines monthly trends across the portal instead of repeating individual service work queues."
@@ -313,7 +328,7 @@ function Reports() {
             <span>{error}</span>
             <button
               type="button"
-              onClick={loadReport}
+              onClick={() => loadReport()}
               className="font-bold underline"
             >
               Try again
@@ -742,7 +757,7 @@ function CategoryBreakdown({ categories }) {
           </div>
           <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[#2455D6] via-[#7138E8] to-[#E52B32]"
+              className="h-full rounded-full bg-[#2455D6]"
               style={{ width: `${(item.count / maxCount) * 100}%` }}
             />
           </div>

@@ -148,7 +148,7 @@ function Residents() {
       else if (isVerification) loadPendingResidents(true);
       else loadRegistry(true);
     };
-    const timer = window.setInterval(refresh, 10000);
+    const timer = window.setInterval(refresh, 5000);
     return () => window.clearInterval(timer);
   }, [isDashboard, isAccounts, isVerification, loadAccounts, loadDashboardStats, loadPendingResidents, loadRegistry]);
 
@@ -257,6 +257,7 @@ function Residents() {
     >
       <div className="space-y-6 pt-6">
         <AdminPageHeader
+          actionsOnly
           eyebrow={`Residents & Registry · ${isDashboard ? "Overview" : isVerification ? "Account review" : "Official records"}`}
           title={
             isDashboard
@@ -272,22 +273,7 @@ function Residents() {
                 ? "Review resident registrations against barangay registry records and approve eligible accounts."
                 : isAccounts ? "Review every registered account, its login activity, and disable inactive accounts." : "Browse the official resident records used to validate resident account registrations."
           }
-        >
-          <div className="flex min-h-12 items-center gap-3 rounded-xl border border-white/20 bg-white/10 px-4 py-2">
-            <span className="text-2xl font-bold leading-none text-white">
-              {loading
-                ? "…"
-                : isDashboard
-                  ? (dashboardStats?.pending_total ?? 0)
-                  : isVerification
-                    ? pendingResidents.length
-                    : isAccounts ? accountTotal.toLocaleString() : total.toLocaleString()}
-            </span>
-            <span className="text-xs font-semibold leading-4 text-white/75">
-              {isDashboard || isVerification ? "awaiting review" : isAccounts ? "resident accounts" : "registry records"}
-            </span>
-          </div>
-        </AdminPageHeader>
+        />
 
         <nav
           aria-label="Residents and registry sections"
@@ -374,7 +360,7 @@ function Residents() {
             <form onSubmit={applySearch} className="flex flex-wrap gap-2 border-b border-slate-100 p-4">
               <label className="sr-only" htmlFor="resident-account-search">Search resident accounts</label>
               <input id="resident-account-search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search by name or email" className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm" />
-              <button type="submit" className="rounded-lg bg-[#2455D6] px-4 py-2 text-sm font-semibold text-white">Search</button>
+              <button type="submit" className="rounded-lg bg-[#2455D6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1D46B5]">Search</button>
             </form>
             <p className="border-b border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               Accounts with matching names are grouped together. Accounts without a recorded login appear first in each group so admins can review and disable extra accounts.
@@ -474,11 +460,11 @@ function Residents() {
                     className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10"
                   />
                 </label>
-                <button type="submit" className={`${primaryButtonClass} px-4`}>
+                <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5]">
                   Search
                 </button>
               </form>
-              <button type="button" onClick={() => { setRegistryFormErrors({}); setShowRegistryForm(true); }} className={`${primaryButtonClass} inline-flex items-center gap-2 px-4`}>
+              <button type="button" onClick={() => { setRegistryFormErrors({}); setShowRegistryForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5]">
                 <UserPlus className="h-4 w-4" aria-hidden="true" /> Add resident
               </button>
               </div>
@@ -906,7 +892,7 @@ function ResidentsRegistryDashboard({
             <button
               type="button"
               onClick={onOpenVerification}
-              className={`${primaryButtonClass} min-h-11 px-4 py-2.5`}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5]"
             >
               Review accounts
               <ArrowRight className="h-4 w-4" aria-hidden="true" />

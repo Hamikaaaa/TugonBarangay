@@ -180,12 +180,13 @@ function SummonForm() {
       <style>{`@media print { @page { margin: 0.25in; } body * { visibility: hidden !important; } #barangay-summons, #barangay-summons * { visibility: visible !important; } #barangay-summons { position: absolute; inset: 0; width: 100%; margin: 0; border: 0; border-radius: 0; box-shadow: none; print-color-adjust: exact; -webkit-print-color-adjust: exact; break-inside: avoid; } #barangay-summons .summons-template-image { display: block !important; } .no-print { display: none !important; } }`}</style>
       <div className="mx-auto w-full max-w-[1600px] space-y-6 px-5 pb-10 pt-6 sm:px-7 lg:px-9">
         <AdminPageHeader
+          actionsOnly
           eyebrow="Katarungang Pambarangay"
           title="Notice to Appear"
           description="Prepare a barangay mediation notice for the parties involved in a reported dispute."
         >
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={() => navigate("/staff/blotter")} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/30 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20">
+            <button type="button" onClick={() => navigate("/staff/blotter")} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 transition hover:bg-slate-50">
               <X size={15} aria-hidden="true" /> Cancel
             </button>
             <button type="button" onClick={() => window.print()} disabled={!canPrint || templateLoading} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#2455D6] shadow-sm transition hover:bg-[#EEF4FF] disabled:cursor-not-allowed disabled:opacity-50">

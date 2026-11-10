@@ -1,18 +1,31 @@
-function AdminPageHeader({ eyebrow, title, description, children, footer }) {
+function AdminPageHeader({
+  eyebrow,
+  title,
+  description,
+  children,
+  footer,
+  actionsOnly = false,
+}) {
+  if (actionsOnly) {
+    return children ? (
+      <div className="flex flex-wrap justify-end gap-2">{children}</div>
+    ) : null;
+  }
+
   return (
-    <header className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#123F70] via-[#2455D6] to-[#7138E8] p-6 text-white shadow-lg shadow-blue-900/10 sm:p-8">
+    <header className="overflow-hidden rounded-3xl border border-slate-200 bg-white p-6 text-[#172B4D] shadow-lg shadow-blue-900/10 sm:p-8">
       <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
         <div className="min-w-0 flex-1 xl:max-w-3xl">
           {eyebrow && (
-            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/70">
+            <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#2455D6]">
               {eyebrow}
             </p>
           )}
-          <h2 className="mt-2 text-3xl font-bold tracking-tight text-white">
+          <h2 className="mt-2 text-3xl font-bold tracking-tight text-[#172B4D]">
             {title}
           </h2>
           {description && (
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-white/80">
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
               {description}
             </p>
           )}
@@ -24,7 +37,7 @@ function AdminPageHeader({ eyebrow, title, description, children, footer }) {
         )}
       </div>
       {footer && (
-        <div className="mt-5 border-t border-white/15 pt-4 text-xs font-medium text-white/75">
+        <div className="mt-5 border-t border-slate-200 pt-4 text-xs font-medium text-slate-500">
           {footer}
         </div>
       )}

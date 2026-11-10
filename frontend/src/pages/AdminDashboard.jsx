@@ -16,10 +16,12 @@ function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (silent = false) => {
     if (!token) return;
-    setLoading(true);
-    setError("");
+    if (!silent) {
+      setLoading(true);
+      setError("");
+    }
 
     try {
       const headers = authHeaders(token);
@@ -58,6 +60,18 @@ function AdminDashboard() {
     loadDashboard();
   }, [loadDashboard]);
 
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") loadDashboard(true);
+    };
+    const timer = window.setInterval(refresh, 5000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadDashboard]);
+
   const cards = [
     { label: "Document requests", value: overview?.total, note: "All submitted requests", icon: ClipboardList, tone: "blue" },
     { label: "Active requests", value: overview?.active, note: "Currently being processed", icon: Activity, tone: "amber" },
@@ -75,6 +89,7 @@ function AdminDashboard() {
     <AdminLayout title="Dashboard">
       <section className="space-y-6 pt-6">
         <AdminPageHeader
+          actionsOnly
           eyebrow="Admin overview"
           title="Dashboard"
           description="A read-only overview of resident registrations, document requests, and recent processing activity."
@@ -83,7 +98,7 @@ function AdminDashboard() {
         {error && (
           <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
             <span>{error}</span>
-            <button type="button" onClick={loadDashboard} className="font-bold underline">Try again</button>
+            <button type="button" onClick={() => loadDashboard()} className="font-bold underline">Try again</button>
           </div>
         )}
 

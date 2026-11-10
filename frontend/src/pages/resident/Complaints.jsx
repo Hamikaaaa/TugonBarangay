@@ -9,13 +9,13 @@ import {
   FileText,
   MapPin,
   Paperclip,
+  RotateCcw,
   Upload,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   downloadResidentFile,
   inputClass,
-  primaryButtonClass,
   residentApi,
 } from "../../services/residentApi";
 import { shouldPromptForFeatureFeedback } from "../../services/featureFeedback";
@@ -48,7 +48,7 @@ function formatDate(value) {
 function StatusBadge({ status }) {
   const normalized = (status || "pending").replaceAll("_", " ").toLowerCase();
   const resolved = ["resolved", "closed"].includes(normalized);
-  const processing = ["under review", "in progress"].includes(normalized);
+  const processing = ["under review", "in progress", "resubmitted"].includes(normalized);
   const rejected = normalized === "rejected";
   const classes = resolved
     ? "bg-[#ECF9F1] text-[#21864A]"
@@ -62,7 +62,7 @@ function StatusBadge({ status }) {
     <span
       className={`w-fit rounded-full px-3 py-1.5 text-xs font-bold capitalize ${classes}`}
     >
-      {normalized}
+      {normalized === "resolved" ? "resolved · closed" : normalized}
     </span>
   );
 }
@@ -80,11 +80,39 @@ function Detail({ label, value, wide = false }) {
   );
 }
 
-function ComplaintRow({ complaint, token }) {
+function ComplaintRow({ complaint, token, onResubmitted }) {
   const [expanded, setExpanded] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState("");
+  const [resubmitted, setResubmitted] = useState(false);
+  const [resubmitting, setResubmitting] = useState(false);
+  const [resubmitMessage, setResubmitMessage] = useState("");
+  const [resubmitError, setResubmitError] = useState("");
   const detailsId = `complaint-${complaint.id}-details`;
+
+  const status = complaint.status === "resolved" && resubmitted
+    ? "resubmitted"
+    : complaint.status;
+
+  const resubmitComplaint = async () => {
+    setResubmitting(true);
+    setResubmitMessage("");
+    setResubmitError("");
+    try {
+      const result = await residentApi(
+        `/resident/complaints/${complaint.id}/resubmit`,
+        token,
+        { method: "PATCH" },
+      );
+      setResubmitted(result.complaint.status === "resubmitted");
+      setResubmitMessage(result.message);
+      onResubmitted();
+    } catch (error) {
+      setResubmitError(error.message);
+    } finally {
+      setResubmitting(false);
+    }
+  };
 
   const downloadEvidence = async () => {
     setDownloading(true);
@@ -130,9 +158,28 @@ function ComplaintRow({ complaint, token }) {
               Priority review
             </span>
           )}
-          <StatusBadge status={complaint.status} />
+          <StatusBadge status={status} />
         </div>
       </div>
+
+      {status === "resolved" && (
+        <div className="mt-4 rounded-xl border border-[#F1D9A8] bg-[#FFF7E7] p-4">
+          <p className="text-sm leading-6 text-[#805900]">
+            If the issue is still unresolved, resubmit this complaint for staff review.
+          </p>
+          <button
+            type="button"
+            onClick={resubmitComplaint}
+            disabled={resubmitting}
+            className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#2455D6] px-4 text-sm font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-wait disabled:opacity-60"
+          >
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            {resubmitting ? "Resubmitting..." : "Resubmit complaint"}
+          </button>
+        </div>
+      )}
+      {resubmitMessage && <p role="status" className="mt-3 text-sm font-semibold text-[#21864A]">{resubmitMessage}</p>}
+      {resubmitError && <p role="alert" className="mt-3 text-sm font-semibold text-red-700">{resubmitError}</p>}
 
       <button
         type="button"
@@ -255,6 +302,7 @@ function Complaints({
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState("");
   const [reloadHistory, setReloadHistory] = useState(0);
+  const [showHistory, setShowHistory] = useState(false);
   const fileInput = useRef(null);
 
   useEffect(() => {
@@ -305,6 +353,20 @@ function Complaints({
       active = false;
     };
   }, [historyPage, reloadHistory, token]);
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") {
+        setReloadHistory((current) => current + 1);
+      }
+    };
+    const timer = window.setInterval(refresh, 5000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
 
   const updateField = (event) => {
     const { name, value } = event.target;
@@ -386,6 +448,11 @@ function Complaints({
     setReloadHistory((current) => current + 1);
   };
 
+  const refreshHistory = () => {
+    setHistoryLoading(true);
+    setReloadHistory((current) => current + 1);
+  };
+
   return (
     <div className="space-y-6 pb-8">
       <header className="relative overflow-hidden rounded-[28px] border border-white/70 bg-white/70 px-6 py-7 shadow-[0_8px_28px_rgba(18,63,112,0.05)] backdrop-blur-sm sm:px-8">
@@ -416,20 +483,21 @@ function Complaints({
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <button
               type="button"
-              onClick={() =>
-                document
-                  .getElementById("new-complaint")
-                  ?.scrollIntoView({ behavior: "smooth" })
-              }
-              className={primaryButtonClass}
+              onClick={() => setShowHistory((current) => !current)}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-70"
             >
-              <CircleAlert className="h-4 w-4" aria-hidden="true" />
-              Start a complaint
+              {showHistory ? (
+                <CircleAlert className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <FileText className="h-4 w-4" aria-hidden="true" />
+              )}
+              {showHistory ? "New complaint" : "Complaint history"}
             </button>
           </div>
         </div>
       </header>
 
+      {!showHistory && (
       <section className="rounded-[26px] border border-slate-200/80 bg-white/90 p-6 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm sm:p-8">
         <div>
           <h2 className="text-lg font-bold tracking-tight text-[#172B4D]">
@@ -448,18 +516,10 @@ function Complaints({
             />
             <p>
               Your account must be verified before you can submit a complaint.
-              You can still view your complaint history below.
+              Use the Complaint history button to view your submissions.
             </p>
           </div>
         )}
-
-        <div className="mt-5 rounded-xl bg-[#F3F6FB] px-4 py-3 text-sm leading-6 text-[#41658A]">
-          Reports describing an ongoing serious disturbance, escalating
-          conflict, threats, or violence are flagged for priority staff review.
-          This flag does not replace contacting emergency services when someone
-          is in immediate danger.
-        </div>
-
         <form id="new-complaint" className="mt-6" onSubmit={submitComplaint}>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
@@ -666,13 +726,15 @@ function Complaints({
           <button
             type="submit"
             disabled={submitting || !verified}
-            className={`${primaryButtonClass} mt-5`}
+            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {submitting ? "Submitting complaint..." : "Submit complaint"}
           </button>
         </form>
       </section>
+      )}
 
+      {showHistory && (
       <section
         id="complaint-history"
         className="scroll-mt-24 overflow-hidden rounded-[26px] border border-slate-200/80 bg-white/90 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm"
@@ -736,6 +798,7 @@ function Complaints({
                   key={complaint.id}
                   complaint={complaint}
                   token={token}
+                  onResubmitted={refreshHistory}
                 />
               ))}
             </div>
@@ -775,6 +838,7 @@ function Complaints({
           </>
         )}
       </section>
+      )}
       {feedbackOpen && (
         <FeedbackPrompt
           token={token}

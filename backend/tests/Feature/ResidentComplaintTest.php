@@ -45,6 +45,68 @@ class ResidentComplaintTest extends TestCase
             ->assertOk();
     }
 
+    public function test_verified_resident_can_resubmit_a_resolved_complaint(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        $complaint = Complaint::create([
+            'resident_id' => $resident->id,
+            'category' => 'Road and Public',
+            'subject' => 'Blocked drainage',
+            'description' => 'The drainage remains blocked after the reported work.',
+            'status' => 'resolved',
+            'resolved_at' => now(),
+        ]);
+        Sanctum::actingAs($resident);
+
+        $this->patchJson("/api/resident/complaints/{$complaint->id}/resubmit")
+            ->assertOk()
+            ->assertJsonPath('complaint.status', 'resubmitted');
+
+        $this->assertDatabaseHas('complaints', [
+            'id' => $complaint->id,
+            'status' => 'resubmitted',
+            'resolved_at' => null,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'resident_id' => $resident->id,
+            'type' => 'complaint_status_updated',
+            'title' => 'Complaint CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT).' resubmitted',
+        ]);
+    }
+
+    public function test_resident_cannot_resubmit_another_residents_complaint(): void
+    {
+        $owner = Resident::factory()->create(['verification_status' => 'verified']);
+        $otherResident = Resident::factory()->create(['verification_status' => 'verified']);
+        $complaint = Complaint::create([
+            'resident_id' => $owner->id,
+            'category' => 'Public safety',
+            'subject' => 'Street light is out',
+            'description' => 'The street light is not working.',
+            'status' => 'resolved',
+        ]);
+        Sanctum::actingAs($otherResident);
+
+        $this->patchJson("/api/resident/complaints/{$complaint->id}/resubmit")
+            ->assertNotFound();
+    }
+
+    public function test_resident_cannot_resubmit_a_complaint_that_is_not_resolved(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        $complaint = Complaint::create([
+            'resident_id' => $resident->id,
+            'category' => 'Public safety',
+            'subject' => 'Street light is out',
+            'description' => 'The street light is not working.',
+            'status' => 'in_progress',
+        ]);
+        Sanctum::actingAs($resident);
+
+        $this->patchJson("/api/resident/complaints/{$complaint->id}/resubmit")
+            ->assertStatus(409);
+    }
+
     public function test_resident_cannot_download_another_residents_complaint_evidence(): void
     {
         Storage::fake('local');

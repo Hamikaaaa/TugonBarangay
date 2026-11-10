@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import StaffLayout from "./StaffLayout";
 import useComplaintStaffNavigation from "../../hooks/useComplaintStaffNavigation";
 import { primaryButtonClass } from "../../utils/buttonStyles";
@@ -204,13 +203,7 @@ function BlotterManagement() {
       onNavigate={navigate}
     >
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
-        <AdminPageHeader
-          eyebrow="Community records"
-          title="Barangay blotter"
-          description="Record and track incidents reported by residents of the barangay."
-        />
-
-        <section className="mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Blotter summary">
+        <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Blotter summary">
           {summaryCards.map((card) => {
             const Icon = card.icon;
             return (
@@ -263,7 +256,7 @@ function BlotterManagement() {
                 </span>
               )}
             </div>
-            <button type="button" onClick={() => setFormOpen(true)} className={primaryButtonClass}>
+            <button type="button" onClick={() => setFormOpen(true)} className={`${primaryButtonClass} !bg-none !bg-[#2455D6]`}>
               <Plus size={15} aria-hidden="true" />
               New blotter entry
             </button>

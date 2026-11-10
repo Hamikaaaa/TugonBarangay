@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  Archive,
   AlertCircle,
   CheckCircle2,
   ChevronDown,
@@ -16,7 +15,6 @@ import {
   Search,
   ShieldAlert,
   X,
-  XCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
@@ -27,14 +25,23 @@ import { primaryButtonClass } from "../../utils/buttonStyles";
 const API_URL = "http://127.0.0.1:8000/api";
 const STATUS_LABELS = {
   pending: "Pending",
+  resubmitted: "Resubmitted",
   in_progress: "In progress",
   resolved: "Resolved",
+  // Keep labels for records created before the three-stage workflow.
   rejected: "Rejected",
   closed: "Closed",
 };
-const PROGRESS_STAGES = ["pending", "in_progress", "resolved", "closed"];
+const FILTER_STATUS_LABELS = {
+  pending: STATUS_LABELS.pending,
+  resubmitted: STATUS_LABELS.resubmitted,
+  in_progress: STATUS_LABELS.in_progress,
+  resolved: STATUS_LABELS.resolved,
+};
+const PROGRESS_STAGES = ["pending", "in_progress", "resolved"];
 const STATUS_COLORS = {
   pending: "#D89A35",
+  resubmitted: "#8B5CF6",
   in_progress: "#3976C5",
   resolved: "#258A72",
   rejected: "#C44F5B",
@@ -42,23 +49,20 @@ const STATUS_COLORS = {
 };
 const TIMELINE_TONES = {
   pending: "#D89A35",
+  resubmitted: "#8B5CF6",
   in_progress: "#3976C5",
   resolved: "#258A72",
   rejected: "#C44F5B",
   closed: "#7A8290",
 };
 const TRANSITIONS = {
-  pending: ["in_progress", "resolved", "rejected"],
-  in_progress: ["resolved", "rejected"],
-  resolved: ["closed"],
-  rejected: [],
-  closed: [],
+  pending: ["in_progress"],
+  in_progress: ["resolved"],
+  resolved: [],
 };
 const TRANSITION_ICONS = {
   in_progress: LoaderCircle,
   resolved: CheckCircle2,
-  rejected: XCircle,
-  closed: Archive,
 };
 
 function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = false, complaintId = null, analyticsOnly = false, listOnly = false, hideAdminHeader = false, blotterHistory = false }) {
@@ -143,7 +147,9 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
       }
     };
     loadBlotterSummary();
-    const timer = window.setInterval(loadBlotterSummary, 30000);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") loadBlotterSummary();
+    }, 5000);
     return () => {
       active = false;
       window.clearInterval(timer);
@@ -239,11 +245,16 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
   }, [loadComplaints]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === "visible" && !submitting && !selected && !complaintId) loadComplaints();
-    }, 10000);
-    return () => window.clearInterval(timer);
-  }, [complaintId, loadComplaints, selected, submitting]);
+    const refresh = () => {
+      if (document.visibilityState === "visible" && !submitting && !complaintId) loadComplaints();
+    };
+    const timer = window.setInterval(refresh, 5000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [complaintId, loadComplaints, submitting]);
 
   useEffect(() => {
     if (!isAdmin || !selected) return undefined;
@@ -366,12 +377,14 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
     <div className={isAdmin ? "w-full space-y-6" : "mx-auto w-full max-w-[1600px] space-y-6 px-5 pb-10 pt-6 sm:px-7 lg:px-9"}>
       {isAdmin && !listOnly && !hideAdminHeader ? (
         <AdminPageHeader
+          actionsOnly
           eyebrow="Complaint oversight"
           title={categoryFilter ? `${categoryFilter} overview` : "Complaint queue"}
           description="Review resident complaints, document actions, and track resolutions."
         />
       ) : !isAdmin && !hideAdminHeader ? (
         <AdminPageHeader
+          actionsOnly
           eyebrow="Complaint management"
           title={staffPageTitle}
           description={
@@ -561,7 +574,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
             <select value={statusFilter} onChange={(event) => { setLoading(true); setStatusFilter(event.target.value); setPage(1); }} aria-label="Filter by complaint status" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]">
               <option value="all">All statuses</option>
               <option value="blotter">Blotter history</option>
-              {Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              {Object.entries(FILTER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           )}
           {!isBlotterView && (
@@ -815,7 +828,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                 ) : (
                   <ol className="mt-4 space-y-3">
                     {PROGRESS_STAGES.map((status, index) => {
-                      const currentIndex = PROGRESS_STAGES.indexOf(selected.status);
+                      const currentIndex = PROGRESS_STAGES.indexOf(selected.status === "closed" ? "resolved" : selected.status);
                       const complete = currentIndex >= index;
                       const current = selected.status === status;
                       return (
@@ -868,7 +881,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
             </label>
             <label className="mt-3 block text-xs font-semibold text-slate-600">
               Resolution / outcome details
-              <textarea value={resolutionDetails} onChange={(event) => setResolutionDetails(event.target.value)} maxLength={5000} rows={3} className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-xs outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" placeholder="Required when resolving or rejecting..." />
+              <textarea value={resolutionDetails} onChange={(event) => setResolutionDetails(event.target.value)} maxLength={5000} rows={3} className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-xs outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" placeholder="Required to resolve and close the complaint..." />
             </label>
             <div className="mt-4 flex flex-wrap gap-2">
               {(TRANSITIONS[selected.status] || []).map((status) => {
@@ -877,20 +890,18 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                   <button
                     key={status}
                     type="button"
-                    disabled={submitting || (["resolved", "rejected"].includes(status) && !resolutionDetails.trim())}
+                    disabled={submitting || (status === "resolved" && !resolutionDetails.trim())}
                     onClick={() => updateComplaint(status)}
-                    className={status === "rejected"
-                      ? "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-xs font-bold text-red-700 transition hover:border-red-300 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                      : isAdmin
-                        ? primaryButtonClass
-                        : "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1948B8] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-50"}
+                    className={isAdmin
+                      ? primaryButtonClass
+                      : "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1948B8] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-50"}
                   >
                     {submitting ? (
                       <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
                     ) : (
                       <Icon size={14} aria-hidden="true" />
                     )}
-                    {submitting ? "Saving..." : STATUS_LABELS[status]}
+                    {submitting ? "Saving..." : status === "resolved" ? "Resolve and close" : STATUS_LABELS[status]}
                   </button>
                 );
               })}

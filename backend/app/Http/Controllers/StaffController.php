@@ -745,8 +745,34 @@ class StaffController extends Controller
 
     public function showComplaint(Complaint $complaint)
     {
+        DB::transaction(function () use ($complaint): void {
+            $complaint = Complaint::query()
+                ->lockForUpdate()
+                ->findOrFail($complaint->id);
+
+            if (!in_array($complaint->status, ['pending', 'resubmitted'], true)) {
+                return;
+            }
+
+            $wasResubmitted = $complaint->status === 'resubmitted';
+            $complaint->status = 'in_progress';
+            $complaint->resolved_at = null;
+            $complaint->status_updated_at = now();
+            $complaint->save();
+
+            $caseReference = 'CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT);
+            ResidentNotification::create([
+                'resident_id' => $complaint->resident_id,
+                'type' => 'complaint_status_updated',
+                'title' => "Update on complaint {$caseReference}",
+                'message' => $wasResubmitted
+                    ? "Your resubmitted complaint {$caseReference} is now In progress and under review."
+                    : "The status of your complaint {$caseReference} is now In progress.",
+            ]);
+        });
+
         return response()->json([
-            'data' => $complaint->load('user'),
+            'data' => $complaint->fresh()->load('user'),
         ]);
     }
 
@@ -767,43 +793,45 @@ class StaffController extends Controller
     public function updateComplaintStatus(Request $request, Complaint $complaint)
     {
         $validated = $request->validate([
-            'status' => ['required', 'string', 'in:pending,in_progress,resolved,rejected,closed'],
+            'status' => ['required', 'string', 'in:pending,in_progress,resolved'],
             'staff_remarks' => ['nullable', 'string', 'max:2000'],
             'resolution_details' => ['nullable', 'string', 'max:5000'],
         ]);
 
-        $transitions = [
-            'pending' => ['in_progress', 'resolved', 'rejected'],
-            'in_progress' => ['resolved', 'rejected'],
-            'resolved' => ['closed'],
-            'rejected' => [],
-            'closed' => [],
-        ];
-        if (!in_array($validated['status'], $transitions[$complaint->status] ?? [], true)) {
+        if ($validated['status'] === 'resolved' && blank($validated['resolution_details'] ?? null)) {
             return response()->json([
-                'message' => 'This complaint status transition is not allowed.',
-            ], 409);
-        }
-
-        if (in_array($validated['status'], ['resolved', 'rejected'], true) && blank($validated['resolution_details'] ?? null)) {
-            return response()->json([
-                'message' => 'Resolution details are required to resolve or reject a complaint.',
+                'message' => 'Resolution details are required to resolve and close a complaint.',
             ], 422);
         }
 
-        DB::transaction(function () use ($complaint, $validated): void {
+        $transitioned = DB::transaction(function () use ($complaint, $validated): bool {
+            $complaint = Complaint::query()
+                ->lockForUpdate()
+                ->findOrFail($complaint->id);
+            $transitions = [
+                'pending' => ['in_progress'],
+                'resubmitted' => ['in_progress'],
+                'in_progress' => ['resolved'],
+                'resolved' => [],
+            ];
+            if (!in_array($validated['status'], $transitions[$complaint->status] ?? [], true)) {
+                return false;
+            }
+
             $complaint->status = $validated['status'];
             $complaint->status_updated_at = now();
             $complaint->staff_remarks = $validated['staff_remarks'] ?? null;
             $complaint->resolution_details = $validated['resolution_details'] ?? null;
-            $complaint->resolved_at = in_array($validated['status'], ['resolved', 'closed'], true)
+            $complaint->resolved_at = $validated['status'] === 'resolved'
                 ? ($complaint->resolved_at ?? now())
                 : null;
             $complaint->save();
 
             $statusLabel = str_replace('_', ' ', ucfirst($validated['status']));
             $caseReference = 'CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT);
-            $message = "The status of your complaint {$caseReference} is now {$statusLabel}.";
+            $message = $validated['status'] === 'resolved'
+                ? "The status of your complaint {$caseReference} is now Resolved and closed."
+                : "The status of your complaint {$caseReference} is now {$statusLabel}.";
             if (filled($validated['staff_remarks'] ?? null)) {
                 $message .= "\n\nStaff remarks: ".$validated['staff_remarks'];
             }
@@ -817,7 +845,15 @@ class StaffController extends Controller
                 'title' => "Update on complaint {$caseReference}",
                 'message' => $message,
             ]);
+
+            return true;
         });
+
+        if (!$transitioned) {
+            return response()->json([
+                'message' => 'This complaint status transition is not allowed.',
+            ], 409);
+        }
 
         return response()->json([
             'message' => 'Complaint updated successfully.',

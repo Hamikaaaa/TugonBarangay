@@ -31,6 +31,8 @@ Route::middleware(['auth:sanctum', 'role:resident'])->prefix('resident')->group(
     Route::get('/complaints', [ResidentController::class, 'complaints']);
     Route::post('/complaints', [ResidentController::class, 'storeComplaint'])
         ->middleware('verified');
+    Route::patch('/complaints/{complaint}/resubmit', [ResidentController::class, 'resubmitComplaint'])
+        ->middleware('verified');
     Route::get('/complaints/{complaint}/evidence', [ResidentController::class, 'downloadComplaintEvidence']);
     Route::get('/notifications', [ResidentController::class, 'notifications']);
     Route::patch('/notifications/read-all', [ResidentController::class, 'markAllNotificationsRead']);

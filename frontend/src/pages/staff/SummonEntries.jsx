@@ -79,7 +79,7 @@ export default function SummonEntries() {
   return (
     <StaffLayout title="Summon Entries" navigationItems={navigationItems} activePath="/staff/blotter/summons" onNavigate={navigate}>
       <div className="mx-auto w-full max-w-[1600px] space-y-6 px-5 pb-10 pt-6 sm:px-7 lg:px-9">
-        <AdminPageHeader eyebrow="Katarungang Pambarangay" title="Summon Entries" description="Saved barangay mediation notices prepared by complaint staff.">
+        <AdminPageHeader actionsOnly eyebrow="Katarungang Pambarangay" title="Summon Entries" description="Saved barangay mediation notices prepared by complaint staff.">
           <div className="flex gap-2">
             <button type="button" onClick={() => navigate("/staff/blotter/summon")} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-bold text-[#2455D6] shadow-sm hover:bg-[#EEF4FF]"><Plus size={15} /> Prepare notice</button>
           </div>

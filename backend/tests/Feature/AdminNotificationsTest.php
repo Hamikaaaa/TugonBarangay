@@ -48,7 +48,7 @@ class AdminNotificationsTest extends TestCase
             ->assertJsonFragment([
                 'type' => 'resident_verification',
                 'count' => 1,
-                'path' => '/admin/dashboard',
+                'path' => '/admin/residents/verification',
             ])
             ->assertJsonFragment([
                 'type' => 'document_requests',
@@ -99,5 +99,32 @@ class AdminNotificationsTest extends TestCase
 
         Sanctum::actingAs($resident);
         $this->getJson('/api/admin/notifications')->assertForbidden();
+    }
+
+    public function test_admin_notifications_include_resubmitted_complaints_as_open_work(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        Complaint::create([
+            'resident_id' => $resident->id,
+            'category' => 'Road issue',
+            'subject' => 'Pothole still present',
+            'description' => 'The pothole remains after the initial resolution.',
+            'status' => 'resubmitted',
+        ]);
+        Sanctum::actingAs(Admin::create([
+            'name' => 'Resubmitted Notifications Admin',
+            'email' => 'resubmitted-notifications-admin@example.com',
+            'password' => 'password123',
+        ]));
+
+        $this->getJson('/api/admin/notifications')
+            ->assertOk()
+            ->assertJsonPath('total', 1)
+            ->assertJsonFragment([
+                'type' => 'complaints',
+                'title' => 'Open complaints',
+                'count' => 1,
+                'path' => '/admin/complaints',
+            ]);
     }
 }

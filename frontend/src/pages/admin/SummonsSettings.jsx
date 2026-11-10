@@ -28,12 +28,11 @@ function SummonsSettings() {
   const [notice, setNotice] = useState("");
   const [templateFile, setTemplateFile] = useState(null);
   const [removeTemplate, setRemoveTemplate] = useState(false);
-  const [templateUrl, setTemplateUrl] = useState("");
+  const [templatePreview, setTemplatePreview] = useState(null);
   const [templateError, setTemplateError] = useState("");
 
   useEffect(() => {
     if (!token || !settings.uploaded_template_name || !/\.jpe?g$/i.test(settings.uploaded_template_name)) {
-      setTemplateUrl("");
       return undefined;
     }
     let active = true;
@@ -46,9 +45,9 @@ function SummonsSettings() {
       .then((blob) => {
         if (!active) return;
         objectUrl = URL.createObjectURL(blob);
-        setTemplateUrl(objectUrl);
+        setTemplatePreview({ name: settings.uploaded_template_name, url: objectUrl });
       })
-      .catch(() => setTemplateUrl(""));
+      .catch(() => setTemplateError("Unable to load the paper design preview."));
     return () => {
       active = false;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
@@ -199,12 +198,12 @@ function SummonsSettings() {
                 {(settings.uploaded_template_name || templateFile) && <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-semibold text-red-600"><input type="checkbox" checked={removeTemplate} onChange={(event) => { setRemoveTemplate(event.target.checked); if (event.target.checked) setTemplateFile(null); }} /><Trash2 size={14} /> Remove template</label>}
               </div>
               {templateError && <p role="alert" className="mt-2 text-xs font-semibold text-red-600">{templateError}</p>}
-              {(templateFile?.previewUrl || templateUrl) && !removeTemplate && <img src={templateFile?.previewUrl || templateUrl} alt="Summons paper template preview" className="mt-4 max-h-72 max-w-full rounded-lg border border-slate-200 bg-white object-contain" />}
+              {(templateFile?.previewUrl || (templatePreview?.name === settings.uploaded_template_name ? templatePreview.url : "")) && !removeTemplate && <img src={templateFile?.previewUrl || templatePreview.url} alt="Summons paper template preview" className="mt-4 max-h-72 max-w-full rounded-lg border border-slate-200 bg-white object-contain" />}
             </section>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7">
             <p className="text-xs text-slate-500">Changes apply to future notices prepared by complaint staff.</p>
-            <button type="submit" disabled={loading || saving} className={`${primaryButtonClass} inline-flex items-center gap-2 px-5 disabled:cursor-wait disabled:opacity-50`}>
+            <button type="submit" disabled={loading || saving} className={`${primaryButtonClass} !bg-none !bg-[#2455D6] inline-flex items-center gap-2 px-5 disabled:cursor-wait disabled:opacity-50`}>
               <Save size={15} aria-hidden="true" /> {saving ? "Saving..." : "Save settings"}
             </button>
           </div>

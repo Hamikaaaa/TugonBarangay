@@ -10,6 +10,8 @@ import {
   LogOut,
   Menu,
   MessageSquareWarning,
+  ChevronLeft,
+  ChevronRight,
   Star,
   Users,
   UserCog,
@@ -88,10 +90,13 @@ const isActiveNavigationItem = (item, pathname) =>
   Boolean(getActiveChild(item, pathname));
 
 function AdminLayout({ children, title }) {
-  const { user, token, logout } = useAuth();
+  const { token, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => window.localStorage.getItem("adminSidebarCollapsed") === "true",
+  );
   const activeItem = navigation.find((item) =>
     isActiveNavigationItem(item, location.pathname),
   );
@@ -105,6 +110,17 @@ function AdminLayout({ children, title }) {
     setSidebarOpen(false);
   };
 
+  const toggleSidebarCollapsed = () => {
+    setSidebarCollapsed((collapsed) => {
+      const nextCollapsed = !collapsed;
+      window.localStorage.setItem(
+        "adminSidebarCollapsed",
+        String(nextCollapsed),
+      );
+      return nextCollapsed;
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#F5F7FB] text-[#172B4D]">
       <AdminSidebar
@@ -114,11 +130,16 @@ function AdminLayout({ children, title }) {
         onLogout={logout}
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapsed}
       />
 
-      <main className="min-w-0 bg-[#F5F7FB] lg:pl-72">
+      <main
+        className={`min-w-0 bg-[#F5F7FB] transition-[padding] duration-300 ${
+          sidebarCollapsed ? "lg:pl-20" : "lg:pl-72"
+        }`}
+      >
         <AdminHeader
-          user={user}
           token={token}
           activePanel={activePanel}
           onMenu={() => setSidebarOpen(true)}
@@ -133,7 +154,16 @@ function AdminLayout({ children, title }) {
   );
 }
 
-function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) {
+function AdminSidebar({
+  token,
+  activePath,
+  onSelect,
+  onLogout,
+  open,
+  onClose,
+  collapsed,
+  onToggleCollapse,
+}) {
   const [openMenuOverride, setOpenMenuOverride] = useState(null);
   const [pendingEscalationCount, setPendingEscalationCount] = useState(null);
   const [pendingVerificationCount, setPendingVerificationCount] = useState(null);
@@ -204,26 +234,52 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
       )}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,88vw)] flex-col overflow-hidden bg-[#123F70] px-5 py-6 text-white shadow-2xl transition-transform duration-300 lg:w-72 lg:translate-x-0 lg:shadow-none ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-[min(19rem,88vw)] flex-col overflow-hidden bg-[#123F70] px-5 py-6 text-white shadow-2xl transition-[width,transform,padding] duration-300 lg:translate-x-0 lg:shadow-none ${
+          collapsed ? "lg:w-20 lg:px-3" : "lg:w-72"
+        } ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <div className="shrink-0 border-b border-white/10 px-2 pb-5">
-          <div className="flex items-center gap-3">
+        <div
+          className={`shrink-0 border-b border-white/10 pb-5 ${
+            collapsed ? "px-0" : "px-2"
+          }`}
+        >
+          <div
+            className={`flex items-center gap-3 ${
+              collapsed ? "flex-col" : ""
+            }`}
+          >
             <img
               src="/images/logo-white-version.png"
               alt="TugonBarangay"
-              className="h-12 w-12 object-contain"
+              className="h-10 w-10 shrink-0 object-contain"
             />
 
-            <div>
+            {!collapsed && <div className="min-w-0">
               <h1 className="text-lg font-bold tracking-tight">
                 Tugon<span className="text-[#FF6B6B]">Barangay</span>
               </h1>
               <p className="mt-0.5 text-[9px] font-medium uppercase tracking-[0.15em] text-blue-100/70">
                 Admin Portal
               </p>
-            </div>
+            </div>}
+
+            <button
+              type="button"
+              onClick={onToggleCollapse}
+              className={`hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-blue-100 transition hover:bg-white/10 hover:text-white lg:flex ${
+                collapsed ? "" : "ml-auto"
+              }`}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              {collapsed ? (
+                <ChevronRight size={18} aria-hidden="true" />
+              ) : (
+                <ChevronLeft size={18} aria-hidden="true" />
+              )}
+            </button>
 
             <button
               type="button"
@@ -237,9 +293,11 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
         </div>
 
         <div className="sidebar-scroll mt-7 min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-200/60">
-            Main Menu
-          </p>
+          {!collapsed && (
+            <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-blue-200/60">
+              Main Menu
+            </p>
+          )}
 
           <nav className="space-y-1">
             {navigation.map((item) =>
@@ -250,9 +308,14 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
                 >
                   <button
                     type="button"
+                    title={collapsed ? item.label : undefined}
                     aria-haspopup="true"
                     aria-expanded={openMenu === item.label}
                     onClick={() => {
+                      if (collapsed) {
+                        onSelect(item.path);
+                        return;
+                      }
                       if (openMenu !== item.label) onSelect(item.path);
                       setOpenMenuOverride((current) =>
                         (current ?? activeNavigationItem?.label) === item.label
@@ -260,7 +323,9 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
                           : item.label,
                       );
                     }}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium ${
+                    className={`flex w-full items-center gap-3 rounded-xl py-3 text-left text-sm font-medium ${
+                      collapsed ? "justify-center px-0" : "px-3"
+                    } ${
                       isActiveItem(item)
                         ? "bg-white text-[#123F70] shadow-lg"
                         : "text-blue-100"
@@ -278,26 +343,26 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
                         return <Icon size={15} aria-hidden="true" />;
                       })()}
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                    {item.label === "Chatbot" && pendingEscalationCount > 0 && (
+                    {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+                    {!collapsed && item.label === "Chatbot" && pendingEscalationCount > 0 && (
                       <span aria-label={`${pendingEscalationCount} pending escalated questions`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                         {pendingEscalationCount > 99 ? "99+" : pendingEscalationCount}
                       </span>
                     )}
-                    {item.label === "Residents & Registry" && pendingVerificationCount > 0 && (
+                    {!collapsed && item.label === "Residents & Registry" && pendingVerificationCount > 0 && (
                       <span aria-label={`${pendingVerificationCount} accounts pending verification`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                         {pendingVerificationCount > 99 ? "99+" : pendingVerificationCount}
                       </span>
                     )}
-                    <ChevronDown
+                    {!collapsed && <ChevronDown
                       size={15}
                       className={`transition-transform ${openMenu === item.label ? "rotate-180" : ""}`}
                       aria-hidden="true"
-                    />
+                    />}
                   </button>
                   <div
                     className={`ml-5 mt-1 space-y-1 border-l border-white/15 pl-3 ${
-                      openMenu === item.label ? "block" : "hidden"
+                      !collapsed && openMenu === item.label ? "block" : "hidden"
                     }`}
                   >
                     {item.children.map((child) => (
@@ -331,7 +396,10 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
                   key={item.path}
                   type="button"
                   onClick={() => onSelect(item.path)}
-                  className={`group flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-medium ${
+                  title={collapsed ? item.label : undefined}
+                  className={`group flex w-full items-center gap-3 rounded-xl py-3 text-left text-sm font-medium ${
+                    collapsed ? "justify-center px-0" : "px-3"
+                  } ${
                     activePath === item.path
                       ? "bg-white text-[#123F70] shadow-lg"
                       : "text-blue-100"
@@ -349,8 +417,8 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
                       return <Icon size={15} aria-hidden="true" />;
                     })()}
                   </span>
-                  <span className="truncate">{item.label}</span>
-                  {activePath === item.path && (
+                  {!collapsed && <span className="truncate">{item.label}</span>}
+                  {!collapsed && activePath === item.path && (
                     <span className="ml-auto h-1.5 w-1.5 rounded-full bg-[#EF4444]" />
                   )}
                 </button>
@@ -360,29 +428,37 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
         </div>
 
         <div className="mt-auto shrink-0 pt-6">
-          <div className="mb-4 rounded-xl bg-white/10 p-3">
+          <div
+            className={`mb-4 rounded-xl bg-white/10 ${
+              collapsed ? "flex justify-center p-2" : "p-3"
+            }`}
+            title={collapsed ? "Admin User — Barangay Administrator" : undefined}
+          >
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-bold text-[#2455D6]">
                 {userInitial()}
               </div>
-              <div className="min-w-0">
+              {!collapsed && <div className="min-w-0">
                 <p className="truncate text-xs font-bold">Admin User</p>
                 <p className="truncate text-[10px] text-blue-100/60">
                   Barangay Administrator
                 </p>
-              </div>
+              </div>}
             </div>
           </div>
 
           <button
             type="button"
             onClick={onLogout}
-            className="flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-semibold text-red-100"
+            title={collapsed ? "Logout" : undefined}
+            className={`flex w-full items-center gap-3 rounded-xl py-3 text-left text-sm font-semibold text-red-100 ${
+              collapsed ? "justify-center px-0" : "px-3"
+            }`}
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-400/10">
               <LogOut size={15} aria-hidden="true" />
             </span>
-            Logout
+            {!collapsed && "Logout"}
           </button>
         </div>
       </aside>
@@ -394,7 +470,7 @@ function AdminSidebar({ token, activePath, onSelect, onLogout, open, onClose }) 
   }
 }
 
-function AdminHeader({ user, token, activePanel, onMenu, onNavigate }) {
+function AdminHeader({ token, activePanel, onMenu, onNavigate }) {
   const [currentDateTime, setCurrentDateTime] = useState(() => new Date());
   const [notifications, setNotifications] = useState([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -425,10 +501,15 @@ function AdminHeader({ user, token, activePanel, onMenu, onNavigate }) {
 
   useEffect(() => {
     const initialLoad = window.setTimeout(loadNotifications, 0);
-    const refresh = window.setInterval(loadNotifications, 10000);
+    const refresh = () => {
+      if (document.visibilityState === "visible") loadNotifications();
+    };
+    const timer = window.setInterval(refresh, 5000);
+    document.addEventListener("visibilitychange", refresh);
     return () => {
       window.clearTimeout(initialLoad);
-      window.clearInterval(refresh);
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
     };
   }, [loadNotifications]);
 
@@ -523,18 +604,6 @@ function AdminHeader({ user, token, activePanel, onMenu, onNavigate }) {
             )}
           </div>
 
-          <div className="hidden text-right sm:block">
-            <p className="max-w-[150px] truncate text-sm font-bold text-[#172B4D]">
-              {user?.name || "Administrator"}
-            </p>
-            <p className="mt-0.5 text-[10px] capitalize text-slate-400">
-              {user?.role || "admin"}
-            </p>
-          </div>
-
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-[#2455D6] via-[#7138E8] to-[#E52B32] text-sm font-bold text-white shadow-md">
-            {user?.name?.charAt(0)?.toUpperCase() || "A"}
-          </div>
         </div>
       </div>
     </header>

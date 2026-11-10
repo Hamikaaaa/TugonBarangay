@@ -207,7 +207,7 @@ function openDocumentPrintDialog() {
   }
 }
 
-function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
+function DocumentPreviewModal({ request, onClose, onSave, readOnly = false, fullPage = false }) {
   const { token, user } = useAuth();
   const [editing, setEditing] = useState(false);
   const [fields, setFields] = useState(() => {
@@ -338,15 +338,14 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
   }, [
     checkingPrintEligibility,
     clearanceHasInvolvedPersonMatch,
-    fields.derogatory_reviewed,
-    fields.derogatory_status,
+    fields,
     isClearance,
     isGoodMoral,
     paperDesignLoading,
     requiresCaseReview,
-    request?.id,
+    request,
     token,
-    user?.role,
+    user,
   ]);
 
   useEffect(() => {
@@ -563,16 +562,21 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
         "--paper-height": paperHeight,
         "--document-paper-size": printPageSize,
       }}
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-[#071B3D]/70 p-3 backdrop-blur-sm sm:p-6"
+      className={fullPage
+        ? "min-h-screen w-full bg-slate-100"
+        : "fixed inset-0 z-[100] flex items-center justify-center bg-[#071B3D]/70 p-3 backdrop-blur-sm sm:p-6"}
       role="dialog"
       aria-modal="true"
       aria-label={`${label} preview`}
-      onMouseDown={(event) => {
+      onMouseDown={fullPage ? undefined : (event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <style>{`@media print { @page { size: ${printPageSize}; margin: 0; } }`}</style>
-      <div className="flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+      <div className={fullPage
+        ? "flex h-screen min-h-screen w-full flex-col overflow-hidden bg-white"
+        : "flex max-h-[94vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"}
+      >
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#2455D6]">
@@ -754,7 +758,7 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
           </p>
         )}
 
-        <div className="document-preview-scroll overflow-auto bg-slate-100 p-4 sm:p-8">
+        <div className="document-preview-scroll min-h-0 flex-1 overflow-auto bg-slate-100 p-4 sm:p-8">
           {paperDesignLoading ? (
             <div
               className="document-paper mx-auto flex items-center justify-center border border-slate-200 bg-white text-sm font-semibold text-slate-500 shadow-sm"
@@ -773,7 +777,6 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false }) {
               applicantPhoto={applicantPhotoUrl}
               label={label}
               residentName={residentName}
-              issueDate={issueDate}
               formattedDate={formattedDate}
               fields={fields}
               issuedDay={ordinalDay}
@@ -1840,7 +1843,6 @@ function DocumentPaper({
   applicantPhoto,
   label,
   residentName,
-  issueDate,
   formattedDate,
   fields,
   issuedDay,

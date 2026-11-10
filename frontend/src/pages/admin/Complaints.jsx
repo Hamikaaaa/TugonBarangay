@@ -198,6 +198,7 @@ function Complaints() {
     <AdminLayout title="Complaints">
       <section className="space-y-6 pt-6">
         <AdminPageHeader
+          actionsOnly
           eyebrow="Complaint oversight"
           title={sectionContent.title}
           description={sectionContent.description}
