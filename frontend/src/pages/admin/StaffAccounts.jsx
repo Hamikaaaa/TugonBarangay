@@ -143,13 +143,13 @@ function StaffAccounts() {
   ).length;
 
   return (
-    <AdminLayout title="Staff Accounts">
+    <AdminLayout title="User Management">
       <div className="space-y-6 pt-6">
         <AdminPageHeader
           actionsOnly
-          eyebrow="Staff administration · Access management"
-          title="Staff accounts"
-          description="Create and manage Document Request Officers and Complaint Management Officers. Disabled accounts cannot sign in or continue using active sessions."
+          eyebrow="User management · Access control"
+          title="User management"
+          description="Manage staff accounts and resident accounts from one place. Disabled accounts cannot sign in or continue using active sessions."
         >
           <button
             type="button"

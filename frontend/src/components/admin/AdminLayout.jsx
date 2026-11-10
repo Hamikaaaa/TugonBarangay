@@ -23,14 +23,21 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 const navigation = [
   { label: "Dashboard", path: "/admin/dashboard", icon: LayoutDashboard },
-  { label: "Staff Accounts", path: "/admin/staff-accounts", icon: UserCog },
+  {
+    label: "User Management",
+    path: "/admin/staff-accounts",
+    icon: UserCog,
+    children: [
+      { label: "Staff Accounts", path: "/admin/staff-accounts" },
+      { label: "Residents Account", path: "/admin/user-management/residents" },
+    ],
+  },
   {
     label: "Residents & Registry",
     path: "/admin/residents",
     icon: Users,
     children: [
       { label: "Dashboard", path: "/admin/residents/dashboard" },
-      { label: "Residents Account", path: "/admin/residents/accounts" },
       { label: "Barangay Masterlist", path: "/admin/residents" },
       { label: "Account Verification", path: "/admin/residents/verification" },
     ],
