@@ -27,7 +27,7 @@ function Residents() {
   const navigate = useNavigate();
   const isDashboard = location.pathname.endsWith("/dashboard");
   const isVerification = location.pathname.endsWith("/verification");
-  const isAccounts = location.pathname.endsWith("/accounts");
+  const isAccounts = location.pathname === "/admin/user-management/residents";
   const [registry, setRegistry] = useState([]);
   const [pendingResidents, setPendingResidents] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -248,82 +248,106 @@ function Residents() {
   return (
     <AdminLayout
       title={
-        isDashboard
+        isAccounts
+          ? "User Management"
+          : isDashboard
           ? "Residents & Registry Dashboard"
           : isVerification
             ? "Account Verification"
-            : isAccounts ? "Resident Accounts" : "Barangay Masterlist"
+            : "Barangay Masterlist"
       }
     >
       <div className="space-y-6 pt-6">
         <AdminPageHeader
           actionsOnly
-          eyebrow={`Residents & Registry · ${isDashboard ? "Overview" : isVerification ? "Account review" : "Official records"}`}
+          eyebrow={
+            isAccounts
+              ? "User management · Resident access"
+              : `Residents & Registry · ${isDashboard ? "Overview" : isVerification ? "Account review" : "Official records"}`
+          }
           title={
-            isDashboard
+            isAccounts
+              ? "Resident accounts"
+              : isDashboard
               ? "Residents & Registry dashboard"
               : isVerification
                 ? "Account verification"
-                : isAccounts ? "Resident accounts" : "Barangay masterlist"
+                : "Barangay masterlist"
           }
           description={
-            isDashboard
+            isAccounts
+              ? "Review resident accounts, login activity, and account status."
+              : isDashboard
               ? "View the official registry and resident account verification workload at a glance."
               : isVerification
                 ? "Review resident registrations against barangay registry records and approve eligible accounts."
-                : isAccounts ? "Review every registered account, its login activity, and disable inactive accounts." : "Browse the official resident records used to validate resident account registrations."
+                : "Browse the official resident records used to validate resident account registrations."
           }
         />
 
-        <nav
-          aria-label="Residents and registry sections"
-          className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
-        >
-          <button
-            type="button"
-            onClick={() => navigate("/admin/residents/dashboard")}
-            aria-current={isDashboard ? "page" : undefined}
-            className={tabClass(isDashboard)}
+        {isAccounts ? (
+          <nav
+            aria-label="User management sections"
+            className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
           >
-            <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
-            Dashboard
-          </button>
-          <button
-            type="button"
-            onClick={() => { setPage(1); navigate("/admin/residents/accounts"); }}
-            aria-current={isAccounts ? "page" : undefined}
-            className={tabClass(isAccounts)}
+            <button
+              type="button"
+              onClick={() => navigate("/admin/staff-accounts")}
+              className={tabClass(false)}
+            >
+              Staff Accounts
+            </button>
+            <button
+              type="button"
+              aria-current="page"
+              className={tabClass(true)}
+            >
+              <Users className="h-4 w-4" aria-hidden="true" />
+              Residents Account
+            </button>
+          </nav>
+        ) : (
+          <nav
+            aria-label="Residents and registry sections"
+            className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
           >
-            <Users className="h-4 w-4" aria-hidden="true" />
-            Residents Account
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setPage(1);
-              navigate("/admin/residents");
-            }}
-            aria-current={!isDashboard && !isVerification && !isAccounts ? "page" : undefined}
-            className={tabClass(!isDashboard && !isVerification && !isAccounts)}
-          >
-            <Users className="h-4 w-4" aria-hidden="true" />
-            Barangay Masterlist
-          </button>
-          <button
-            type="button"
-            onClick={() => navigate("/admin/residents/verification")}
-            aria-current={isVerification ? "page" : undefined}
-            className={tabClass(isVerification)}
-          >
-            <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-            Account Verification
-            {isVerification && pendingResidents.length > 0 && (
-              <span className="rounded-full bg-[#FFF0F0] px-2 py-0.5 text-[10px] font-bold text-[#E45757]">
-                {pendingResidents.length}
-              </span>
-            )}
-          </button>
-        </nav>
+            <button
+              type="button"
+              onClick={() => navigate("/admin/residents/dashboard")}
+              aria-current={isDashboard ? "page" : undefined}
+              className={tabClass(isDashboard)}
+            >
+              <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
+              Dashboard
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPage(1);
+                navigate("/admin/residents");
+              }}
+              aria-current={!isDashboard && !isVerification ? "page" : undefined}
+              className={tabClass(!isDashboard && !isVerification)}
+            >
+              <Users className="h-4 w-4" aria-hidden="true" />
+              Barangay Masterlist
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/admin/residents/verification")}
+              aria-current={isVerification ? "page" : undefined}
+              className={tabClass(isVerification)}
+            >
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              Account Verification
+              {isVerification && pendingResidents.length > 0 && (
+                <span className="rounded-full bg-[#FFF0F0] px-2 py-0.5 text-[10px] font-bold text-[#E45757]">
+                  {pendingResidents.length}
+                </span>
+              )}
+            </button>
+          </nav>
+        )}
 
         {error && (
           <div
