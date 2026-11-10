@@ -4,7 +4,7 @@ const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
-    const storedUser = localStorage.getItem("user");
+    const storedUser = localStorage.getItem("user") || sessionStorage.getItem("user");
 
     if (!storedUser) return null;
 
@@ -13,15 +13,20 @@ export function AuthProvider({ children }) {
     } catch {
       // Corrupt stored user data would otherwise crash the whole app (white screen)
       localStorage.removeItem("user");
+      sessionStorage.removeItem("user");
       return null;
     }
   });
 
-  const [token, setToken] = useState(() => localStorage.getItem("token"));
+  const [token, setToken] = useState(() => localStorage.getItem("token") || sessionStorage.getItem("token"));
 
-  const login = (userData, authToken) => {
-    localStorage.setItem("token", authToken);
-    localStorage.setItem("user", JSON.stringify(userData));
+  const login = (userData, authToken, remember = true) => {
+    const storage = remember ? localStorage : sessionStorage;
+    const otherStorage = remember ? sessionStorage : localStorage;
+    otherStorage.removeItem("token");
+    otherStorage.removeItem("user");
+    storage.setItem("token", authToken);
+    storage.setItem("user", JSON.stringify(userData));
 
     setUser(userData);
     setToken(authToken);
@@ -29,7 +34,8 @@ export function AuthProvider({ children }) {
 
   const updateUser = (userData) => {
     const updatedUser = { ...user, ...userData };
-    localStorage.setItem("user", JSON.stringify(updatedUser));
+    const storage = localStorage.getItem("token") ? localStorage : sessionStorage;
+    storage.setItem("user", JSON.stringify(updatedUser));
     setUser(updatedUser);
     return updatedUser;
   };
@@ -50,6 +56,8 @@ export function AuthProvider({ children }) {
     } finally {
       localStorage.removeItem("token");
       localStorage.removeItem("user");
+      sessionStorage.removeItem("token");
+      sessionStorage.removeItem("user");
 
       setUser(null);
       setToken(null);

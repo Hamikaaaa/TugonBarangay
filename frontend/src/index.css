@@ -1,5 +1,96 @@
 @import "tailwindcss";
 
+@keyframes auth-modal-enter {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-modal-enter {
+  animation: auth-modal-enter 180ms ease-out both;
+}
+
+@keyframes coastal-drift {
+  from { transform: translateX(-1%) rotate(-2deg); }
+  to { transform: translateX(1%) rotate(0deg); }
+}
+
+.coastal-wave {
+  position: absolute;
+  z-index: 0;
+  bottom: -148px;
+  left: -18%;
+  width: 136%;
+  height: 220px;
+  border-top: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 50%;
+  box-shadow: 0 -16px 0 -15px rgb(255 255 255 / 13%), 0 -34px 0 -33px rgb(255 255 255 / 11%), 0 -54px 0 -53px rgb(255 255 255 / 9%);
+  pointer-events: none;
+  animation: coastal-drift 22s ease-in-out infinite alternate;
+}
+
+.coastal-wave-two {
+  bottom: -168px;
+  left: -12%;
+  opacity: .55;
+  animation-duration: 28s;
+  animation-direction: alternate-reverse;
+}
+
+.service-finder:focus-within {
+  transform: translateY(-2px);
+  box-shadow: 0 24px 58px rgb(2 20 60 / 28%);
+}
+
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 500ms ease, transform 500ms ease;
+}
+
+.reveal-on-scroll.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.login-modal-compact .mb-12 { margin-bottom: 1rem; }
+.login-modal-compact .mb-8 { margin-bottom: 1.25rem; }
+.login-modal-compact .mb-5 { margin-bottom: .75rem; }
+.login-modal-compact .mt-7 { margin-top: 1rem; }
+.login-modal-compact .mt-12 { margin-top: 1.25rem; }
+.login-modal-compact .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: .75rem; }
+.login-modal-compact input { min-height: 44px; padding-top: .65rem; padding-bottom: .65rem; }
+.login-modal-compact button[type="submit"] { padding-top: .75rem; padding-bottom: .75rem; }
+.login-modal-compact > .mb-12 img { width: 2.75rem; height: 2.75rem; }
+.login-modal-compact h2 { font-size: 1.5rem; line-height: 2rem; }
+
+.register-modal-compact main > div { max-width: 520px; }
+.register-modal-compact main > div > .mb-8 { margin-bottom: 1.1rem; }
+.register-modal-compact h2 { font-size: 1.5rem; line-height: 1.9rem; }
+.register-modal-compact .grid.gap-5 { gap: .75rem; }
+.register-modal-compact .space-y-5 > :not([hidden]) ~ :not([hidden]) { margin-top: .75rem; }
+.register-modal-compact select,
+.register-modal-compact input:not([type="checkbox"]) { height: 2.75rem; min-height: 2.75rem; border-radius: .75rem; padding-block: .5rem; }
+.register-modal-compact select { margin-top: .375rem; }
+.register-modal-compact .relative.mt-2 { margin-top: .375rem; }
+.register-modal-compact .mt-7 { margin-top: 1rem; }
+.register-modal-compact .mt-8 { margin-top: 1.25rem; }
+.register-modal-compact form .h-14 { height: 3rem; }
+.register-modal-compact form .mt-7.overflow-hidden .px-5.py-4 { padding: .75rem; }
+.register-modal-compact form .mt-7.overflow-hidden .px-5.py-4.bg-slate-50 { padding: .75rem; }
+.register-modal-compact form > div.border-t { padding-top: 1rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .coastal-wave { animation: none; }
+  .reveal-on-scroll,
+  .reveal-on-scroll.is-visible,
+  .auth-modal-enter { animation: none !important; opacity: 1 !important; transform: none !important; transition: none !important; }
+}
+
 .sidebar-scroll {
   scrollbar-width: none;
   -ms-overflow-style: none;
