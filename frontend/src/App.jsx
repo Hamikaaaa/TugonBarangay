@@ -1,10 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
+import ServiceLanding from "./pages/ServiceLanding";
 import ResidentDashboard from "./pages/ResidentDashboard";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
-import PublicOnlyRoute from "./components/PublicOnlyRoute";
 import { AuthProvider } from "./context/AuthContext";
 import StaffHome from "./pages/staff/StaffHome";
 import {
@@ -34,18 +32,8 @@ function App() {
       <BrowserRouter>
         <Routes>
           {/* Public Routes */}
-          <Route
-            path="/login"
-            element={<Login />}
-          />
-          <Route
-            path="/register"
-            element={
-              <PublicOnlyRoute>
-                <Register />
-              </PublicOnlyRoute>
-            }
-          />
+          <Route path="/login" element={<Navigate to="/?auth=login" replace />} />
+          <Route path="/register" element={<Navigate to="/?auth=signup" replace />} />
 
           {/* Resident Route */}
           <Route
@@ -61,7 +49,7 @@ function App() {
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           {/* Default */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
+          <Route path="/" element={<ServiceLanding />} />
 
           <Route
             path="/staff/dashboard"

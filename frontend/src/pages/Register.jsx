@@ -24,7 +24,7 @@ const formSteps = [
   },
 ];
 
-function Register() {
+function Register({ isModal = false }) {
   const navigate = useNavigate();
 
   const [step, setStep] = useState(0);
@@ -273,12 +273,12 @@ function Register() {
   const showPasswordErrors = step === 2 && passwordValidationAttempted;
 
   return (
-    <div className="min-h-screen w-full bg-[#F4F7FB] lg:flex">
+    <div className={isModal ? "register-modal-compact w-full bg-white" : "min-h-screen w-full bg-[#F4F7FB] lg:flex"}>
       {/* =====================================================
           LEFT PANEL
       ====================================================== */}
       {/* LEFT BRANDING PANEL */}
-      <aside className="relative hidden min-h-screen overflow-hidden bg-[#071B3D] lg:flex lg:w-[38%] xl:w-[40%]">
+      <aside className={isModal ? "hidden" : "relative hidden min-h-screen overflow-hidden bg-[#071B3D] lg:flex lg:w-[38%] xl:w-[40%]"}>
         {/* Background Image */}
         <div
           className="
@@ -474,7 +474,7 @@ function Register() {
       {/* =====================================================
           RIGHT CONTENT
       ====================================================== */}
-      <main className="flex min-h-screen w-full items-start justify-center overflow-y-auto px-5 py-8 sm:px-10 lg:w-[62%] lg:px-14 lg:py-12 xl:px-20">
+      <main className={isModal ? "flex w-full items-start justify-center px-4 py-4 sm:px-6" : "flex min-h-screen w-full items-start justify-center overflow-y-auto px-5 py-8 sm:px-10 lg:w-[62%] lg:px-14 lg:py-12 xl:px-20"}>
         <div className="w-full max-w-[780px]">
           {/* Header */}
           <div className="mb-8">
