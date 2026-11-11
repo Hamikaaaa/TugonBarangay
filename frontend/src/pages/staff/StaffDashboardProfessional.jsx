@@ -499,6 +499,14 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
       path: `/staff/document-types/${encodeURIComponent(item.value)}`,
     })),
   ];
+  const requestTypeNavigationItem = navigationItems.find(
+    (item) => item.value && item.value === selectedRequest?.document_type,
+  );
+  const currentActivePath = documentType
+    ? `/staff/document-types/${encodeURIComponent(documentType)}`
+    : requestId
+      ? requestTypeNavigationItem?.path || "/staff/dashboard"
+      : "/staff/dashboard";
 
   if (documentType && !documentTypesLoading && !activeType) {
     return <Navigate to="/staff/dashboard" replace />;
@@ -516,7 +524,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
             : 0,
         ]),
       )}
-      activePath={documentType ? `/staff/document-types/${encodeURIComponent(documentType)}` : "/staff/dashboard"}
+      activePath={currentActivePath}
       onNavigate={(path) => {
         const item = navigationItems.find((navigationItem) => navigationItem.path === path);
         if (item) {
