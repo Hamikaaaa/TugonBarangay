@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { Camera, ChevronLeft, ChevronRight, FileText } from "lucide-react";
+import { Camera, CheckCircle2, ChevronLeft, ChevronRight, FileText } from "lucide-react";
 import {
   inputClass,
   primaryButtonClass,
@@ -655,7 +655,10 @@ function Documents({ requests, token, onRefresh, user }) {
   const [message, setMessage] = useState("");
   const [messageTone, setMessageTone] = useState("info");
   const [submitting, setSubmitting] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
+  const [requestSuccessOpen, setRequestSuccessOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const [feedbackAfterRequest, setFeedbackAfterRequest] = useState(false);
   const [businessAttestationOpen, setBusinessAttestationOpen] = useState(false);
   const [businessAttestationAccepted, setBusinessAttestationAccepted] = useState(false);
   const [permitCertificationOpen, setPermitCertificationOpen] = useState(false);
@@ -675,6 +678,10 @@ function Documents({ requests, token, onRefresh, user }) {
   const formRef = useRef(null);
   const photoPreviewUrlRef = useRef(null);
   const cameraRequestRef = useRef(0);
+  const feedbackTimerRef = useRef(null);
+  const feedbackDelayElapsedRef = useRef(false);
+  const feedbackEligibleRef = useRef(false);
+  const requestSuccessDismissedRef = useRef(false);
 
   if (user !== previousUser) {
     setPreviousUser(user);
@@ -689,6 +696,10 @@ function Documents({ requests, token, onRefresh, user }) {
 
   useEffect(() => () => {
     if (photoPreviewUrlRef.current) URL.revokeObjectURL(photoPreviewUrlRef.current);
+  }, []);
+
+  useEffect(() => () => {
+    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
   }, []);
 
   const setRequirementFile = (key, file) => {
@@ -929,8 +940,25 @@ function Documents({ requests, token, onRefresh, user }) {
     formRef.current?.reset();
   };
 
-  const submitRequest = async (event) => {
+  const maybeShowFeedback = () => {
+    if (!feedbackDelayElapsedRef.current || !feedbackEligibleRef.current) return;
+    if (requestSuccessDismissedRef.current) {
+      setFeedbackOpen(true);
+    } else {
+      setFeedbackAfterRequest(true);
+    }
+  };
+
+  const clearFeedbackWait = () => {
+    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+    feedbackTimerRef.current = null;
+    feedbackDelayElapsedRef.current = false;
+    feedbackEligibleRef.current = false;
+  };
+
+  const submitRequest = (event) => {
     event.preventDefault();
+    if (submitting) return;
     if (!selectedDocument) {
       setMessage("Choose a document type before submitting your request.");
       setMessageTone("error");
@@ -954,6 +982,19 @@ function Documents({ requests, token, onRefresh, user }) {
       setMessageTone("error");
       return;
     }
+    clearFeedbackWait();
+    requestSuccessDismissedRef.current = false;
+    setFeedbackAfterRequest(false);
+    feedbackTimerRef.current = window.setTimeout(() => {
+      feedbackDelayElapsedRef.current = true;
+      maybeShowFeedback();
+    }, 5000);
+    setConfirmationOpen(true);
+  };
+
+  const confirmRequest = async () => {
+    if (!selectedDocument || submitting) return;
+    setConfirmationOpen(false);
     setSubmitting(true);
     setMessage("");
     setMessageTone("info");
@@ -1018,6 +1059,8 @@ function Documents({ requests, token, onRefresh, user }) {
           : `Request submitted. Your Request ID is ${data.request.id}.`,
       );
       setMessageTone("success");
+      setRequestSuccessOpen(true);
+      requestSuccessDismissedRef.current = false;
       if (!editingRequest) {
         setRequestCapacity((current) =>
           current
@@ -1044,7 +1087,8 @@ function Documents({ requests, token, onRefresh, user }) {
         !editingRequest &&
         shouldPromptForFeatureFeedback(user?.id, "document_request")
       ) {
-        setFeedbackOpen(true);
+        feedbackEligibleRef.current = true;
+        maybeShowFeedback();
       }
       setEditingRequest(null);
       setDocumentType("");
@@ -1065,6 +1109,7 @@ function Documents({ requests, token, onRefresh, user }) {
         // The request is saved; the request history has its own refresh state.
       }
     } catch (error) {
+      clearFeedbackWait();
       const validationField = getValidationField(error.message, selectedDocument);
       if (validationField) {
         setMessage(
@@ -1825,6 +1870,89 @@ function Documents({ requests, token, onRefresh, user }) {
           </div>
         </section>
       </div>}
+      {confirmationOpen && (
+        <div
+          className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              setConfirmationOpen(false);
+              clearFeedbackWait();
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="request-confirmation-title"
+            className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl sm:p-8"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#2455D6]/10 text-[#2455D6]">
+              <FileText size={23} aria-hidden="true" />
+            </div>
+            <h2 id="request-confirmation-title" className="mt-5 text-xl font-bold text-[#172B4D]">
+              Confirm document request
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              {editingRequest
+                ? `Send your corrections for ${selectedDocument?.label || "this document"} to barangay staff for review?`
+                : `Submit your request for ${selectedDocument?.label || "this document"}? Barangay staff will review it before processing.`}
+            </p>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmationOpen(false);
+                  clearFeedbackWait();
+                }}
+                className="min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmRequest}
+                disabled={submitting}
+                className="min-h-11 rounded-xl bg-[#2455D6] px-5 text-sm font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-wait disabled:opacity-60"
+              >
+                Confirm and submit
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+      {requestSuccessOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/65 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="request-success-title"
+            className="w-full max-w-xl rounded-2xl bg-white px-6 py-10 text-center shadow-2xl sm:px-10 sm:py-12"
+          >
+            <CheckCircle2 className="mx-auto h-20 w-20 text-emerald-500" strokeWidth={1.7} aria-hidden="true" />
+            <h2 id="request-success-title" className="mt-6 text-2xl font-bold text-[#172B4D] sm:text-3xl">
+              Request submitted
+            </h2>
+            <p className="mx-auto mt-3 max-w-md text-base leading-7 text-slate-600">
+              Your document is now being requested and will be reviewed.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                requestSuccessDismissedRef.current = true;
+                setRequestSuccessOpen(false);
+                if (feedbackAfterRequest) {
+                  setFeedbackAfterRequest(false);
+                  setFeedbackOpen(true);
+                }
+              }}
+              className="mt-8 min-h-11 rounded-xl bg-[#2455D6] px-6 text-sm font-bold text-white transition hover:bg-[#1D46B5]"
+            >
+              Done
+            </button>
+          </section>
+        </div>
+      )}
       {feedbackOpen && (
         <FeedbackPrompt
           token={token}

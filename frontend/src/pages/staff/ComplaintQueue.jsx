@@ -16,7 +16,7 @@ import {
   ShieldAlert,
   X,
 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { COMPLAINT_CATEGORIES } from "../../constants/complaintCategories";
@@ -67,6 +67,7 @@ const TRANSITION_ICONS = {
 
 function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = false, complaintId = null, analyticsOnly = false, listOnly = false, hideAdminHeader = false, blotterHistory = false }) {
   const { token } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [complaints, setComplaints] = useState([]);
   const [counts, setCounts] = useState({});
@@ -159,7 +160,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
   const loadComplaints = useCallback(async () => {
     if (!token) return;
     try {
-      const query = new URLSearchParams({ page: String(page), per_page: "25" });
+      const query = new URLSearchParams({ page: String(page), per_page: "15" });
       if (search.trim()) query.set("search", search.trim());
       if (statusFilter !== "all") query.set("status", statusFilter);
       if (priorityFilter !== "all") query.set("priority", priorityFilter);
@@ -307,11 +308,11 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
   };
 
   const saveClassification = async () => {
-    if (!selected || !token || isAdmin || savingClassification) return;
+    if (!selected || !token || savingClassification) return;
     setSavingClassification(true);
     setError("");
     try {
-      const response = await fetch(`${API_URL}/staff/complaints/${selected.id}/classification`, {
+      const response = await fetch(`${API_URL}${endpoint}/${selected.id}/classification`, {
         method: "PATCH",
         headers: { ...authHeaders(token), "Content-Type": "application/json" },
         body: JSON.stringify({ priority: classificationPriority }),
@@ -398,7 +399,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
           {complaintId && (
             <button
               type="button"
-              onClick={() => navigate("/staff/complaints")}
+              onClick={() => navigate(location.state?.returnTo || "/staff/complaints")}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#2455D6] shadow-lg transition hover:-translate-y-0.5 hover:bg-[#EEF4FF] hover:shadow-xl"
             >
               <ArrowLeft size={16} />
@@ -573,7 +574,6 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
           {!blotterHistory && !statusLocked && (
             <select value={statusFilter} onChange={(event) => { setLoading(true); setStatusFilter(event.target.value); setPage(1); }} aria-label="Filter by complaint status" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]">
               <option value="all">All statuses</option>
-              <option value="blotter">Blotter history</option>
               {Object.entries(FILTER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
           )}
@@ -680,13 +680,14 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                             <button
                               type="button"
                               onClick={() => {
-                                if (isDashboard) {
-                                  navigate(`/staff/complaints?status=${encodeURIComponent(complaint.status)}`);
-                                } else {
-                                  navigate(`/staff/complaints/${complaint.id}`, {
-                                    state: { status: complaint.status },
-                                  });
-                                }
+                                const sidebarPath = `${location.pathname}${location.search}`;
+                                navigate(`/staff/complaints/${complaint.id}`, {
+                                  state: {
+                                    status: complaint.status,
+                                    sidebarPath,
+                                    returnTo: sidebarPath,
+                                  },
+                                });
                               }}
                               className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]"
                             >
@@ -820,7 +821,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
             </div>
           </div>
           <div className="border-t border-slate-100 pt-5 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-            {isAdmin ? (
+            {isAdmin && (
               <section aria-label="Complaint progress">
                 <h4 className="text-sm font-bold text-[#132A4A]">Complaint progress</h4>
                 {selected.status === "rejected" ? (
@@ -853,7 +854,8 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                   )}
                 </div>
               </section>
-            ) : (
+            )}
+            {!selected._blotter && (
               <section className="mb-6 border-b border-slate-100 pb-5">
                 <h4 className="text-sm font-bold text-[#132A4A]">Priority assessment</h4>
                 <label className="mt-3 block text-xs font-semibold text-slate-600">
@@ -869,10 +871,10 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                 </button>
               </section>
             )}
-            {!isAdmin && <>
+            {!selected._blotter && <>
             <h4 className="text-sm font-bold text-[#132A4A]">Case update</h4>
             <p className="mt-2 rounded-lg bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-800">
-              Staff remarks and case resolution details entered here are shared
+              Remarks and case resolution details entered here are shared
               with the resident in their complaint and notifications.
             </p>
             <label className="mt-4 block text-xs font-semibold text-slate-600">

@@ -80,7 +80,7 @@ function Residents() {
     try {
       const query = new URLSearchParams({
         page: String(page),
-        per_page: "25",
+        per_page: "15",
       });
       if (search) query.set("search", search);
       const response = await fetch(
@@ -124,7 +124,7 @@ function Residents() {
     if (!token || !isAccounts) return;
     if (!silent) setLoading(true);
     try {
-      const query = new URLSearchParams({ page: String(page), per_page: "50" });
+      const query = new URLSearchParams({ page: String(page), per_page: "15" });
       if (search) query.set("search", search);
       const response = await fetch(`${API_URL}/admin/resident-accounts?${query}`, { headers: authHeaders(token) });
       const payload = await response.json();

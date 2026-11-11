@@ -291,6 +291,8 @@ function Complaints({
   const [evidence, setEvidence] = useState(null);
   const [message, setMessage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [complaintSuccessOpen, setComplaintSuccessOpen] = useState(false);
+  const [complaintReference, setComplaintReference] = useState("");
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [history, setHistory] = useState(complaints);
   const [historyPage, setHistoryPage] = useState(1);
@@ -304,6 +306,13 @@ function Complaints({
   const [reloadHistory, setReloadHistory] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const fileInput = useRef(null);
+  const feedbackTimerRef = useRef(null);
+  const feedbackDelayElapsedRef = useRef(false);
+  const feedbackEligibleRef = useRef(false);
+
+  useEffect(() => () => {
+    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -373,8 +382,21 @@ function Complaints({
     setForm((current) => ({ ...current, [name]: value }));
   };
 
+  const maybeOpenFeedback = () => {
+    if (feedbackDelayElapsedRef.current && feedbackEligibleRef.current) {
+      setFeedbackOpen(true);
+    }
+  };
+
   const submitComplaint = async (event) => {
     event.preventDefault();
+    if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+    feedbackDelayElapsedRef.current = false;
+    feedbackEligibleRef.current = false;
+    feedbackTimerRef.current = window.setTimeout(() => {
+      feedbackDelayElapsedRef.current = true;
+      maybeOpenFeedback();
+    }, 5000);
     setSubmitting(true);
     setMessage(null);
 
@@ -395,15 +417,11 @@ function Complaints({
         method: "POST",
         body: formData,
       });
-      setMessage({
-        type: "success",
-        text:
-          result.complaint.priority === "urgent"
-            ? `Complaint submitted and flagged for priority staff review. Your reference number is CMP-${String(result.complaint.id).padStart(5, "0")}.`
-            : `Complaint submitted. Your reference number is CMP-${String(result.complaint.id).padStart(5, "0")}.`,
-      });
+      setComplaintReference(`CMP-${String(result.complaint.id).padStart(5, "0")}`);
+      setComplaintSuccessOpen(true);
       if (shouldPromptForFeatureFeedback(userId, "complaint")) {
-        setFeedbackOpen(true);
+        feedbackEligibleRef.current = true;
+        maybeOpenFeedback();
       }
       setForm(EMPTY_FORM);
       setEvidence(null);
@@ -417,6 +435,10 @@ function Complaints({
         // The complaint is already saved; history has its own refresh error state.
       }
     } catch (error) {
+      if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
+      feedbackTimerRef.current = null;
+      feedbackDelayElapsedRef.current = false;
+      feedbackEligibleRef.current = false;
       setMessage({ type: "error", text: error.message });
     } finally {
       setSubmitting(false);
@@ -714,10 +736,10 @@ function Complaints({
             </p>
           </div>
 
-          {message && (
+          {message?.type === "error" && (
             <p
-              role={message.type === "error" ? "alert" : "status"}
-              className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${message.type === "error" ? "bg-red-50 text-red-800" : "bg-[#ECF9F1] text-[#21864A]"}`}
+              role="alert"
+              className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm font-semibold text-red-800"
             >
               {message.text}
             </p>
@@ -838,6 +860,34 @@ function Complaints({
           </>
         )}
       </section>
+      )}
+      {complaintSuccessOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/65 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="complaint-success-title"
+            className="w-full max-w-xl rounded-2xl bg-white px-6 py-10 text-center shadow-2xl sm:px-10 sm:py-12"
+          >
+            <CheckCircle2 className="mx-auto h-20 w-20 text-emerald-500" strokeWidth={1.7} aria-hidden="true" />
+            <h2 id="complaint-success-title" className="mt-6 text-2xl font-bold text-[#172B4D] sm:text-3xl">
+              Complaint submitted
+            </h2>
+            <p className="mx-auto mt-3 max-w-md text-base leading-7 text-slate-600">
+              Your complaint has been submitted and will be reviewed by barangay staff.
+            </p>
+            <p className="mt-4 inline-flex rounded-lg bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700">
+              Reference number: {complaintReference}
+            </p>
+            <button
+              type="button"
+              onClick={() => setComplaintSuccessOpen(false)}
+              className="mt-8 min-h-11 rounded-xl bg-[#2455D6] px-6 text-sm font-bold text-white transition hover:bg-[#1D46B5]"
+            >
+              Done
+            </button>
+          </section>
+        </div>
       )}
       {feedbackOpen && (
         <FeedbackPrompt

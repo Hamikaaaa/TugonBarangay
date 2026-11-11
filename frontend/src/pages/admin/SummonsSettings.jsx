@@ -198,7 +198,7 @@ function SummonsSettings() {
                 {(settings.uploaded_template_name || templateFile) && <label className="inline-flex cursor-pointer items-center gap-1.5 text-sm font-semibold text-red-600"><input type="checkbox" checked={removeTemplate} onChange={(event) => { setRemoveTemplate(event.target.checked); if (event.target.checked) setTemplateFile(null); }} /><Trash2 size={14} /> Remove template</label>}
               </div>
               {templateError && <p role="alert" className="mt-2 text-xs font-semibold text-red-600">{templateError}</p>}
-              {(templateFile?.previewUrl || (templatePreview?.name === settings.uploaded_template_name ? templatePreview.url : "")) && !removeTemplate && <img src={templateFile?.previewUrl || templatePreview.url} alt="Summons paper template preview" className="mt-4 max-h-72 max-w-full rounded-lg border border-slate-200 bg-white object-contain" />}
+              {(templateFile?.previewUrl || (templatePreview && templatePreview.name === settings.uploaded_template_name ? templatePreview.url : "")) && !removeTemplate && <img src={templateFile?.previewUrl || templatePreview.url} alt="Summons paper template preview" className="mt-4 max-h-72 max-w-full rounded-lg border border-slate-200 bg-white object-contain" />}
             </section>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:px-7">

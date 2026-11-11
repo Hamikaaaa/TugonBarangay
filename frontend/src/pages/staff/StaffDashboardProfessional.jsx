@@ -241,7 +241,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
     try {
       const query = new URLSearchParams({
         status: statusFilter,
-        per_page: "100",
+        per_page: "15",
         page: String(page),
         sort_by: "created_at",
       });

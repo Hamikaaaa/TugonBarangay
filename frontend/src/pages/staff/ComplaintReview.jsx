@@ -9,7 +9,6 @@ function ComplaintReview() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const status = location.state?.status;
   const navigationItems = useComplaintStaffNavigation();
 
   if (user?.designation !== "Complaint Management Officer") {
@@ -20,7 +19,7 @@ function ComplaintReview() {
     <StaffLayout
       title="Complaint Details"
       navigationItems={navigationItems}
-      activePath={status ? `/staff/complaints?status=${status}` : ""}
+      activePath={location.state?.sidebarPath || ""}
       onNavigate={navigate}
     >
       <ComplaintQueue key={complaintId} complaintId={complaintId} />

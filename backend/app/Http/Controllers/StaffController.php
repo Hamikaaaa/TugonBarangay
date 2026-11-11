@@ -28,7 +28,7 @@ class StaffController extends Controller
             'search' => ['sometimes', 'string', 'max:150'],
             'from' => ['sometimes', 'date_format:Y-m-d'],
             'to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:from'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:15'],
             'sort_by' => ['sometimes', 'string', 'in:created_at,id,document_type,resident_name'],
             'sort_direction' => ['sometimes', 'string', 'in:asc,desc'],
         ]);
@@ -84,7 +84,7 @@ class StaffController extends Controller
             $query->orderBy($sortBy, $direction);
         }
 
-        $page = $query->paginate($validated['per_page'] ?? 25);
+        $page = $query->paginate($validated['per_page'] ?? 15);
         $page->getCollection()->transform(function (DocumentRequest $documentRequest) {
             $documentRequest->setAttribute(
                 'identity_review',
@@ -181,7 +181,10 @@ class StaffController extends Controller
         ]);
 
         $previousFee = (float) $documentRequest->fee;
-        $documentRequest->fee = (float) $validated['assessed_fee'];
+        $documentRequest->setAttribute(
+            'fee',
+            number_format((float) $validated['assessed_fee'], 2, '.', ''),
+        );
         $details['fee_assessed'] = true;
         $newFilePath = null;
         if ($request->hasFile('inspection_report')) {
@@ -350,7 +353,7 @@ class StaffController extends Controller
         }
 
         if (Schema::hasColumn('document_requests', 'document_generated_at')) {
-            $documentRequest->document_generated_at = now();
+            $documentRequest->document_generated_at = \Illuminate\Support\Carbon::now();
         }
 
         if (Schema::hasColumn('document_requests', 'staff_remarks') && array_key_exists('staff_remarks', $validated)) {
@@ -728,7 +731,7 @@ class StaffController extends Controller
                 ELSE 2
             END")
             ->latest()
-            ->paginate(25);
+            ->paginate(15);
         $counts = (clone $query)
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
@@ -1179,7 +1182,9 @@ class StaffController extends Controller
                                 'complaint_id' => $complaint->id,
                                 'subject' => $complaint->subject,
                                 'status' => $complaint->status,
-                                'incident_date' => $complaint->incident_date?->toDateString(),
+                                'incident_date' => $complaint->incident_date
+                                    ? Carbon::parse($complaint->incident_date)->toDateString()
+                                    : null,
                                 'matched_name' => $listedName,
                                 'match_type' => $exact ? 'Exact match' : 'Close match',
                                 'similarity' => round($similarity),
