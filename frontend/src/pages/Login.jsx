@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { REGISTRATION_VERIFIED_STORAGE_KEY } from "../utils/registrationVerification";
 
-function Login() {
+function Login({ isModal = false }) {
   const { login } = useAuth();
   const navigate = useNavigate();
 
@@ -200,16 +200,16 @@ function Login() {
     }
   };
   return (
-    <div className="min-h-screen bg-white lg:flex">
+    <div className={isModal ? "w-full bg-white" : "min-h-screen bg-white lg:flex"}>
       {/* =====================================================
           LEFT SIDE — TUGONBARANGAY BRANDING
       ====================================================== */}
       <section
-        className="
+        className={isModal ? "hidden" : `
         relative hidden min-h-screen overflow-hidden
         lg:flex lg:w-[58%]
         bg-[#123F70]
-  "
+  `}
       >
         {/* Background Image */}
         <div
@@ -398,16 +398,16 @@ function Login() {
     RIGHT SIDE — LOGIN FORM
 ====================================================== */}
       <section
-        className="
+        className={isModal ? "flex w-full items-center justify-center bg-white px-5 py-5 sm:px-6 sm:py-6" : `
     flex min-h-screen w-full items-center justify-center
     bg-white px-6 py-10
     sm:px-10
     lg:w-[42%]
     lg:px-12
     xl:px-16
-  "
+  `}
       >
-        <div className="w-full max-w-md">
+        <div className={isModal ? "login-modal-compact w-full max-w-[360px]" : "w-full max-w-md"}>
           {/* TugonBarangay Logo */}
           <div className="mb-12 flex items-center gap-1">
             <img

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import ResidentLayout from "../components/resident/ResidentLayout";
 import Overview from "./resident/Overview";
 import Documents from "./resident/Documents";
@@ -8,7 +9,11 @@ import Notifications from "./resident/Notifications";
 import Profile from "./resident/Profile";
 
 function ResidentDashboard() {
-  const [view, setView] = useState("dashboard");
+  const [searchParams] = useSearchParams();
+  const [view, setView] = useState(() => {
+    const requestedView = searchParams.get("view");
+    return ["documents", "complaints", "bantaybot"].includes(requestedView) ? requestedView : "dashboard";
+  });
 
   return (
     <ResidentLayout view={view} onNavigate={setView}>
