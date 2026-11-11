@@ -241,8 +241,14 @@ function BantayBot({ token, userId }) {
   const [escalationError, setEscalationError] = useState("");
   const [reloadEscalations, setReloadEscalations] = useState(0);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
+  const feedbackTimersRef = useRef(new Set());
   const [language, setLanguage] = useState(getSavedLanguage);
   const t = UI.en;
+
+  useEffect(() => () => {
+    feedbackTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    feedbackTimersRef.current.clear();
+  }, []);
 
   const changeLanguage = (next) => {
     setLanguage(next);
@@ -370,15 +376,30 @@ function BantayBot({ token, userId }) {
     setAsking(true);
     setEscalation(null);
     setEscalationMessageId(null);
+    let responseSucceeded = false;
+    let feedbackEligible = false;
+    let delayElapsed = false;
+    let feedbackTimer;
+    const openFeedbackIfReady = () => {
+      if (responseSucceeded && feedbackEligible && delayElapsed) {
+        setFeedbackOpen(true);
+      }
+    };
+    feedbackTimer = window.setTimeout(() => {
+      feedbackTimersRef.current.delete(feedbackTimer);
+      delayElapsed = true;
+      openFeedbackIfReady();
+    }, 5000);
+    feedbackTimersRef.current.add(feedbackTimer);
     try {
       const data = await residentApi("/resident/bantaybot/ask", token, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: submittedQuestion, language, faq_id: faqId }),
       });
-      if (shouldPromptForFeatureFeedback(userId, "bantaybot")) {
-        setFeedbackOpen(true);
-      }
+      responseSucceeded = true;
+      feedbackEligible = shouldPromptForFeatureFeedback(userId, "bantaybot");
+      openFeedbackIfReady();
       setChatMessages((messages) =>
         messages.map((message) =>
           message.id === messageId
@@ -392,6 +413,8 @@ function BantayBot({ token, userId }) {
         ),
       );
     } catch (error) {
+      window.clearTimeout(feedbackTimer);
+      feedbackTimersRef.current.delete(feedbackTimer);
       const errorAnswer = { answer: error.message, matched: false, faq: null };
       setChatMessages((messages) =>
         messages.map((message) =>

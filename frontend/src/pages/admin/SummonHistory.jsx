@@ -43,8 +43,6 @@ export default function SummonHistory() {
 
   const loadEntries = useCallback(async (pageNumber = 1) => {
     if (!token) return;
-    setLoading(true);
-    setError("");
     try {
       const response = await fetch(`${API_URL}/admin/complaints/summon-history?page=${pageNumber}`, { headers: authHeaders(token) });
       const payload = await response.json();
@@ -58,7 +56,27 @@ export default function SummonHistory() {
     }
   }, [token]);
 
-  useEffect(() => { loadEntries(); }, [loadEntries]);
+  const changePage = (pageNumber) => {
+    setLoading(true);
+    setError("");
+    loadEntries(pageNumber);
+  };
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/admin/complaints/summon-history?page=1`, { headers: authHeaders(token) })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.message || "Unable to load summon history.");
+        return payload;
+      })
+      .then((payload) => {
+        setEntries(payload.data || []);
+        setPage({ current_page: payload.current_page || 1, last_page: payload.last_page || 1, total: payload.total || 0 });
+      })
+      .catch((loadError) => setError(loadError.message))
+      .finally(() => setLoading(false));
+  }, [token]);
   useEffect(() => {
     if (!token) return;
     fetch(`${API_URL}/admin/complaints/summons-settings`, { headers: authHeaders(token) })
@@ -147,8 +165,8 @@ export default function SummonHistory() {
           </table>
         </div>
         <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3"><p className="text-xs text-slate-500">Page {page.current_page} of {page.last_page}</p><div className="flex gap-2">
-          <button type="button" disabled={page.current_page <= 1 || loading} onClick={() => loadEntries(page.current_page - 1)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 disabled:opacity-40"><ChevronLeft size={14} /> Previous</button>
-          <button type="button" disabled={page.current_page >= page.last_page || loading} onClick={() => loadEntries(page.current_page + 1)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 disabled:opacity-40">Next <ChevronRight size={14} /></button>
+          <button type="button" disabled={page.current_page <= 1 || loading} onClick={() => changePage(page.current_page - 1)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 disabled:opacity-40"><ChevronLeft size={14} /> Previous</button>
+          <button type="button" disabled={page.current_page >= page.last_page || loading} onClick={() => changePage(page.current_page + 1)} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 disabled:opacity-40">Next <ChevronRight size={14} /></button>
         </div></div>
       </section>
 

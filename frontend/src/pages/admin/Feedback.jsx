@@ -42,7 +42,7 @@ function Feedback() {
 
     const query = new URLSearchParams({
       page: String(page),
-      per_page: "12",
+      per_page: "15",
     });
     if (search) query.set("search", search);
     if (serviceType) query.set("service_type", serviceType);

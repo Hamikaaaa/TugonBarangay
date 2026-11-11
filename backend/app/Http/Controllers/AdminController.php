@@ -91,7 +91,7 @@ class AdminController extends Controller
     {
         $validated = $request->validate([
             'search' => ['nullable', 'string', 'max:150'],
-            'per_page' => ['nullable', 'integer', 'between:1,100'],
+            'per_page' => ['nullable', 'integer', 'between:1,15'],
         ]);
 
         $query = BarangayRegistry::query()
@@ -133,7 +133,7 @@ class AdminController extends Controller
         $page = $query
             ->orderBy('last_name')
             ->orderBy('first_name')
-            ->paginate($validated['per_page'] ?? 25);
+            ->paginate($validated['per_page'] ?? 15);
 
         $registryIdentityHashes = $page->getCollection()
             ->map(fn (BarangayRegistry $record) => hash('sha256', 'registry:'.$record->id));
@@ -180,7 +180,10 @@ class AdminController extends Controller
 
     public function residentAccounts(Request $request)
     {
-        $validated = $request->validate(['search' => ['nullable', 'string', 'max:150']]);
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:150'],
+            'per_page' => ['nullable', 'integer', 'between:1,15'],
+        ]);
         $query = Resident::query()
             ->select(['id','name','first_name','middle_name','last_name','email','verification_status','is_active','last_login_at','created_at'])
             ->selectRaw('(SELECT COUNT(*) FROM residents AS same_name_accounts WHERE LOWER(TRIM(COALESCE(same_name_accounts.first_name, \'\'))) = LOWER(TRIM(COALESCE(residents.first_name, \'\'))) AND LOWER(TRIM(COALESCE(same_name_accounts.middle_name, \'\'))) = LOWER(TRIM(COALESCE(residents.middle_name, \'\'))) AND LOWER(TRIM(COALESCE(same_name_accounts.last_name, \'\'))) = LOWER(TRIM(COALESCE(residents.last_name, \'\')))) AS same_name_accounts');
@@ -194,7 +197,7 @@ class AdminController extends Controller
             ->orderByRaw("LOWER(TRIM(COALESCE(last_name, '')))")
             ->orderByRaw('CASE WHEN last_login_at IS NULL THEN 0 ELSE 1 END')
             ->orderBy('last_login_at')
-            ->paginate(50);
+            ->paginate($validated['per_page'] ?? 15);
     }
 
     public function updateResidentAccountStatus(Request $request, Resident $resident)
@@ -494,7 +497,7 @@ class AdminController extends Controller
             'search' => ['nullable', 'string', 'max:150'],
             'service_type' => ['nullable', 'string', 'max:100'],
             'rating' => ['nullable', 'integer', 'between:1,5'],
-            'per_page' => ['nullable', 'integer', 'between:1,50'],
+            'per_page' => ['nullable', 'integer', 'between:1,15'],
         ]);
 
         $query = Feedback::query()->with('resident:id,name,email')->latest();
@@ -520,7 +523,7 @@ class AdminController extends Controller
             $query->where('rating', $validated['rating']);
         }
 
-        $page = $query->paginate($validated['per_page'] ?? 12);
+        $page = $query->paginate($validated['per_page'] ?? 15);
         $stats = Feedback::query()
             ->selectRaw('COUNT(*) as total, COALESCE(AVG(rating), 0) as average_rating')
             ->selectRaw('COALESCE(SUM(CASE WHEN rating = 5 THEN 1 ELSE 0 END), 0) as five_star')

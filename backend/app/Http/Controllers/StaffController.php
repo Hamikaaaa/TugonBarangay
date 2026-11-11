@@ -27,7 +27,7 @@ class StaffController extends Controller
             'search' => ['sometimes', 'string', 'max:150'],
             'from' => ['sometimes', 'date_format:Y-m-d'],
             'to' => ['sometimes', 'date_format:Y-m-d', 'after_or_equal:from'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:15'],
             'sort_by' => ['sometimes', 'string', 'in:created_at,id,document_type,resident_name'],
             'sort_direction' => ['sometimes', 'string', 'in:asc,desc'],
         ]);
@@ -79,7 +79,7 @@ class StaffController extends Controller
             $query->orderBy($sortBy, $direction);
         }
 
-        $page = $query->paginate($validated['per_page'] ?? 25);
+        $page = $query->paginate($validated['per_page'] ?? 15);
         $page->getCollection()->transform(function (DocumentRequest $documentRequest) {
             $documentRequest->setAttribute(
                 'identity_review',
@@ -721,7 +721,7 @@ class StaffController extends Controller
                 ELSE 2
             END")
             ->latest()
-            ->paginate(25);
+            ->paginate(15);
         $counts = (clone $query)
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')

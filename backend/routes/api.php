@@ -99,6 +99,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/complaints/summon-history', [\App\Http\Controllers\BlotterController::class, 'summonEntries']);
     Route::get('/complaints/summon-history/{summonEntry}/template', [\App\Http\Controllers\BlotterController::class, 'downloadSummonEntryTemplate']);
     Route::patch('/complaints/{complaint}/status', [\App\Http\Controllers\StaffController::class, 'updateComplaintStatus']);
+    Route::patch('/complaints/{complaint}/classification', [\App\Http\Controllers\StaffController::class, 'updateComplaintClassification']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);
     Route::get('/blotter/entries', [\App\Http\Controllers\BlotterController::class, 'index']);
 });

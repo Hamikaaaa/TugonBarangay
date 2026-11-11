@@ -17,7 +17,7 @@ class AdminDocumentRequestHistoryController extends Controller
         $validated = $request->validate([
             'status' => ['sometimes', 'string', 'in:all,pending,under_review,processing,for_correction,ready_for_release,completed,rejected,delayed'],
             'search' => ['nullable', 'string', 'max:150'],
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:15'],
         ]);
 
         $query = DocumentRequest::query()->with(['resident', 'type', 'assignedStaff']);
@@ -41,7 +41,7 @@ class AdminDocumentRequestHistoryController extends Controller
             });
         }
 
-        $results = $query->latest()->paginate($validated['per_page'] ?? 25);
+        $results = $query->latest()->paginate($validated['per_page'] ?? 15);
         $results->getCollection()->each(function (DocumentRequest $documentRequest) {
             $documentRequest->setAttribute(
                 'is_delayed',
@@ -146,12 +146,12 @@ class AdminDocumentRequestHistoryController extends Controller
     public function events(Request $request)
     {
         $validated = $request->validate([
-            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:15'],
         ]);
 
         return DocumentRequestEvent::query()
             ->with(['documentRequest.resident', 'documentRequest.type'])
             ->latest()
-            ->paginate($validated['per_page'] ?? 30);
+            ->paginate($validated['per_page'] ?? 15);
     }
 }

@@ -159,7 +159,7 @@ function Complaints() {
     const query = categorySearch.trim().toLowerCase();
     return !query || `${category.name} ${category.description || ""}`.toLowerCase().includes(query);
   });
-  const categoriesPerPage = 7;
+  const categoriesPerPage = 15;
   const pageCount = Math.max(1, Math.ceil(filteredCategories.length / categoriesPerPage));
   const currentPage = Math.min(categoryPage, pageCount);
   const pageCategories = filteredCategories.slice(

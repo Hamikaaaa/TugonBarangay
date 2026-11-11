@@ -18,7 +18,7 @@ const formSteps = [
   },
   {
     title: "Secure Your Account",
-    description: "Create a password, then verify your contact to complete registration.",
+    description: "Create a password, then verify your email to complete registration.",
     label: "Account Setup",
     icon: "lock",
   },
@@ -42,7 +42,6 @@ function Register({ isModal = false }) {
   const [showPasswordConfirmation, setShowPasswordConfirmation] =
     useState(false);
   const [showVerificationChoice, setShowVerificationChoice] = useState(false);
-  const [verificationMethod, setVerificationMethod] = useState("email");
   const [pendingVerification, setPendingVerification] = useState(null);
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationLoading, setVerificationLoading] = useState(false);
@@ -253,7 +252,7 @@ function Register({ isModal = false }) {
         },
         body: JSON.stringify({
           ...formData,
-          verification_method: verificationMethod,
+          verification_method: "email",
         }),
       });
 
@@ -620,7 +619,7 @@ function Register({ isModal = false }) {
 
                 <p className="mt-2 text-sm text-slate-500">
                   {pendingVerification
-                    ? "Complete contact verification to finish creating your account."
+                    ? "Complete email verification to finish creating your account."
                     : showVerificationChoice
                       ? "Choose whether to verify by email or phone. We’ll send the verification after you choose."
                       : currentStep.description}
@@ -727,43 +726,14 @@ function Register({ isModal = false }) {
               </div>
             ) : showVerificationChoice ? (
               <div className="space-y-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-                <fieldset>
-                  <legend className="text-sm font-semibold text-slate-700">
-                    Verify using
-                  </legend>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["email", "Email", "Receive a verification link by email"],
-                      ["sms", "Phone number", "Receive a 5-digit code by SMS"],
-                    ].map(([value, label, description]) => (
-                      <label
-                        key={value}
-                        className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition ${
-                          verificationMethod === value
-                            ? "border-[#2455D6] bg-blue-50"
-                            : "border-slate-200 bg-white"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="verification_method"
-                          value={value}
-                          checked={verificationMethod === value}
-                          onChange={() => setVerificationMethod(value)}
-                          className="mt-1 accent-[#2455D6]"
-                        />
-                        <span>
-                          <span className="block text-sm font-bold text-slate-700">
-                            {label}
-                          </span>
-                          <span className="mt-1 block text-xs font-normal text-slate-500">
-                            {description}
-                          </span>
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                </fieldset>
+                <div className="rounded-xl border border-[#2455D6] bg-blue-50 p-4">
+                  <p className="text-sm font-bold text-slate-700">
+                    Email verification
+                  </p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    A verification link will be sent to {formData.email}.
+                  </p>
+                </div>
 
                 <button
                   type="button"
@@ -771,11 +741,7 @@ function Register({ isModal = false }) {
                   disabled={loading}
                   className="flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-[#2455D6] text-sm font-bold text-white shadow-md transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {loading
-                    ? "Sending verification..."
-                    : verificationMethod === "sms"
-                      ? "Send verification code"
-                      : "Send verification email"}
+                  {loading ? "Sending verification..." : "Send verification email"}
                 </button>
                 <button
                   type="button"

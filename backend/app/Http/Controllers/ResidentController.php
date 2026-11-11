@@ -173,7 +173,7 @@ class ResidentController extends Controller
         $requests = DocumentRequest::where('resident_id', $residentId)
             ->with('type')
             ->latest()
-            ->paginate(10);
+            ->paginate(15);
         $activeRequestCount = $this->activeDocumentRequestCount($residentId);
 
         return response()->json(array_merge($requests->toArray(), [
@@ -567,7 +567,7 @@ class ResidentController extends Controller
 
     public function complaints(Request $request)
     {
-        return Complaint::where('resident_id', $request->user()->id)->latest()->paginate(10);
+        return Complaint::where('resident_id', $request->user()->id)->latest()->paginate(15);
     }
 
     public function storeComplaint(Request $request)
@@ -961,14 +961,14 @@ class ResidentController extends Controller
     {
         return ChatbotEscalation::where('resident_id', $request->user()->id)
             ->latest()
-            ->paginate(10);
+            ->paginate(15);
     }
 
     public function adminBotEscalations()
     {
         return ChatbotEscalation::with('resident:id,name,email')
             ->latest()
-            ->paginate(20);
+            ->paginate(15);
     }
 
     public function adminBotFaqs()

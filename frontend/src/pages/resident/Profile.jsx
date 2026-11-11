@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { UserRound } from "lucide-react";
+import { Check, UserRound } from "lucide-react";
 import {
   inputClass,
   primaryButtonClass,
@@ -58,6 +58,12 @@ function Profile({ user, verified, token }) {
       pending: "Pending verification",
       rejected: "Verification rejected",
     }[user?.verification_status] || "Status unavailable";
+  const accountSteps = [
+    { label: "Registration submitted", done: true },
+    { label: "Identity reviewed by staff", done: verified },
+    { label: "Full service access", done: verified },
+  ];
+  const completedSteps = accountSteps.filter((step) => step.done).length;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-8">
@@ -84,6 +90,61 @@ function Profile({ user, verified, token }) {
           </div>
         </div>
       </header>
+
+      <section className="overflow-hidden rounded-[26px] border border-slate-200/80 bg-white/90 p-6 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm sm:p-8">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-[#172B4D]">
+              Account setup
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Keep your account ready for barangay services.
+            </p>
+          </div>
+          <span className="shrink-0 text-2xl font-semibold text-[#2455D6]">
+            {completedSteps}/{accountSteps.length}
+          </span>
+        </div>
+        <div
+          className="mt-5 h-2 overflow-hidden rounded-full bg-slate-100"
+          role="progressbar"
+          aria-label="Account setup progress"
+          aria-valuemin={0}
+          aria-valuemax={accountSteps.length}
+          aria-valuenow={completedSteps}
+        >
+          <div
+            className="h-full rounded-full bg-[#2455D6] transition-all duration-500"
+            style={{ width: `${(completedSteps / accountSteps.length) * 100}%` }}
+          />
+        </div>
+        <ul className="mt-5 divide-y divide-slate-100">
+          {accountSteps.map((step) => (
+            <li
+              key={step.label}
+              className="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+            >
+              <span className="text-sm font-medium text-slate-700">
+                {step.label}
+              </span>
+              <span
+                className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                  step.done
+                    ? "bg-[#2455D6] text-white"
+                    : "border border-slate-300 bg-slate-50"
+                }`}
+              >
+                {step.done && <Check className="h-3.5 w-3.5" aria-hidden="true" />}
+              </span>
+            </li>
+          ))}
+        </ul>
+        {!verified && (
+          <p className="mt-4 border-t border-slate-100 pt-4 text-sm leading-5 text-slate-500">
+            Staff are reviewing your registration. Some services stay restricted until you are verified.
+          </p>
+        )}
+      </section>
 
       <section className="overflow-hidden rounded-[26px] border border-slate-200/80 bg-white/90 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm">
         <div className="flex items-center gap-4 border-b border-slate-100 p-6 sm:p-8">
