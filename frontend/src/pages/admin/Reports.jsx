@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
+import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const SERVICE_SERIES = [
@@ -245,7 +246,7 @@ function Reports() {
       [`Reporting period: ${formatDate(generatedReport.from)} to ${formatDate(generatedReport.to)}`],
       [],
       ["Request ID", "Date submitted", "Resident", "Document", "Status", "Handled by", "Fee (PHP)"],
-      ...generatedReport.data.map((item) => [item.id, formatDateTime(item.created_at), fullResidentName(item.resident), item.document_type_label || item.document_type, item.status, item.assigned_staff?.name || "Unassigned", item.fee]),
+      ...generatedReport.data.map((item) => [formatDocumentRequestId(item.id), formatDateTime(item.created_at), fullResidentName(item.resident), item.document_type_label || item.document_type, item.status, item.assigned_staff?.name || "Unassigned", item.fee]),
       [], ["TOTAL REQUESTS", generatedReport.data.length],
       ["TOTAL FEES (PHP)", generatedReport.data.reduce((sum, item) => sum + Number(item.fee || 0), 0).toFixed(2)],
     ] : [

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import DocumentPreviewModal from "./DocumentPreviewModal";
+import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
@@ -387,7 +388,7 @@ function StaffDashboard() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-bold text-[#172B4D]">{request.resident?.name || "Unknown resident"}</p>
-                          <p className="mt-1 truncate text-xs text-slate-500">{request.document_type} · #{request.id}</p>
+                          <p className="mt-1 truncate text-xs text-slate-500">{request.document_type} · {formatDocumentRequestId(request.id)}</p>
                         </div>
                         <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold ${STATUS_STYLES[request.status] || "bg-slate-100 text-slate-600"}`}>
                           {STATUS_LABELS[request.status] || request.status}
@@ -426,7 +427,7 @@ function StaffDashboard() {
                           <span className={`rounded-full px-3 py-1 text-[11px] font-bold ${STATUS_STYLES[selected.status] || "bg-slate-100 text-slate-600"}`}>
                             {STATUS_LABELS[selected.status] || selected.status}
                           </span>
-                          <span className="text-xs text-slate-400">Request #{selected.id}</span>
+                          <span className="text-xs text-slate-400">Request {formatDocumentRequestId(selected.id)}</span>
                         </div>
                         <h2 className="mt-3 text-xl font-bold text-[#172B4D]">{selected.document_type}</h2>
                         <p className="mt-1 text-sm text-slate-500">Submitted by {selected.resident?.name || "Unknown resident"}</p>
