@@ -192,11 +192,18 @@ class ResidentController extends Controller
         abort_unless($disk->exists($file['path']), 404);
 
         $filename = $file['original_name'] ?? basename($file['path']);
+        $stream = $disk->readStream($file['path']);
+        abort_unless(is_resource($stream), 404);
+        $mimeType = mime_content_type($disk->path($file['path'])) ?: 'application/octet-stream';
 
-        return $disk->response($file['path'], $filename, [
+        return response()->stream(function () use ($stream): void {
+            fpassthru($stream);
+            fclose($stream);
+        }, 200, [
             'Cache-Control' => 'private, no-store',
             'Content-Disposition' => 'inline; filename="'.str_replace('"', '', $filename).'"',
-        ], 'inline');
+            'Content-Type' => $mimeType,
+        ]);
     }
 
     public function storeRequest(Request $request)
@@ -791,7 +798,7 @@ class ResidentController extends Controller
             ->oldest('created_at')
             ->oldest('id')
             ->get()
-            ->map(fn (ChatbotMessage $message) => [
+            ->map(fn ($message) => [
                 'id' => $message->id,
                 'question' => $message->question,
                 'sent_at' => $message->created_at?->toISOString(),
@@ -853,7 +860,7 @@ class ResidentController extends Controller
             : null;
 
         if (! $faq) {
-            $faq = $faqs->first(function (ChatbotFaq $candidate) use ($normalizedQuestion, $language) {
+            $faq = $faqs->first(function ($candidate) use ($normalizedQuestion, $language) {
                 $candidateQuestion = $language === 'ceb'
                     ? ($candidate->question_ceb ?: $candidate->question)
                     : $candidate->question;
@@ -865,7 +872,7 @@ class ResidentController extends Controller
         if (! $faq) {
             $queryTerms = $this->botSearchTerms($normalizedQuestion, $language);
             if (count($queryTerms) > 1) {
-                $match = $faqs->map(function (ChatbotFaq $candidate) use ($queryTerms, $language) {
+                $match = $faqs->map(function ($candidate) use ($queryTerms, $language) {
                     $candidateQuestion = $language === 'ceb'
                         ? ($candidate->question_ceb ?: $candidate->question)
                         : $candidate->question;

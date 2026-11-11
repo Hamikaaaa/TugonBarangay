@@ -161,11 +161,7 @@ function Profile({ user, verified, token }) {
         <dl className="grid gap-6 p-6 sm:grid-cols-2 sm:p-8">
           <Detail
             label="Resident ID"
-            value={
-              user?.id
-                ? `TB-${String(user.id).padStart(5, "0")}`
-                : "Pending assignment"
-            }
+            value={user?.resident_id || "Sign in again to view your ID"}
           />
           <Detail
             label="Verification"
@@ -178,6 +174,9 @@ function Profile({ user, verified, token }) {
           <Detail label="Sex" value={user?.sex || "Not provided"} />
           <Detail label="Purok" value={user?.purok || "Not provided"} />
         </dl>
+        <p className="px-6 pb-6 text-sm text-slate-500 sm:px-8">
+          Use your resident ID or email address to sign in.
+        </p>
         <form
           onSubmit={saveProfile}
           className="border-t border-slate-100 bg-slate-50/60 p-6 sm:p-8"

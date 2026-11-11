@@ -48,7 +48,86 @@ class AdminResidentRegistryTest extends TestCase
             ->assertOk()
             ->assertJsonPath('total', 1)
             ->assertJsonPath('data.0.id', $match->id)
+            ->assertJsonPath('data.0.resident_id', null)
             ->assertJsonPath('data.0.first_name', 'Maria');
+    }
+
+    public function test_admin_can_bulk_import_registry_rows_and_duplicate_records_are_skipped(): void
+    {
+        BarangayRegistry::create([
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'date_of_birth' => '1990-04-12',
+            'sex' => 'Female',
+            'purok' => 'Purok 2',
+            'mobile_number' => '09171234567',
+        ]);
+
+        $this->postJson('/api/admin/barangay-registry/import', [
+            'records' => [
+                [
+                    'first_name' => 'Maria',
+                    'last_name' => 'Santos',
+                    'date_of_birth' => '1990-04-12',
+                    'sex' => 'Female',
+                    'purok' => 'Purok 2',
+                    'mobile_number' => '09171234567',
+                ],
+                [
+                    'first_name' => 'Juan',
+                    'middle_name' => 'Dela',
+                    'last_name' => 'Cruz',
+                    'date_of_birth' => '1985-02-01',
+                    'sex' => 'Male',
+                    'purok' => 'Purok 1',
+                    'address' => 'Main Street',
+                    'mobile_number' => '09181234567',
+                ],
+            ],
+        ])->assertOk()
+            ->assertJsonPath('imported_count', 1)
+            ->assertJsonPath('skipped_count', 1);
+
+        $this->assertSame(2, BarangayRegistry::count());
+        $imported = BarangayRegistry::where('first_name', 'Juan')->firstOrFail();
+        $this->assertNull($imported->resident_id);
+    }
+
+    public function test_invalid_bulk_import_rows_do_not_create_partial_registry_records(): void
+    {
+        $this->postJson('/api/admin/barangay-registry/import', [
+            'records' => [
+                [
+                    'first_name' => 'Jamie',
+                    'last_name' => 'Resident',
+                    'date_of_birth' => '1990-01-01',
+                    'sex' => 'Female',
+                    'purok' => 'Purok 1',
+                    'mobile_number' => '09171234567',
+                ],
+                [
+                    'first_name' => 'Invalid',
+                    'last_name' => 'Resident',
+                    'date_of_birth' => '1990-01-01',
+                    'sex' => 'Female',
+                    'purok' => 'Purok 1',
+                    'mobile_number' => '123',
+                ],
+            ],
+        ])->assertUnprocessable()
+            ->assertJsonPath('row_errors.3.0', 'The mobile number field format is invalid.');
+
+        $this->assertSame(0, BarangayRegistry::count());
+    }
+
+    public function test_resident_account_list_includes_the_sign_in_id(): void
+    {
+        $resident = Resident::factory()->create();
+
+        $this->getJson('/api/admin/resident-accounts')
+            ->assertOk()
+            ->assertJsonPath('data.0.id', $resident->id)
+            ->assertJsonPath('data.0.resident_id', $resident->resident_id);
     }
 
     public function test_pending_account_review_includes_registry_match_and_admin_can_approve(): void
@@ -79,7 +158,13 @@ class AdminResidentRegistryTest extends TestCase
 
         $this->patchJson("/api/admin/residents/{$resident->id}/verify")
             ->assertOk()
-            ->assertJsonPath('user.verification_status', 'verified');
+            ->assertJsonPath('user.verification_status', 'verified')
+            ->assertJsonStructure(['user' => ['resident_id']]);
+
+        $resident->refresh();
+        $registryRecord->refresh();
+        $this->assertMatchesRegularExpression('/^\d{6}$/', $resident->resident_id);
+        $this->assertSame($resident->resident_id, $registryRecord->resident_id);
     }
 
     public function test_resident_registry_dashboard_reports_registry_and_verification_totals(): void

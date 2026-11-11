@@ -14,6 +14,7 @@ use App\Models\SummonEntry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
@@ -126,7 +127,8 @@ class AdminController extends Controller
                     ->orWhere('suffix', 'like', "%{$search}%")
                     ->orWhere('purok', 'like', "%{$search}%")
                     ->orWhere('address', 'like', "%{$search}%")
-                    ->orWhere('mobile_number', 'like', "%{$search}%");
+                    ->orWhere('mobile_number', 'like', "%{$search}%")
+                    ->orWhere('resident_id', 'like', "%{$search}%");
             });
         }
 
@@ -170,12 +172,92 @@ class AdminController extends Controller
             'mobile_number' => ['required', 'regex:/^09\\d{9}$/'],
         ]);
 
+        if ($this->registryRecordExists($validated)) {
+            return response()->json([
+                'message' => 'This resident is already in the barangay registry.',
+                'errors' => ['resident' => ['This resident is already in the barangay registry.']],
+            ], 422);
+        }
+
         $record = BarangayRegistry::create($validated);
 
         return response()->json([
             'message' => 'Resident added to the barangay registry.',
             'resident' => $record,
         ], 201);
+    }
+
+    public function importBarangayRegistry(Request $request)
+    {
+        $validated = $request->validate([
+            'records' => ['required', 'array', 'min:1', 'max:500'],
+            'records.*' => ['required', 'array'],
+        ]);
+
+        $rules = [
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'suffix' => ['nullable', 'string', 'max:50'],
+            'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
+            'sex' => ['required', 'string', 'max:50'],
+            'purok' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'mobile_number' => ['required', 'regex:/^09\\d{9}$/'],
+        ];
+        $records = [];
+        $rowErrors = [];
+
+        foreach ($validated['records'] as $index => $record) {
+            $validator = Validator::make($record, $rules);
+            if ($validator->fails()) {
+                $rowErrors[$index + 2] = $validator->errors()->all();
+                continue;
+            }
+
+            $records[] = $validator->validated();
+        }
+
+        if ($rowErrors) {
+            return response()->json([
+                'message' => 'Please correct the spreadsheet rows with invalid or missing information and upload it again.',
+                'row_errors' => $rowErrors,
+            ], 422);
+        }
+
+        $result = DB::transaction(function () use ($records) {
+            $imported = 0;
+            $skipped = 0;
+
+            foreach ($records as $record) {
+                if ($this->registryRecordExists($record)) {
+                    $skipped++;
+                    continue;
+                }
+
+                BarangayRegistry::create($record);
+                $imported++;
+            }
+
+            return compact('imported', 'skipped');
+        });
+
+        return response()->json([
+            'message' => "{$result['imported']} resident(s) added to the masterlist; {$result['skipped']} duplicate(s) skipped.",
+            'imported_count' => $result['imported'],
+            'skipped_count' => $result['skipped'],
+        ]);
+    }
+
+    private function registryRecordExists(array $record): bool
+    {
+        return BarangayRegistry::query()
+            ->where('first_name', $record['first_name'])
+            ->where('last_name', $record['last_name'])
+            ->whereDate('date_of_birth', $record['date_of_birth'])
+            ->where('sex', $record['sex'])
+            ->where('purok', $record['purok'])
+            ->exists();
     }
 
     public function residentAccounts(Request $request)
@@ -185,11 +267,11 @@ class AdminController extends Controller
             'per_page' => ['nullable', 'integer', 'between:1,15'],
         ]);
         $query = Resident::query()
-            ->select(['id','name','first_name','middle_name','last_name','email','verification_status','is_active','last_login_at','created_at'])
+            ->select(['id','resident_id','name','first_name','middle_name','last_name','email','verification_status','is_active','last_login_at','created_at'])
             ->selectRaw('(SELECT COUNT(*) FROM residents AS same_name_accounts WHERE LOWER(TRIM(COALESCE(same_name_accounts.first_name, \'\'))) = LOWER(TRIM(COALESCE(residents.first_name, \'\'))) AND LOWER(TRIM(COALESCE(same_name_accounts.middle_name, \'\'))) = LOWER(TRIM(COALESCE(residents.middle_name, \'\'))) AND LOWER(TRIM(COALESCE(same_name_accounts.last_name, \'\'))) = LOWER(TRIM(COALESCE(residents.last_name, \'\')))) AS same_name_accounts');
         if (!empty($validated['search'])) {
             $term = trim($validated['search']);
-            $query->where(fn ($q) => $q->where('name', 'like', "%{$term}%")->orWhere('email', 'like', "%{$term}%"));
+            $query->where(fn ($q) => $q->where('name', 'like', "%{$term}%")->orWhere('email', 'like', "%{$term}%")->orWhere('resident_id', 'like', "%{$term}%"));
         }
         return $query
             ->orderByRaw("LOWER(TRIM(COALESCE(first_name, '')))")
@@ -550,17 +632,14 @@ class AdminController extends Controller
         return Resident::where('verification_status', 'pending')
             ->latest()
             ->get()
-            ->map(function (Resident $resident) {
-                $resident->setAttribute(
-                    'registry_match',
-                    BarangayRegistry::query()
-                        ->where('first_name', $resident->first_name)
-                        ->where('last_name', $resident->last_name)
-                        ->whereDate('date_of_birth', $resident->date_of_birth)
-                        ->where('sex', $resident->sex)
-                        ->where('purok', $resident->purok)
-                        ->first(),
-                );
+            ->map(function ($resident) {
+                $resident->registry_match = BarangayRegistry::query()
+                    ->where('first_name', $resident->first_name)
+                    ->where('last_name', $resident->last_name)
+                    ->whereDate('date_of_birth', $resident->date_of_birth)
+                    ->where('sex', $resident->sex)
+                    ->where('purok', $resident->purok)
+                    ->first();
 
                 return $resident;
             });
@@ -568,9 +647,44 @@ class AdminController extends Controller
 
     public function verifyResident(Resident $user)
     {
-        $user->update(['verification_status' => 'verified', 'rejection_reason' => null]);
+        $user = DB::transaction(function () use ($user) {
+            $user = Resident::query()->lockForUpdate()->findOrFail($user->id);
+            $residentId = $user->resident_id ?: $this->generateResidentId();
+            $user->forceFill([
+                'resident_id' => $residentId,
+                'verification_status' => 'verified',
+                'rejection_reason' => null,
+            ])->save();
+
+            $registryRecord = BarangayRegistry::query()
+                ->where('first_name', $user->first_name)
+                ->where('last_name', $user->last_name)
+                ->whereDate('date_of_birth', $user->date_of_birth)
+                ->where('sex', $user->sex)
+                ->where('purok', $user->purok)
+                ->lockForUpdate()
+                ->first();
+
+            if ($registryRecord && ! $registryRecord->resident_id) {
+                $registryRecord->forceFill(['resident_id' => $residentId])->save();
+            }
+
+            return $user->fresh();
+        });
 
         return response()->json(['message' => 'Resident verified.', 'user' => $user]);
+    }
+
+    private function generateResidentId(): string
+    {
+        do {
+            $residentId = (string) random_int(100000, 999999);
+        } while (
+            Resident::query()->where('resident_id', $residentId)->exists()
+            || BarangayRegistry::query()->where('resident_id', $residentId)->exists()
+        );
+
+        return $residentId;
     }
 
     public function rejectResident(Request $request, Resident $user)

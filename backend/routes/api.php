@@ -72,6 +72,13 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/document-requests', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'index']);
     Route::get('/document-requests/{documentRequest}/requirements/{requirement}', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'viewRequirement']);
     Route::get('/document-requests/{documentRequest}', [\App\Http\Controllers\AdminDocumentRequestHistoryController::class, 'show']);
+    Route::patch('/document-requests/{documentRequest}/status', [\App\Http\Controllers\StaffController::class, 'updateDocumentRequestStatus']);
+    Route::post('/document-requests/{documentRequest}/generate', [\App\Http\Controllers\StaffController::class, 'generateDocumentPreview']);
+    Route::patch('/document-requests/{documentRequest}/fee', [\App\Http\Controllers\StaffController::class, 'updateDocumentRequestFee']);
+    Route::patch('/document-requests/{documentRequest}/construction-inspection', [\App\Http\Controllers\StaffController::class, 'saveConstructionInspection']);
+    Route::get('/document-requests/{documentRequest}/construction-inspection', [\App\Http\Controllers\StaffController::class, 'viewConstructionInspection']);
+    Route::patch('/document-requests/{documentRequest}/permit-inspection', [\App\Http\Controllers\StaffController::class, 'saveConstructionInspection']);
+    Route::get('/document-requests/{documentRequest}/permit-inspection', [\App\Http\Controllers\StaffController::class, 'viewConstructionInspection']);
     Route::get('/bantaybot/escalations', [ResidentController::class, 'adminBotEscalations']);
     Route::patch('/bantaybot/escalations/{chatbotEscalation}/reply', [ResidentController::class, 'replyToBotEscalation']);
     Route::get('/bantaybot/faqs', [ResidentController::class, 'adminBotFaqs']);
@@ -82,6 +89,7 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/residents/registry-stats', [AdminController::class, 'residentRegistryStats']);
     Route::get('/barangay-registry', [AdminController::class, 'barangayRegistry']);
     Route::post('/barangay-registry', [AdminController::class, 'storeBarangayRegistry']);
+    Route::post('/barangay-registry/import', [AdminController::class, 'importBarangayRegistry']);
     Route::get('/resident-accounts', [AdminController::class, 'residentAccounts']);
     Route::patch('/resident-accounts/{resident}/status', [AdminController::class, 'updateResidentAccountStatus']);
     Route::get('/pending-residents', [AdminController::class, 'pendingResidents']);

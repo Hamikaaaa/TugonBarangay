@@ -10,6 +10,7 @@ use App\Models\DocumentRequestEvent;
 use App\Models\DocumentType;
 use App\Models\Resident;
 use App\Models\ResidentNotification;
+use App\Models\Staff;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,7 @@ class StaffController extends Controller
     public function documentRequests(Request $request)
     {
         $validated = $request->validate([
-            'status' => ['sometimes', 'string', 'in:all,pending,under_review,processing,for_correction,ready_for_release,completed,rejected'],
+            'status' => ['sometimes', 'string', 'in:all,under_review,for_correction,ready_for_release,completed,rejected'],
             'document_type' => ['sometimes', 'string', 'max:100'],
             'search' => ['sometimes', 'string', 'max:150'],
             'from' => ['sometimes', 'date_format:Y-m-d'],
@@ -36,7 +37,11 @@ class StaffController extends Controller
         if (array_key_exists('status', $validated)) {
             $status = $validated['status'];
             if ($status !== 'all') {
-                $query->where('status', $status);
+                if ($status === 'under_review') {
+                    $query->whereIn('status', ['pending', 'under_review', 'processing']);
+                } else {
+                    $query->where('status', $status);
+                }
             }
         } else {
             $query->whereNotIn('status', ['completed', 'rejected']);
@@ -176,7 +181,10 @@ class StaffController extends Controller
         ]);
 
         $previousFee = (float) $documentRequest->fee;
-        $documentRequest->fee = (float) $validated['assessed_fee'];
+        $documentRequest->setAttribute(
+            'fee',
+            number_format((float) $validated['assessed_fee'], 2, '.', ''),
+        );
         $details['fee_assessed'] = true;
         $newFilePath = null;
         if ($request->hasFile('inspection_report')) {
@@ -345,7 +353,7 @@ class StaffController extends Controller
         }
 
         if (Schema::hasColumn('document_requests', 'document_generated_at')) {
-            $documentRequest->document_generated_at = now();
+            $documentRequest->document_generated_at = \Illuminate\Support\Carbon::now();
         }
 
         if (Schema::hasColumn('document_requests', 'staff_remarks') && array_key_exists('staff_remarks', $validated)) {
@@ -458,7 +466,7 @@ class StaffController extends Controller
             ], 422);
         }
 
-        if ($status === 'ready_for_release' && (
+        if ($status === 'ready_for_release' && $request->user()->role !== 'admin' && (
             $documentRequest->document_content === null
             || (Schema::hasColumn('document_requests', 'document_generated_at') && !$documentRequest->document_generated_at)
         )) {
@@ -524,7 +532,9 @@ class StaffController extends Controller
             'status' => $status,
             'status_changed_at' => now(),
         ];
-        if (in_array($status, ['under_review', 'processing'], true) && !$documentRequest->assigned_staff_id) {
+        if ($request->user() instanceof Staff
+            && in_array($status, ['under_review', 'processing'], true)
+            && !$documentRequest->assigned_staff_id) {
             $update['assigned_staff_id'] = $request->user()->id;
         }
 
@@ -1172,7 +1182,9 @@ class StaffController extends Controller
                                 'complaint_id' => $complaint->id,
                                 'subject' => $complaint->subject,
                                 'status' => $complaint->status,
-                                'incident_date' => $complaint->incident_date?->toDateString(),
+                                'incident_date' => $complaint->incident_date
+                                    ? Carbon::parse($complaint->incident_date)->toDateString()
+                                    : null,
                                 'matched_name' => $listedName,
                                 'match_type' => $exact ? 'Exact match' : 'Close match',
                                 'similarity' => round($similarity),

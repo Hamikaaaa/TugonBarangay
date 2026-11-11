@@ -250,17 +250,112 @@ function DocumentRequestHistory() {
       </section>
 
       {selectedRequest && (
-        <RequestHistoryModal request={selectedRequest} onClose={() => setSelectedRequest(null)} />
+        <RequestHistoryModal
+          request={selectedRequest}
+          token={token}
+          onClose={() => setSelectedRequest(null)}
+          onUpdated={(updatedRequest) => {
+            setSelectedRequest(updatedRequest);
+            setRequests((current) => current.map((item) => item.id === updatedRequest.id ? { ...item, ...updatedRequest } : item));
+          }}
+        />
       )}
     </AdminLayout>
   );
 }
 
-function RequestHistoryModal({ request, onClose }) {
+function RequestHistoryModal({ request, token, onClose, onUpdated }) {
   const [documentOpen, setDocumentOpen] = useState(false);
-  const fields = request.details?.form_fields || {};
-  const hasGeneratedDocument = request.document_content && Object.keys(request.document_content).length > 0;
-  const canPreviewDocument = Boolean(request.document_type);
+  const [currentRequest, setCurrentRequest] = useState(request);
+  const [working, setWorking] = useState(false);
+  const [actionError, setActionError] = useState("");
+  const [fee, setFee] = useState(String(request.fee || 0));
+  const [staffRemarks, setStaffRemarks] = useState(request.staff_remarks || "");
+  const [rejectionReason, setRejectionReason] = useState(request.rejection_reason || "");
+  const [inspectionFile, setInspectionFile] = useState(null);
+  const [inspectionGoAhead, setInspectionGoAhead] = useState(request.details?.inspection_report?.decision === "go_ahead");
+  const [inspectionNote, setInspectionNote] = useState(request.details?.inspection_report?.staff_note || "");
+  const [inspectionFee, setInspectionFee] = useState(String(request.details?.inspection_report?.assessed_fee ?? request.fee ?? 0));
+  const fields = currentRequest.details?.form_fields || {};
+  const hasGeneratedDocument = currentRequest.document_content && Object.keys(currentRequest.document_content).length > 0;
+  const canPreviewDocument = Boolean(currentRequest.document_type);
+  const canEditDocument = ["processing", "ready_for_release"].includes(currentRequest.status);
+
+  const updateRequest = async (endpoint, method, body) => {
+    setWorking(true);
+    setActionError("");
+    try {
+      const response = await fetch(`${API_URL}/admin/document-requests/${currentRequest.id}/${endpoint}`, {
+        method,
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to update this document request.");
+      const updatedRequest = {
+        ...currentRequest,
+        ...payload.data,
+        events: payload.data.events ?? currentRequest.events,
+      };
+      setCurrentRequest(updatedRequest);
+      onUpdated(updatedRequest);
+      return updatedRequest;
+    } catch (requestError) {
+      setActionError(requestError.message);
+      throw requestError;
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const updateStatus = async (status, extra = {}) => {
+    await updateRequest("status", "PATCH", { status, ...extra });
+  };
+
+  const saveDocument = async (documentContent) => {
+    await updateRequest("generate", "POST", { document_content: documentContent });
+  };
+
+  const saveFee = async () => {
+    await updateRequest("fee", "PATCH", { fee });
+  };
+
+  const saveInspection = async () => {
+    setWorking(true);
+    setActionError("");
+    try {
+      const formData = new FormData();
+      if (inspectionFile) formData.append("inspection_report", inspectionFile);
+      formData.append("councilor_go_ahead", inspectionGoAhead ? "1" : "0");
+      formData.append("staff_note", inspectionNote);
+      formData.append("assessed_fee", inspectionFee);
+      const response = await fetch(`${API_URL}/admin/document-requests/${currentRequest.id}/construction-inspection`, {
+        method: "PATCH",
+        headers: authHeaders(token),
+        body: formData,
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to save the permit inspection.");
+      const updatedRequest = {
+        ...currentRequest,
+        ...payload.data,
+        events: payload.data.events ?? currentRequest.events,
+      };
+      setCurrentRequest(updatedRequest);
+      onUpdated(updatedRequest);
+      setInspectionFile(null);
+    } catch (requestError) {
+      setActionError(requestError.message);
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const runAction = (action) => {
+    action().catch(() => {});
+  };
+  const requiresInspection = ["Construction Permit", "Fencing Permit"].includes(currentRequest.document_type);
+  const existingInspection = currentRequest.details?.inspection_report || {};
 
   return (
     <>
@@ -268,20 +363,73 @@ function RequestHistoryModal({ request, onClose }) {
         <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
           <div className="flex items-start justify-between border-b border-slate-200 p-5">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-[#2455D6]">Read-only request history</p>
-              <h3 className="mt-1 text-xl font-bold text-[#172B4D]">#{request.id} · {request.document_type_label || request.document_type}</h3>
-              <p className="mt-1 text-sm text-slate-500">{request.resident?.name} · {labelStatus(request.status)}</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-[#2455D6]">Document request processing</p>
+              <h3 className="mt-1 text-xl font-bold text-[#172B4D]">#{currentRequest.id} · {currentRequest.document_type_label || currentRequest.document_type}</h3>
+              <p className="mt-1 text-sm text-slate-500">{currentRequest.resident?.name} · {labelStatus(currentRequest.status)}</p>
             </div>
             <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close request history"><X size={20} /></button>
           </div>
           <div className="overflow-y-auto p-5">
+            <section className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+              <h4 className="font-bold text-[#172B4D]">Admin actions</h4>
+              <p className="mt-1 text-xs leading-5 text-slate-600">Admins can review, prepare, release, and complete document requests. Existing compliance checks remain in effect.</p>
+              {actionError && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{actionError}</p>}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {currentRequest.status === "pending" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("under_review"))} className="rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Start review</button>}
+                {currentRequest.status === "under_review" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("processing"))} className="rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Begin processing</button>}
+                {canEditDocument && <button type="button" onClick={() => setDocumentOpen(true)} className="rounded-lg border border-[#2455D6] bg-white px-3 py-2 text-xs font-bold text-[#2455D6]">{hasGeneratedDocument ? "Review / edit document" : "Generate document"}</button>}
+                {currentRequest.status === "processing" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("ready_for_release"))} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Mark ready for release</button>}
+                {currentRequest.status === "ready_for_release" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("completed"))} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Mark completed</button>}
+              </div>
+              {["pending", "under_review", "processing"].includes(currentRequest.status) && (
+                <div className="mt-4 grid gap-2 border-t border-blue-100 pt-4 sm:grid-cols-2">
+                  <label className="text-xs font-semibold text-slate-600">Review note / correction instructions
+                    <textarea value={staffRemarks} onChange={(event) => setStaffRemarks(event.target.value)} maxLength={2000} className="mt-1 block min-h-16 w-full rounded-lg border border-slate-200 p-2 text-sm" />
+                  </label>
+                  <label className="text-xs font-semibold text-slate-600">Rejection reason
+                    <textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} maxLength={2000} className="mt-1 block min-h-16 w-full rounded-lg border border-slate-200 p-2 text-sm" />
+                  </label>
+                  <div className="flex flex-wrap gap-2 sm:col-span-2">
+                    <button type="button" disabled={working || !staffRemarks.trim()} onClick={() => runAction(() => updateStatus("for_correction", { staff_remarks: staffRemarks }))} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs font-bold text-violet-800 disabled:opacity-50">Request correction</button>
+                    <button type="button" disabled={working || !staffRemarks.trim() || !rejectionReason.trim()} onClick={() => runAction(() => updateStatus("rejected", { staff_remarks: staffRemarks, rejection_reason: rejectionReason }))} className="rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-700 disabled:opacity-50">Reject request</button>
+                  </div>
+                </div>
+              )}
+              {currentRequest.details?.fee_mode === "assessed" && ["pending", "under_review", "processing"].includes(currentRequest.status) && (
+                <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-blue-100 pt-4">
+                  <label className="text-xs font-semibold text-slate-600">Assessed fee (₱)
+                    <input type="number" min="0" step="0.01" value={fee} onChange={(event) => setFee(event.target.value)} className="mt-1 block h-9 w-36 rounded-lg border border-slate-200 px-2 text-sm" />
+                  </label>
+                  <button type="button" disabled={working} onClick={() => runAction(saveFee)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 disabled:opacity-50">Save fee</button>
+                </div>
+              )}
+              {requiresInspection && currentRequest.status === "processing" && (
+                <div className="mt-4 space-y-3 border-t border-blue-100 pt-4">
+                  <p className="text-xs font-bold text-slate-700">Permit inspection</p>
+                  {existingInspection.file_path && <p className="text-xs text-slate-500">Current report: {existingInspection.original_name || "Uploaded report"}</p>}
+                  <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setInspectionFile(event.target.files?.[0] || null)} className="block w-full text-xs text-slate-600" />
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-700">
+                    <input type="checkbox" checked={inspectionGoAhead} onChange={(event) => setInspectionGoAhead(event.target.checked)} />
+                    Councilor go-ahead recorded
+                  </label>
+                  <label className="block text-xs font-medium text-slate-600">Inspection note
+                    <textarea value={inspectionNote} onChange={(event) => setInspectionNote(event.target.value)} maxLength={2000} className="mt-1 block min-h-16 w-full rounded-lg border border-slate-200 p-2 text-sm" />
+                  </label>
+                  <label className="block text-xs font-medium text-slate-600">Assessed fee (₱)
+                    <input type="number" min="0" step="0.01" value={inspectionFee} onChange={(event) => setInspectionFee(event.target.value)} className="mt-1 block h-9 w-36 rounded-lg border border-slate-200 px-2 text-sm" />
+                  </label>
+                  <button type="button" disabled={working || (!inspectionFile && !existingInspection.file_path)} onClick={saveInspection} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 disabled:opacity-50">Save inspection</button>
+                </div>
+              )}
+            </section>
+
             <div className="grid gap-3 sm:grid-cols-2">
-              <Info label="Assigned handler" value={request.assigned_staff?.name || "Not assigned yet"} />
-              <Info label="Fee" value={`₱${Number(request.fee || 0).toFixed(2)}`} />
-              <Info label="Submitted" value={formatDateTime(request.created_at)} />
-              <Info label="Status last changed" value={formatDateTime(request.status_changed_at || request.updated_at)} />
-              {request.rejection_reason && <Info label="Rejection reason" value={request.rejection_reason} />}
-              {request.staff_remarks && <Info label="Staff remarks" value={request.staff_remarks} />}
+              <Info label="Assigned handler" value={currentRequest.assigned_staff?.name || "Not assigned yet"} />
+              <Info label="Fee" value={`₱${Number(currentRequest.fee || 0).toFixed(2)}`} />
+              <Info label="Submitted" value={formatDateTime(currentRequest.created_at)} />
+              <Info label="Status last changed" value={formatDateTime(currentRequest.status_changed_at || currentRequest.updated_at)} />
+              {currentRequest.rejection_reason && <Info label="Rejection reason" value={currentRequest.rejection_reason} />}
+              {currentRequest.staff_remarks && <Info label="Staff remarks" value={currentRequest.staff_remarks} />}
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#D9E6FF] bg-[#F6F8FC] p-4">
@@ -289,7 +437,7 @@ function RequestHistoryModal({ request, onClose }) {
                 <h4 className="font-bold text-[#172B4D]">Generated document</h4>
                 <p className="mt-1 text-xs text-slate-500">
                   {hasGeneratedDocument
-                    ? `Soft copy generated ${formatDateTime(request.document_generated_at)}.`
+                            ? `Soft copy generated ${formatDateTime(currentRequest.document_generated_at)}.`
                     : "No saved soft copy is available yet. You can still preview the document template."}
                 </p>
               </div>
@@ -315,7 +463,7 @@ function RequestHistoryModal({ request, onClose }) {
 
             <h4 className="mt-7 font-bold text-[#172B4D]">Processing history</h4>
             <ol className="mt-3 space-y-3 border-l-2 border-blue-100 pl-4">
-              {(request.events || []).map((event) => (
+              {(currentRequest.events || []).map((event) => (
                 <li key={event.id} className="relative rounded-xl bg-slate-50 p-3">
                   <span className="absolute left-[-1.35rem] top-4 h-2.5 w-2.5 rounded-full bg-[#2455D6]" />
                   <p className="text-sm font-bold text-slate-800">{labelAction(event.action)}</p>
@@ -325,15 +473,16 @@ function RequestHistoryModal({ request, onClose }) {
                   <p className="mt-1 text-xs text-slate-600">{eventDescription(event)}</p>
                 </li>
               ))}
-              {!request.events?.length && <li className="text-sm text-slate-500">No processing events recorded.</li>}
+              {!currentRequest.events?.length && <li className="text-sm text-slate-500">No processing events recorded.</li>}
             </ol>
           </div>
         </div>
       </div>
       {documentOpen && canPreviewDocument && (
         <DocumentPreviewModal
-          request={request}
-          readOnly
+          request={currentRequest}
+          readOnly={!canEditDocument}
+          onSave={canEditDocument ? saveDocument : undefined}
           onClose={() => setDocumentOpen(false)}
         />
       )}
@@ -370,6 +519,7 @@ function tabClass(active) {
 }
 
 function labelStatus(status = "") {
+  if (["pending", "under_review", "processing"].includes(status)) return "Under Review";
   return status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 

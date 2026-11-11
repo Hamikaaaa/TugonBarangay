@@ -116,7 +116,7 @@ class AdminDocumentRequestHistoryController extends Controller
             ->where('designation', Staff::DOCUMENT_REQUEST_OFFICER)
             ->orderBy('name')
             ->get()
-            ->map(fn (Staff $staff) => [
+            ->map(fn ($staff) => [
                 'id' => $staff->id,
                 'name' => $staff->name,
                 'active_requests' => DocumentRequest::where('assigned_staff_id', $staff->id)
