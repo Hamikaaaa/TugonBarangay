@@ -5,7 +5,7 @@ import { RequestRow } from "../../components/resident/ResidentUI";
 const BRAND_GRADIENT =
   "bg-gradient-to-r from-[#2455D6] via-[#7138E8] to-[#E52B32]";
 
-function Overview({ firstName, verified, dashboard, onNavigate, token }) {
+function Overview({ firstName, verified, dashboard, onNavigate, token, user }) {
   const stats = dashboard?.stats || {};
   const requests = dashboard?.requests || [];
 
@@ -105,6 +105,11 @@ function Overview({ firstName, verified, dashboard, onNavigate, token }) {
                 <span className="mt-2 inline-flex h-7 items-center gap-1 rounded-full bg-[#2455D6]/10 px-3 text-xs font-semibold text-[#2455D6]">
                   <Check className="h-3.5 w-3.5" aria-hidden="true" />
                   Verified
+                </span>
+              )}
+              {user?.resident_id && (
+                <span className="mt-2 inline-flex h-7 items-center rounded-full border border-slate-200 bg-white/80 px-3 text-xs font-semibold text-[#55708F]">
+                  Resident ID: {user.resident_id}
                 </span>
               )}
             </div>
