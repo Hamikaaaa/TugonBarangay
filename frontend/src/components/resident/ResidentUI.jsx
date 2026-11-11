@@ -7,6 +7,7 @@ import {
   downloadResidentFile,
   primaryButtonClass,
 } from "../../services/residentApi";
+import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
 function StatCard({ label, value, hint, color }) {
   const colors = {
@@ -192,7 +193,7 @@ function RequestRow({ request, token }) {
                 {title}
               </p>
               <p className="mt-1 text-xs text-slate-400">
-                Request ID: {request.id ?? "Not available"} · Submitted{" "}
+                Request ID: {request.id == null ? "Not available" : formatDocumentRequestId(request.id)} · Submitted{" "}
                 {request.date ||
                   (request.created_at
                     ? new Date(request.created_at).toLocaleDateString()
@@ -240,7 +241,7 @@ function RequestRow({ request, token }) {
                   {title}
                 </h2>
                 <p className="mt-1 text-xs text-slate-500">
-                  Request ID: {request.id ?? "Not available"}
+                  Request ID: {request.id == null ? "Not available" : formatDocumentRequestId(request.id)}
                 </p>
               </div>
               <button
