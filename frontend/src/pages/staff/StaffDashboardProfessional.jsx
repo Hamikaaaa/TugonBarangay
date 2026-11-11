@@ -82,14 +82,22 @@ const DOCUMENT_TYPE_ICONS = {
 };
 
 const STATUS_META = {
-  pending: { label: "Pending", className: "bg-[#FFF7E7] text-[#805900] ring-[#F1D9A8]", icon: Clock3 },
+  pending: { label: "Under Review", className: "bg-[#FFF7E7] text-[#805900] ring-[#F1D9A8]", icon: Clock3 },
   under_review: { label: "Under Review", className: "bg-[#EEF4FF] text-[#2455D6] ring-[#D9E6FF]", icon: Search },
-  processing: { label: "Processing", className: "bg-[#EAF1FF] text-[#123F70] ring-[#D9E6FF]", icon: Settings2 },
+  processing: { label: "Under Review", className: "bg-[#EAF1FF] text-[#123F70] ring-[#D9E6FF]", icon: Settings2 },
   for_correction: { label: "For Correction", className: "bg-violet-50 text-violet-700 ring-violet-200", icon: CircleAlert },
   ready_for_release: { label: "Ready for Release", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", icon: FileCheck2 },
   completed: { label: "Completed", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", icon: CheckCircle2 },
   rejected: { label: "Rejected", className: "bg-[#FFF0EE] text-[#C74444] ring-[#F2D4D0]", icon: CircleAlert },
 };
+
+const STATUS_FILTERS = [
+  ["under_review", "Under Review"],
+  ["for_correction", "For Correction"],
+  ["ready_for_release", "Ready for Release"],
+  ["completed", "Completed"],
+  ["rejected", "Rejected"],
+];
 
 function hasApprovedPermitInspection(request) {
   const report = request?.details?.inspection_report;
@@ -101,9 +109,7 @@ function requiresPermitInspection(request) {
 }
 
 const WORKFLOW = [
-  { status: "pending", description: "Request received" },
-  { status: "under_review", description: "Check resident details and uploads" },
-  { status: "processing", description: "Prepare the requested document" },
+  { status: "under_review", description: "Review the request and prepare the document" },
   { status: "ready_for_release", description: "Document is ready to be claimed" },
   { status: "completed", description: "Resident has claimed the document" },
 ];
@@ -477,7 +483,9 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
   };
 
   const currentIndex = selectedRequest
-    ? WORKFLOW.findIndex((step) => step.status === selectedRequest.status)
+    ? WORKFLOW.findIndex((step) => step.status === (
+      ["pending", "processing"].includes(selectedRequest.status) ? "under_review" : selectedRequest.status
+    ))
     : -1;
   const offeredDocumentTypes = documentTypes.map(({ label, value }) => ({ label, value }));
   const activeType = offeredDocumentTypes.find((item) => item.value === documentType);
@@ -522,9 +530,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
           {!requestId && (
             <>
           <section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label={`${activeDocumentLabel || "All document"} request workload`}>
-            <SummaryCard label="Pending Requests" value={counts.pending} icon={Clock3} color="amber" note="Awaiting initial review" onClick={() => quickFilter("pending")} />
-            <SummaryCard label="Under Review" value={counts.under_review} icon={Search} color="blue" note="Requirements being checked" onClick={() => quickFilter("under_review")} />
-            <SummaryCard label="Processing" value={counts.processing} icon={Settings2} color="blue" note="Document being prepared" onClick={() => quickFilter("processing")} />
+            <SummaryCard label="Under Review" value={Number(counts.pending || 0) + Number(counts.under_review || 0) + Number(counts.processing || 0)} icon={Search} color="blue" note="Requests being reviewed and prepared" onClick={() => quickFilter("under_review")} />
             <SummaryCard label="For Correction" value={counts.for_correction} icon={CircleAlert} color="violet" note="Waiting for resident update" onClick={() => quickFilter("for_correction")} />
             <SummaryCard label="Ready for Release" value={counts.ready_for_release} icon={FileCheck2} color="emerald" note="Awaiting resident pickup" onClick={() => quickFilter("ready_for_release")} />
           </section>
@@ -561,7 +567,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                 <Filter size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(1); }} className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-9 pr-9 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/15">
                   <option value="all">All statuses</option>
-                  {Object.entries(STATUS_META).map(([value, status]) => <option key={value} value={value}>{status.label}</option>)}
+                  {STATUS_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
                 <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
               </label>
@@ -759,8 +765,9 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                   {!["for_correction", "rejected"].includes(selectedRequest.status) && (
                     <ol className="space-y-3" aria-label="Request progress steps">
                       {WORKFLOW.map(({ status, description }, index) => {
-                        const complete = currentIndex > index;
-                        const active = selectedRequest.status === status;
+                        const complete = currentIndex > index ||
+                          (selectedRequest.status === "completed" && currentIndex === index);
+                        const active = selectedRequest.status === status && !complete;
                         return (
                           <li key={status} className="flex items-start gap-3">
                             <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${complete ? "border-[#21864A] bg-[#21864A] text-white" : active ? "border-[#2455D6] bg-white text-[#2455D6] ring-2 ring-[#2455D6]/15" : "border-slate-200 bg-white text-slate-400"}`}>{complete ? <CheckCircle2 size={14} /> : index + 1}</span>

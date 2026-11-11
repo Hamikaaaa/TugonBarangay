@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rules\Password;
 
 class AuthController extends Controller
@@ -182,6 +183,13 @@ class AuthController extends Controller
             return response()->json([
                 'message' => 'You are not registered in our barangay. Please contact the barangay office or email barangay@tugonbarangay.gov.ph for assistance.',
                 'errors' => ['registry' => ['You are not registered in our barangay. Please contact the barangay office or email barangay@tugonbarangay.gov.ph for assistance.']],
+            ], 422);
+        }
+
+        if ($this->residentExistsForRegistry($registryRecord)) {
+            return response()->json([
+                'message' => 'A resident account already exists for this registry record. Please sign in or contact the barangay office for help.',
+                'errors' => ['registry' => ['A resident account already exists for this registry record.']],
             ], 422);
         }
 
@@ -427,6 +435,21 @@ class AuthController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
             $payload = $pending->registration_payload;
+            $registryRecord = BarangayRegistry::query()
+                ->where('first_name', $payload['first_name'])
+                ->where('last_name', $payload['last_name'])
+                ->whereDate('date_of_birth', $payload['date_of_birth'])
+                ->where('sex', $payload['sex'])
+                ->where('purok', $payload['purok'])
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($this->residentExistsForRegistry($registryRecord)) {
+                throw ValidationException::withMessages([
+                    'registry' => ['A resident account already exists for this registry record.'],
+                ]);
+            }
+
             $name = trim(implode(' ', array_filter([
                 $payload['first_name'],
                 $payload['middle_name'] ?? null,
@@ -462,6 +485,17 @@ class AuthController extends Controller
         });
     }
 
+    private function residentExistsForRegistry(BarangayRegistry $registryRecord): bool
+    {
+        return Resident::query()
+            ->where('first_name', $registryRecord->first_name)
+            ->where('last_name', $registryRecord->last_name)
+            ->whereDate('date_of_birth', $registryRecord->date_of_birth)
+            ->where('sex', $registryRecord->sex)
+            ->where('purok', $registryRecord->purok)
+            ->exists();
+    }
+
     private function maskDestination(string $destination, string $channel): string
     {
         if ($channel === 'sms') {
@@ -476,17 +510,21 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $credentials = $request->validate([
-            'email' => ['required', 'email'],
+            'email' => ['required', 'string', 'max:255'],
             'password' => ['required', 'string'],
         ]);
 
-        $user = Resident::where('email', $credentials['email'])->first()
-            ?? Staff::where('email', $credentials['email'])->first()
-            ?? Admin::where('email', $credentials['email'])->first();
+        $identifier = trim($credentials['email']);
+        $email = strtolower($identifier);
+
+        $user = Resident::where('resident_id', strtoupper($identifier))->first()
+            ?? Resident::whereRaw('LOWER(email) = ?', [$email])->first()
+            ?? Staff::whereRaw('LOWER(email) = ?', [$email])->first()
+            ?? Admin::whereRaw('LOWER(email) = ?', [$email])->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
             return response()->json([
-                'message' => 'Invalid email or password.',
+                'message' => 'Invalid resident ID, email, or password.',
             ], 401);
         }
 

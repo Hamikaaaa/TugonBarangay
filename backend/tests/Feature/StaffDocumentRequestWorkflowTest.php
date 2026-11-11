@@ -107,6 +107,26 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         ]);
     }
 
+    public function test_under_review_filter_includes_all_preparation_stages_without_a_pending_filter(): void
+    {
+        DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'status' => 'under_review',
+        ]);
+        DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'status' => 'processing',
+        ]);
+        Sanctum::actingAs($this->documentOfficer);
+
+        $this->getJson('/api/staff/document-requests?status=under_review')
+            ->assertOk()
+            ->assertJsonCount(3, 'data');
+
+        $this->getJson('/api/staff/document-requests?status=pending')
+            ->assertUnprocessable();
+    }
+
     public function test_job_seeker_request_uses_the_same_identity_verification_as_barangay_certificate(): void
     {
         $this->resident->update([

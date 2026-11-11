@@ -9,8 +9,8 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
-import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 
@@ -30,6 +30,7 @@ const blankStaff = () => ({
 
 function StaffAccounts() {
   const { token } = useAuth();
+  const navigate = useNavigate();
   const [staff, setStaff] = useState([]);
   const [draft, setDraft] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -145,12 +146,28 @@ function StaffAccounts() {
   return (
     <AdminLayout title="User Management">
       <div className="space-y-6 pt-6">
-        <AdminPageHeader
-          actionsOnly
-          eyebrow="User management · Access control"
-          title="User management"
-          description="Manage staff accounts and resident accounts from one place. Disabled accounts cannot sign in or continue using active sessions."
+        <nav
+          aria-label="User management sections"
+          className="flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-sm"
         >
+          <button
+            type="button"
+            aria-current="page"
+            className={userManagementTabClass(true)}
+          >
+            Staff Accounts
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate("/admin/user-management/residents")}
+            className={userManagementTabClass(false)}
+          >
+            <Users className="h-4 w-4" aria-hidden="true" />
+            Residents Account
+          </button>
+        </nav>
+
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={() => {
@@ -163,7 +180,7 @@ function StaffAccounts() {
             <Plus className="h-4 w-4" aria-hidden="true" />
             Add staff account
           </button>
-        </AdminPageHeader>
+        </div>
 
         <section
           aria-label="Staff account summary"
@@ -472,6 +489,14 @@ function SummaryCard({ label, value, icon: Icon, tone = "blue" }) {
 
 const fieldClass =
   "mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-normal text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#2455D6] focus:bg-white focus:ring-4 focus:ring-[#2455D6]/10";
+
+function userManagementTabClass(active) {
+  return `inline-flex min-h-11 items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-bold transition ${
+    active
+      ? "border-[#D9E6FF] bg-[#EEF4FF] text-[#2455D6]"
+      : "border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800"
+  }`;
+}
 
 function authHeaders(token) {
   return {
