@@ -67,6 +67,46 @@ class RegistrationVerificationTest extends TestCase
         $this->assertSame(0, RegistrationVerification::count());
     }
 
+    public function test_a_resident_cannot_create_a_second_account_for_the_same_registry_record(): void
+    {
+        Resident::factory()->create([
+            'first_name' => 'Jamie',
+            'last_name' => 'Resident',
+            'date_of_birth' => '1990-01-01',
+            'sex' => 'Female',
+            'purok' => 'Purok 1',
+        ]);
+
+        $this->postJson('/api/register', $this->registrationData('sms'))
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'A resident account already exists for this registry record. Please sign in or contact the barangay office for help.');
+
+        $this->assertSame(0, RegistrationVerification::count());
+    }
+
+    public function test_pending_account_without_an_id_does_not_block_another_registry_registration(): void
+    {
+        Resident::factory()->create([
+            'first_name' => 'Morgan',
+            'last_name' => 'Resident',
+            'date_of_birth' => '1991-02-02',
+            'sex' => 'Male',
+            'purok' => 'Purok 2',
+        ]);
+        config([
+            'services.twilio.account_sid' => 'test-account',
+            'services.twilio.auth_token' => 'test-token',
+            'services.twilio.from' => '+15005550006',
+        ]);
+        Http::fake(['api.twilio.com/*' => Http::response([], 201)]);
+
+        $this->postJson('/api/register', $this->registrationData('sms'))
+            ->assertAccepted()
+            ->assertJsonPath('verification.channel', 'sms');
+
+        $this->assertSame(1, RegistrationVerification::count());
+    }
+
     public function test_sms_code_expires_and_can_be_resent_after_the_cooldown(): void
     {
         config([
@@ -118,6 +158,8 @@ class RegistrationVerificationTest extends TestCase
             ->assertRedirect('http://localhost:5173/registration/verified');
 
         $resident = Resident::firstOrFail();
+        $this->assertNull(BarangayRegistry::firstOrFail()->resident_id);
+        $this->assertNull($resident->resident_id);
         $this->assertNotNull($resident->email_verified_at);
         $this->assertNull($resident->mobile_verified_at);
         $this->assertSame('pending', $resident->verification_status);

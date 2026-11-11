@@ -160,7 +160,7 @@ function Login({ isModal = false }) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.message || "Invalid email or password.");
+        setError(data.message || "Invalid resident ID, email, or password.");
 
         // Automatically remove error after 3 seconds
         setTimeout(() => {
@@ -602,7 +602,7 @@ function Login({ isModal = false }) {
               </>
             ) : (
               <>
-            {/* Email */}
+            {/* Resident ID or email */}
             <div>
               <label
                 htmlFor="email"
@@ -612,7 +612,7 @@ function Login({ isModal = false }) {
                   text-[#55708F]
                 "
               >
-                Email Address
+                Resident ID or Email Address
               </label>
 
               <div className="relative">
@@ -636,11 +636,11 @@ function Login({ isModal = false }) {
 
                 <input
                   id="email"
-                  type="email"
+                  type="text"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="Enter your email address"
+                  placeholder="Enter your resident ID or email"
                   required
                   className="
                     w-full rounded-xl

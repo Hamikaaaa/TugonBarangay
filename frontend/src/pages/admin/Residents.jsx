@@ -5,13 +5,15 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  FileSpreadsheet,
   Search,
   ShieldCheck,
   Users,
   UserPlus,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { readSheet } from "read-excel-file/browser";
 import { useLocation, useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
@@ -49,6 +51,9 @@ function Residents() {
   const [registrySaving, setRegistrySaving] = useState(false);
   const [registryForm, setRegistryForm] = useState(emptyRegistryForm());
   const [registryFormErrors, setRegistryFormErrors] = useState({});
+  const [registryImportPreview, setRegistryImportPreview] = useState(null);
+  const [registryImporting, setRegistryImporting] = useState(false);
+  const registryExcelRef = useRef(null);
 
   const loadDashboardStats = useCallback(async (silent = false) => {
     if (!token || !isDashboard) return;
@@ -192,7 +197,9 @@ function Residents() {
       });
       const payload = await response.json();
       if (!response.ok) {
-        if (response.status === 422) setRegistryFormErrors(payload.errors || {});
+        if (response.status === 422) {
+          setRegistryFormErrors({ ...(payload.errors || {}), message: payload.message });
+        }
         else throw new Error(payload.message || "Unable to add resident to the registry.");
         return;
       }
@@ -205,6 +212,59 @@ function Residents() {
       setError(saveError.message);
     } finally {
       setRegistrySaving(false);
+    }
+  };
+
+  const handleRegistryWorkbook = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setError("");
+    setNotice("");
+    if (file.size > 10 * 1024 * 1024) {
+      setError("Choose an Excel file smaller than 10 MB.");
+      return;
+    }
+    try {
+      const records = await parseRegistryWorkbook(file);
+      setRegistryImportPreview({ fileName: file.name, records });
+    } catch (parseError) {
+      setError(parseError.message);
+    }
+  };
+
+  const importRegistryResidents = async () => {
+    if (!registryImportPreview || registryImporting) return;
+    setRegistryImporting(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`${API_URL}/admin/barangay-registry/import`, {
+        method: "POST",
+        headers: {
+          ...authHeaders(token),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ records: registryImportPreview.records }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        const rowErrors = Object.entries(payload.row_errors || {})
+          .map(([row, messages]) => `Row ${row}: ${messages.join(" ")}`)
+          .join(" ");
+        throw new Error(rowErrors || payload.message || "Unable to import residents.");
+      }
+
+      setRegistryImportPreview(null);
+      setNotice(payload.message);
+      setPage(1);
+      setSearch("");
+      setSearchInput("");
+    } catch (importError) {
+      setError(importError.message);
+    } finally {
+      setRegistryImporting(false);
     }
   };
 
@@ -383,20 +443,21 @@ function Residents() {
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
             <form onSubmit={applySearch} className="flex flex-wrap gap-2 border-b border-slate-100 p-4">
               <label className="sr-only" htmlFor="resident-account-search">Search resident accounts</label>
-              <input id="resident-account-search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search by name or email" className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm" />
+              <input id="resident-account-search" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder="Search by ID, name or email" className="min-h-10 min-w-0 flex-1 rounded-lg border border-slate-200 px-3 text-sm" />
               <button type="submit" className="rounded-lg bg-[#2455D6] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#1D46B5]">Search</button>
             </form>
             <p className="border-b border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               Accounts with matching names are grouped together. Accounts without a recorded login appear first in each group so admins can review and disable extra accounts.
             </p>
-            <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-4">Account</th><th className="p-4">Registered</th><th className="p-4">Verification</th><th className="p-4">Last login</th><th className="p-4">Activity</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
+            <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-4">Account</th><th className="p-4">Resident ID</th><th className="p-4">Registered</th><th className="p-4">Verification</th><th className="p-4">Last login</th><th className="p-4">Activity</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
               <tbody className="divide-y divide-slate-100">{accounts.map((account, index) => {
                 const nameKey = accountNameKey(account);
                 const previousNameKey = index > 0 ? accountNameKey(accounts[index - 1]) : null;
                 const startsDuplicateGroup = account.same_name_accounts > 1 && nameKey !== previousNameKey;
                 return <tr key={account.id} className={startsDuplicateGroup ? "border-t-2 border-t-blue-200 bg-blue-50/30" : ""}>
                 <td className="p-4"><strong>{account.name}</strong>{account.same_name_accounts > 1 && <span className="ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">{account.same_name_accounts} accounts with this name</span>}<span className="block text-xs text-slate-500">{account.email}</span></td>
+                <td className="p-4 font-mono text-xs font-semibold">{account.resident_id || "—"}</td>
                 <td className="p-4">{account.created_at ? new Date(account.created_at).toLocaleDateString() : "—"}</td>
                 <td className="p-4">{account.verification_status}</td>
                 <td className="p-4">{account.last_login_at ? new Date(account.last_login_at).toLocaleString() : "Never"}</td>
@@ -471,7 +532,7 @@ function Residents() {
               <form onSubmit={applySearch} className="flex min-w-0 flex-1 gap-2">
                 <label className="relative min-w-0 flex-1 sm:w-80">
                   <span className="sr-only">
-                    Search masterlist by name, address, purok, or mobile
+                    Search masterlist by ID, name, address, purok, or mobile
                   </span>
                   <Search
                     className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
@@ -480,7 +541,7 @@ function Residents() {
                   <input
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
-                    placeholder="Search resident records"
+                    placeholder="Search ID, name, address, purok or mobile"
                     className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10"
                   />
                 </label>
@@ -488,6 +549,21 @@ function Residents() {
                   Search
                 </button>
               </form>
+              <input
+                ref={registryExcelRef}
+                type="file"
+                accept=".xlsx"
+                onChange={handleRegistryWorkbook}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => registryExcelRef.current?.click()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#2455D6] px-4 py-3 text-sm font-bold text-[#2455D6] transition hover:bg-[#EEF4FF]"
+              >
+                <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
+                Import Excel
+              </button>
               <button type="button" onClick={() => { setRegistryFormErrors({}); setShowRegistryForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5]">
                 <UserPlus className="h-4 w-4" aria-hidden="true" /> Add resident
               </button>
@@ -497,50 +573,41 @@ function Residents() {
               <LoadingRows />
             ) : registry.length ? (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1120px] text-left">
-                    <thead className="bg-[#F7F9FC] text-[10px] uppercase tracking-wide text-slate-500">
-                      <tr>
-                        <th className="px-5 py-3 font-bold">Resident name</th>
-                        <th className="px-5 py-3 font-bold">Birth date / sex</th>
-                        <th className="px-5 py-3 font-bold">Purok</th>
-                        <th className="px-5 py-3 font-bold">Address</th>
-                        <th className="px-5 py-3 font-bold">Mobile</th>
-                        <th className="px-5 py-3 font-bold">System account</th>
-                        <th className="px-5 py-3 font-bold">First-time job seeker</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {registry.map((record) => (
-                        <tr key={record.id} className="transition hover:bg-[#F8FAFF]">
-                          <td className="px-5 py-4 text-sm font-semibold text-[#172B4D]">
-                            {fullName(record)}
-                          </td>
-                          <td className="px-5 py-4 text-xs text-slate-600">
-                            <span className="block">{formatDate(record.date_of_birth)}</span>
-                            <span className="mt-1 block text-slate-400">{record.sex || "Not provided"}</span>
-                          </td>
-                          <td className="px-5 py-4 text-sm text-slate-600">
-                            {record.purok || "—"}
-                          </td>
-                          <td className="max-w-xs px-5 py-4 text-sm text-slate-600">
-                            <span className="line-clamp-2">{record.address || "—"}</span>
-                          </td>
-                          <td className="px-5 py-4 text-sm text-slate-600">
-                            {record.mobile_number || "—"}
-                          </td>
-                          <td className="px-5 py-4">
-                            <SystemAccountStatus status={record.system_account_status} count={record.system_account_count} />
-                          </td>
-                          <td className="px-5 py-4">
-                            <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold ${record.first_time_jobseeker_available ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
-                              {record.first_time_jobseeker_available ? "Available" : "Already availed"}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div className="divide-y divide-slate-100">
+                  {registry.map((record) => (
+                    <article key={record.id} className="p-4 transition hover:bg-[#F8FAFF] sm:p-5">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-lg bg-[#EEF4FF] px-2.5 py-1.5 font-mono text-xs font-bold text-[#2455D6]">
+                          {record.resident_id || "ID pending"}
+                        </span>
+                        <h4 className="min-w-0 text-sm font-bold text-[#172B4D] sm:text-base">
+                          {fullName(record)}
+                        </h4>
+                      </div>
+                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
+                        <RegistryDetail label="Birth date / sex">
+                          <span>{formatDate(record.date_of_birth)}</span>
+                          <span className="block text-slate-400">{record.sex || "Not provided"}</span>
+                        </RegistryDetail>
+                        <RegistryDetail label="Purok">{record.purok || "—"}</RegistryDetail>
+                        <RegistryDetail label="Address">
+                          <span className="break-words">{record.address || "—"}</span>
+                        </RegistryDetail>
+                        <RegistryDetail label="Mobile">{record.mobile_number || "—"}</RegistryDetail>
+                        <RegistryDetail label="System account">
+                          <SystemAccountStatus
+                            status={record.system_account_status}
+                            count={record.system_account_count}
+                          />
+                        </RegistryDetail>
+                        <RegistryDetail label="First-time job seeker">
+                          <span className={`inline-flex max-w-full rounded-full px-2.5 py-1 text-[10px] font-bold ${record.first_time_jobseeker_available ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+                            {record.first_time_jobseeker_available ? "Available" : "Already availed"}
+                          </span>
+                        </RegistryDetail>
+                      </dl>
+                    </article>
+                  ))}
                 </div>
                 <Pagination
                   page={page}
@@ -665,6 +732,62 @@ function Residents() {
                 <button type="submit" disabled={registrySaving} className={`${primaryButtonClass} px-5 disabled:cursor-wait disabled:opacity-60`}>{registrySaving ? "Saving..." : "Register resident"}</button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+      {registryImportPreview && (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-[#071B3D]/55 p-4 backdrop-blur-sm"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !registryImporting) {
+              setRegistryImportPreview(null);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="registry-import-title"
+            className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-7"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 id="registry-import-title" className="text-xl font-bold text-[#172B4D]">
+                  Import residents from Excel
+                </h2>
+                <p className="mt-1 break-all text-sm text-slate-500">{registryImportPreview.fileName}</p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close Excel import"
+                onClick={() => setRegistryImportPreview(null)}
+                disabled={registryImporting}
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+            <p className="mt-5 rounded-xl bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+              {registryImportPreview.records.length} resident rows are ready to import. The first worksheet should have headers for first_name, last_name, date_of_birth, sex, purok, and mobile_number. Optional columns: middle_name, suffix, and address. Existing matching residents will be skipped; invalid rows will be reported without importing the file. The resident ID shown in the masterlist can be used to sign in.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRegistryImportPreview(null)}
+                disabled={registryImporting}
+                className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={importRegistryResidents}
+                disabled={registryImporting}
+                className={`${primaryButtonClass} px-5 disabled:cursor-wait disabled:opacity-60`}
+              >
+                {registryImporting ? "Importing..." : "Import residents"}
+              </button>
+            </div>
           </section>
         </div>
       )}
@@ -1034,6 +1157,19 @@ function SystemAccountStatus({ status, count }) {
   );
 }
 
+function RegistryDetail({ label, children }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+        {label}
+      </dt>
+      <dd className="mt-1 break-words text-xs font-medium leading-5 text-slate-700">
+        {children}
+      </dd>
+    </div>
+  );
+}
+
 function Pagination({ page, lastPage, onChange }) {
   return (
     <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 sm:px-5">
@@ -1102,6 +1238,91 @@ function emptyRegistryForm() {
     address: "",
     mobile_number: "",
   };
+}
+
+async function parseRegistryWorkbook(file) {
+  const rows = await readSheet(file);
+  if (rows.length < 2) {
+    throw new Error("The Excel workbook needs a header row and at least one resident.");
+  }
+
+  const aliases = {
+    first_name: "first_name",
+    firstname: "first_name",
+    middle_name: "middle_name",
+    middlename: "middle_name",
+    last_name: "last_name",
+    lastname: "last_name",
+    suffix: "suffix",
+    date_of_birth: "date_of_birth",
+    birth_date: "date_of_birth",
+    dateofbirth: "date_of_birth",
+    sex: "sex",
+    gender: "sex",
+    purok: "purok",
+    address: "address",
+    mobile_number: "mobile_number",
+    mobilenumber: "mobile_number",
+    mobile: "mobile_number",
+    contact_number: "mobile_number",
+    contactnumber: "mobile_number",
+  };
+  const headers = rows[0].map((cell) =>
+    String(cell ?? "")
+      .trim()
+      .toLowerCase()
+      .replace(/[\s-]+/g, "_"),
+  );
+  const columnIndexes = headers.map((header) => aliases[header.replace(/_/g, "")] || aliases[header] || null);
+  const required = ["first_name", "last_name", "date_of_birth", "sex", "purok", "mobile_number"];
+  const missing = required.filter((field) => !columnIndexes.includes(field));
+  if (missing.length) {
+    throw new Error(`Missing required Excel columns: ${missing.join(", ")}.`);
+  }
+
+  const records = rows.slice(1)
+    .map((row) => {
+      const record = emptyRegistryForm();
+      columnIndexes.forEach((field, index) => {
+        if (!field) return;
+        const value = row[index];
+        if (value === null || value === undefined || value === "") return;
+        if (field === "date_of_birth") {
+          record[field] = excelDateValue(value);
+        } else if (field === "mobile_number" && typeof value === "number") {
+          record[field] = String(Math.trunc(value)).padStart(11, "0");
+        } else {
+          record[field] = String(value).trim();
+        }
+      });
+      record.middle_name ||= null;
+      record.suffix ||= null;
+      record.address ||= null;
+      return record;
+    })
+    .filter((record) => Object.values(record).some((value) => value !== "" && value !== null));
+
+  if (!records.length) {
+    throw new Error("No resident data rows were found in the first worksheet.");
+  }
+  if (records.length > 500) {
+    throw new Error("Import up to 500 residents per Excel file.");
+  }
+  return records;
+}
+
+function excelDateValue(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, "0");
+    const day = String(value.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.trunc(value) * 86400000);
+    return date.toISOString().slice(0, 10);
+  }
+  return String(value).trim();
 }
 
 function updateRegistryField(setForm) {

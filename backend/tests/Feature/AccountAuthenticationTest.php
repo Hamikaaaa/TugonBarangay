@@ -44,4 +44,24 @@ class AccountAuthenticationTest extends TestCase
             'admin' => [Admin::class, 'admin'],
         ];
     }
+
+    public function test_resident_can_log_in_using_their_resident_id(): void
+    {
+        $resident = Resident::factory()->create(['password' => 'Password123!']);
+        $admin = Admin::create([
+            'name' => 'Verification Admin',
+            'email' => 'verification-admin@example.com',
+            'password' => 'Password123!',
+        ]);
+        \Laravel\Sanctum\Sanctum::actingAs($admin);
+        $this->patchJson("/api/admin/residents/{$resident->id}/verify")->assertOk();
+        $resident->refresh();
+
+        $this->postJson('/api/login', [
+            'email' => $resident->resident_id,
+            'password' => 'Password123!',
+        ])->assertOk()
+            ->assertJsonPath('user.role', 'resident')
+            ->assertJsonPath('user.resident_id', $resident->resident_id);
+    }
 }

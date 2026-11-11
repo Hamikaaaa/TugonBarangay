@@ -49,7 +49,58 @@ class AdminDocumentRequestWorkflowTest extends TestCase
         $this->getJson('/api/staff/document-requests')->assertForbidden();
         $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
             'status' => 'processing',
-        ])->assertNotFound();
+        ])->assertStatus(409);
+    }
+
+    public function test_admin_can_process_requests_without_being_assigned_as_staff(): void
+    {
+        $this->request->update(['document_type' => 'Barangay Residency']);
+        $admin = Admin::create([
+            'name' => 'Processing Admin',
+            'email' => 'processing-admin@example.com',
+            'password' => 'password123',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
+            'status' => 'under_review',
+        ])->assertOk()->assertJsonPath('data.status', 'under_review');
+
+        $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
+            'status' => 'processing',
+        ])->assertOk()->assertJsonPath('data.status', 'processing');
+        $this->assertNull($this->request->fresh()->assigned_staff_id);
+
+        $this->postJson('/api/admin/document-requests/'.$this->request->id.'/generate', [
+            'document_content' => ['resident_name' => 'Test Resident'],
+        ])->assertOk()->assertJsonPath('data.document_content.resident_name', 'Test Resident');
+
+        $this->assertDatabaseHas('document_request_events', [
+            'document_request_id' => $this->request->id,
+            'actor_id' => $admin->id,
+            'actor_role' => 'admin',
+            'action' => 'preview_generated',
+        ]);
+    }
+
+    public function test_admin_can_mark_a_request_ready_without_a_saved_document(): void
+    {
+        $this->request->update([
+            'document_type' => 'Barangay Residency',
+            'status' => 'processing',
+            'document_content' => null,
+            'document_generated_at' => null,
+        ]);
+        $admin = Admin::create([
+            'name' => 'Release Admin',
+            'email' => 'release-admin@example.com',
+            'password' => 'password123',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
+            'status' => 'ready_for_release',
+        ])->assertOk()->assertJsonPath('data.status', 'ready_for_release');
     }
 
     public function test_admin_history_includes_closed_requests_and_supports_status_search(): void
