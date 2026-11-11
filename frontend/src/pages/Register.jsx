@@ -930,62 +930,58 @@ function Register({ isModal = false }) {
                   <div className="divide-y divide-slate-100">
                     {/* Data Privacy Consent */}
                     <div className="flex items-center justify-between gap-4 px-5 py-4">
-                      <label className="flex min-w-0 cursor-pointer items-start gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
                         <input
                           type="checkbox"
+                          id="privacy-consent"
                           checked={consentAccepted}
                           onChange={(e) => setConsentAccepted(e.target.checked)}
                           className="mt-1 h-4 w-4 accent-[#2455D6]"
                         />
-
-                        <span className="text-sm leading-5 text-slate-700">
-                          I have read and agree to the{" "}
-                          <span className="font-semibold text-[#172B4D]">
+                        <div className="text-sm leading-5 text-slate-700">
+                          <label htmlFor="privacy-consent">
+                            I have read and agree to the{" "}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConsentType("privacy");
+                              setShowConsent(true);
+                            }}
+                            className="font-semibold text-[#2455D6] underline underline-offset-2 hover:text-[#1D46B5]"
+                          >
                             Data Privacy Consent
-                          </span>
-                        </span>
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setConsentType("privacy");
-                          setShowConsent(true);
-                        }}
-                        className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-blue-50"
-                      >
-                        View details
-                      </button>
+                          </button>
+                        </div>
+                      </div>
                     </div>
 
                     {/* Terms & Conditions */}
                     <div className="flex items-center justify-between gap-4 px-5 py-4">
-                      <label className="flex min-w-0 cursor-pointer items-start gap-3">
+                      <div className="flex min-w-0 items-start gap-3">
                         <input
                           type="checkbox"
+                          id="terms-consent"
                           checked={termsAccepted}
                           onChange={(e) => setTermsAccepted(e.target.checked)}
                           className="mt-1 h-4 w-4 accent-[#2455D6]"
                         />
-
-                        <span className="text-sm leading-5 text-slate-700">
-                          I have read and agree to the{" "}
-                          <span className="font-semibold text-[#172B4D]">
+                        <div className="text-sm leading-5 text-slate-700">
+                          <label htmlFor="terms-consent">
+                            I have read and agree to the{" "}
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setConsentType("terms");
+                              setShowConsent(true);
+                            }}
+                            className="font-semibold text-[#2455D6] underline underline-offset-2 hover:text-[#1D46B5]"
+                          >
                             Terms & Conditions
-                          </span>
-                        </span>
-                      </label>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setConsentType("terms");
-                          setShowConsent(true);
-                        }}
-                        className="shrink-0 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-blue-50"
-                      >
-                        View details
-                      </button>
+                          </button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -24,6 +24,7 @@ import { useAuth } from "../../context/AuthContext";
 import DocumentPreviewModal from "./DocumentPreviewModal";
 import FeeAssessment from "../../components/document/FeeAssessment";
 import StaffLayout from "./StaffLayout";
+import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const DOCUMENT_TYPES_CACHE_KEY = "staff-document-types";
@@ -93,10 +94,8 @@ const STATUS_META = {
 
 const STATUS_FILTERS = [
   ["under_review", "Under Review"],
-  ["for_correction", "For Correction"],
   ["ready_for_release", "Ready for Release"],
   ["completed", "Completed"],
-  ["rejected", "Rejected"],
 ];
 
 function hasApprovedPermitInspection(request) {
@@ -537,10 +536,10 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
         <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
           {!requestId && (
             <>
-          <section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-5" aria-label={`${activeDocumentLabel || "All document"} request workload`}>
+          <section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label={`${activeDocumentLabel || "All document"} request workload`}>
             <SummaryCard label="Under Review" value={Number(counts.pending || 0) + Number(counts.under_review || 0) + Number(counts.processing || 0)} icon={Search} color="blue" note="Requests being reviewed and prepared" onClick={() => quickFilter("under_review")} />
-            <SummaryCard label="For Correction" value={counts.for_correction} icon={CircleAlert} color="violet" note="Waiting for resident update" onClick={() => quickFilter("for_correction")} />
             <SummaryCard label="Ready for Release" value={counts.ready_for_release} icon={FileCheck2} color="emerald" note="Awaiting resident pickup" onClick={() => quickFilter("ready_for_release")} />
+            <SummaryCard label="Completed" value={counts.completed} icon={CheckCircle2} color="emerald" note="Resident has claimed the document" onClick={() => quickFilter("completed")} />
           </section>
 
           {notice && <Notice type="success" message={notice} onClose={() => setNotice("")} />}
@@ -620,7 +619,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                       const isSelected = selectedRequest?.id === request.id;
                       return (
                         <tr key={request.id} className={`group transition hover:bg-[#2455D6]/[0.03] ${isSelected ? "bg-[#2455D6]/[0.05]" : ""}`}>
-                          <td className="px-5 py-4 text-xs font-bold text-[#2455D6]">#{request.id}</td>
+                          <td className="px-5 py-4 text-xs font-bold text-[#2455D6]">{formatDocumentRequestId(request.id)}</td>
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
                               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600">{(request.resident?.name || "R").charAt(0)}</span>
@@ -639,7 +638,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                           </td>
                           <td className="px-5 py-4">
                             <div className="flex items-center justify-end gap-1.5">
-                              <button type="button" onClick={() => viewRequest(request)} className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-[#D9E6FF] bg-white px-3 py-2 text-xs font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20" aria-label={`View details for request ${request.id}`}>
+                              <button type="button" onClick={() => viewRequest(request)} className="inline-flex min-h-9 items-center gap-1.5 rounded-xl border border-[#D9E6FF] bg-white px-3 py-2 text-xs font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20" aria-label={`View details for request ${formatDocumentRequestId(request.id)}`}>
                                 <Eye size={13} /> View
                               </button>
                             </div>
@@ -671,7 +670,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                   <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EEF4FF] text-[#2455D6]"><FileText size={18} /></span>
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">Request details</p>
-                    <h2 className="text-lg font-bold text-[#172B4D]">#{selectedRequest.id} · {selectedRequest.document_type_label || DOCUMENT_LABELS[selectedRequest.document_type] || selectedRequest.document_type}</h2>
+                    <h2 className="text-lg font-bold text-[#172B4D]">{formatDocumentRequestId(selectedRequest.id)} · {selectedRequest.document_type_label || DOCUMENT_LABELS[selectedRequest.document_type] || selectedRequest.document_type}</h2>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -1102,9 +1101,9 @@ function printPermitInspection(request) {
     : "";
   const printWindow = window.open("", "_blank", "width=850,height=1000");
   if (!printWindow) return;
-  printWindow.document.write(`<!doctype html><html><head><title>${permitName} Inspection Report - Request ${request.id}</title><style>
+  printWindow.document.write(`<!doctype html><html><head>  <title>${permitName} Inspection Report - Request ${escapeHtml(formatDocumentRequestId(request.id))}</title><style>
     @page{size:letter portrait;margin:1in}body{font-family:Arial,sans-serif;color:#111;font-size:12pt}h1{text-align:center;font-size:16pt;margin:0 0 24pt;text-transform:uppercase}p{margin:0 0 16pt}.line{display:inline-block;min-width:250pt;border-bottom:1px solid #111;padding:0 4pt 3pt}.remarks{height:120pt;border-bottom:1px solid #111;white-space:pre-wrap;margin-top:12pt;padding:0 4pt 4pt;line-height:2.4}.decision{margin-top:24pt;padding:12pt;border:1px solid #555}.choice{display:inline-block;margin:12pt 20pt 0 0}.choice i{display:inline-block;width:12pt;height:12pt;border:1px solid #111;vertical-align:-2pt;margin-right:5pt}footer{margin-top:28pt;font-size:9pt;color:#555}@media print{button{display:none}}
-  </style></head><body><h1>Inspection Report</h1><p><strong>${permitName} Request:</strong> #${escapeHtml(request.id)}</p><p><strong>Project Owner:</strong> ${escapeHtml(formFields.project_owner_name || formFields.full_name)}</p><p><strong>Project Location:</strong> ${escapeHtml(formFields.project_address)}</p>${fenceDetails}<p><strong>Inspection Conducted By:</strong> <span class="line">&nbsp;</span></p><p><strong>Date of Inspection:</strong> <span class="line">&nbsp;</span></p><p><strong>Fee assessed by inspector (PHP):</strong> <span class="line">&nbsp;</span></p><p><strong>Remarks:</strong></p><div class="remarks"></div><div class="decision"><strong>Councilor decision:</strong><br><span class="choice"><i></i> Go ahead - authorize permit preparation</span><span class="choice"><i></i> Needs correction</span></div><footer>${permitName} Request #${escapeHtml(request.id)}</footer><script>window.onload=()=>window.print()</script></body></html>`);
+  </style></head><body><h1>Inspection Report</h1><p><strong>${permitName} Request:</strong> ${escapeHtml(formatDocumentRequestId(request.id))}</p><p><strong>Project Owner:</strong> ${escapeHtml(formFields.project_owner_name || formFields.full_name)}</p><p><strong>Project Location:</strong> ${escapeHtml(formFields.project_address)}</p>${fenceDetails}<p><strong>Inspection Conducted By:</strong> <span class="line">&nbsp;</span></p><p><strong>Date of Inspection:</strong> <span class="line">&nbsp;</span></p><p><strong>Fee assessed by inspector (PHP):</strong> <span class="line">&nbsp;</span></p><p><strong>Remarks:</strong></p><div class="remarks"></div><div class="decision"><strong>Councilor decision:</strong><br><span class="choice"><i></i> Go ahead - authorize permit preparation</span><span class="choice"><i></i> Needs correction</span></div><footer>${permitName} Request ${escapeHtml(formatDocumentRequestId(request.id))}</footer><script>window.onload=()=>window.print()</script></body></html>`);
   printWindow.document.close();
 }
 

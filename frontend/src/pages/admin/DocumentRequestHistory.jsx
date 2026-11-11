@@ -5,6 +5,7 @@ import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
 import { useAuth } from "../../context/AuthContext";
 import DocumentPreviewModal from "../staff/DocumentPreviewModal";
+import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const STATUSES = [
@@ -171,7 +172,7 @@ function DocumentRequestHistory() {
                         {requests.map((request) => (
                           <tr key={request.id} className="hover:bg-slate-50">
                             <td className="px-4 py-3">
-                              <span className="font-bold text-[#172B4D]">#{request.id}</span>
+                              <span className="font-bold text-[#172B4D]">{formatDocumentRequestId(request.id)}</span>
                               <span className="mt-1 block text-xs text-slate-500">{request.document_type_label || request.document_type}</span>
                             </td>
                             <td className="px-4 py-3">
@@ -228,7 +229,7 @@ function DocumentRequestHistory() {
                       <td className="px-4 py-3">{event.actor_name} <span className="text-xs text-slate-400">({event.actor_role})</span></td>
                       <td className="px-4 py-3">
                         <button type="button" onClick={() => openRequest(event.document_request_id)} className="font-bold text-[#2455D6] hover:underline">
-                          #{event.document_request_id} · {event.document_request?.document_type_label || event.document_request?.document_type}
+                          {formatDocumentRequestId(event.document_request_id)} · {event.document_request?.document_type_label || event.document_request?.document_type}
                         </button>
                       </td>
                       <td className="px-4 py-3 text-slate-600">{eventDescription(event)}</td>
@@ -359,12 +360,12 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
 
   return (
     <>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={`Request ${request.id} history`} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={`Request ${formatDocumentRequestId(request.id)} history`} onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
         <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
           <div className="flex items-start justify-between border-b border-slate-200 p-5">
             <div>
               <p className="text-xs font-bold uppercase tracking-wider text-[#2455D6]">Document request processing</p>
-              <h3 className="mt-1 text-xl font-bold text-[#172B4D]">#{currentRequest.id} · {currentRequest.document_type_label || currentRequest.document_type}</h3>
+              <h3 className="mt-1 text-xl font-bold text-[#172B4D]">{formatDocumentRequestId(currentRequest.id)} · {currentRequest.document_type_label || currentRequest.document_type}</h3>
               <p className="mt-1 text-sm text-slate-500">{currentRequest.resident?.name} · {labelStatus(currentRequest.status)}</p>
             </div>
             <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close request history"><X size={20} /></button>

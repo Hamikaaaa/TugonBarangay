@@ -5,6 +5,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
 import { useAuth } from "../../context/AuthContext";
+import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
@@ -157,9 +158,9 @@ function AdminDocumentRequestsDashboard() {
                 <li key={event.id} className="flex flex-col gap-1 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-semibold text-slate-800">
-                      {activityLabel(event.action)} · {event.document_request?.document_type_label || event.document_request?.document_type || `Request #${event.document_request_id}`}
+                      {activityLabel(event.action)} · {event.document_request?.document_type_label || event.document_request?.document_type || `Request ${formatDocumentRequestId(event.document_request_id)}`}
                     </p>
-                    <p className="mt-1 text-xs text-slate-500">{event.actor_name || "System"} · Request #{event.document_request_id}</p>
+                    <p className="mt-1 text-xs text-slate-500">{event.actor_name || "System"} · Request {formatDocumentRequestId(event.document_request_id)}</p>
                   </div>
                   <time className="shrink-0 text-xs text-slate-400" dateTime={event.created_at}>{formatDateTime(event.created_at)}</time>
                 </li>
