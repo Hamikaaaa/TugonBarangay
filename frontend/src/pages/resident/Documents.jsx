@@ -638,7 +638,7 @@ function ApplicantCamera({ stream, onCapture, onCancel }) {
   );
 }
 
-function Documents({ requests, token, onRefresh, user }) {
+function Documents({ requests, token, onRefresh, user, verified }) {
   const [catalogTypes, setCatalogTypes] = useState(null);
   const [documentType, setDocumentType] = useState("");
   const [formFields, setFormFields] = useState(() =>
@@ -958,6 +958,11 @@ function Documents({ requests, token, onRefresh, user }) {
 
   const submitRequest = (event) => {
     event.preventDefault();
+    if (!verified) {
+      setMessage("Your account must be verified by barangay personnel before you can submit a document request.");
+      setMessageTone("error");
+      return;
+    }
     if (submitting) return;
     if (!selectedDocument) {
       setMessage("Choose a document type before submitting your request.");
@@ -993,6 +998,12 @@ function Documents({ requests, token, onRefresh, user }) {
   };
 
   const confirmRequest = async () => {
+    if (!verified) {
+      setConfirmationOpen(false);
+      setMessage("Your account must be verified by barangay personnel before you can submit a document request.");
+      setMessageTone("error");
+      return;
+    }
     if (!selectedDocument || submitting) return;
     setConfirmationOpen(false);
     setSubmitting(true);
@@ -1216,6 +1227,16 @@ function Documents({ requests, token, onRefresh, user }) {
               : "Choose a service and provide any information staff should know."}
           </p>
         </div>
+
+        {!verified && (
+          <p
+            role="alert"
+            className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+          >
+            Your account must be verified by barangay personnel before you can
+            submit a document request.
+          </p>
+        )}
 
         {editingRequest && (
           <div className="mt-5 flex items-start justify-between gap-4 rounded-xl border border-[#F1D9A8] bg-[#FFF7E7] p-4">
@@ -1710,7 +1731,7 @@ function Documents({ requests, token, onRefresh, user }) {
 
           <button
             type="submit"
-            disabled={submitting || oneTimeAlreadyRequested}
+            disabled={submitting || oneTimeAlreadyRequested || !verified}
             className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {submitting
@@ -1912,7 +1933,7 @@ function Documents({ requests, token, onRefresh, user }) {
               <button
                 type="button"
                 onClick={confirmRequest}
-                disabled={submitting}
+                disabled={submitting || !verified}
                 className="min-h-11 rounded-xl bg-[#2455D6] px-5 text-sm font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-wait disabled:opacity-60"
               >
                 Confirm and submit

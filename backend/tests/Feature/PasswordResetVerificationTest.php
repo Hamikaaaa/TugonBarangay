@@ -31,7 +31,9 @@ class PasswordResetVerificationTest extends TestCase
         $this->assertTrue(Hash::check('OldPassword1!', $resident->fresh()->password));
 
         $transport = Mail::mailer()->getSymfonyTransport();
-        $email = quoted_printable_decode($transport->messages()->last()->getOriginalMessage()->toString());
+        $originalMessage = $transport->messages()->last()->getOriginalMessage();
+        $this->assertSame('TugonBarangay', $originalMessage->getFrom()[0]->getName());
+        $email = quoted_printable_decode($originalMessage->toString());
         $this->assertStringContainsString('password change verification code', strtolower($email));
         $this->assertStringContainsString('request to change the password', strtolower($email));
         preg_match('/<p[^>]*>(\d{5})<\/p>/', $email, $matches);

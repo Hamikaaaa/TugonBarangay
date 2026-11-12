@@ -14,6 +14,19 @@ class ResidentComplaintTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_unverified_resident_cannot_submit_a_complaint(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'pending']);
+        Sanctum::actingAs($resident);
+
+        $this->postJson('/api/resident/complaints', [])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'Your account must be verified by barangay personnel before using this service.')
+            ->assertJsonPath('verification_status', 'pending');
+
+        $this->assertDatabaseCount('complaints', 0);
+    }
+
     public function test_verified_resident_can_submit_complaint_with_private_evidence(): void
     {
         Storage::fake('local');
