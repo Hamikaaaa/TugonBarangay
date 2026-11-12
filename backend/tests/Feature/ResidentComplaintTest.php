@@ -168,6 +168,27 @@ class ResidentComplaintTest extends TestCase
             ->assertJsonPath('complaint.status', 'pending');
     }
 
+    public function test_resident_complaint_saves_incident_time(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'verified']);
+        Sanctum::actingAs($resident);
+
+        $this->withHeader('Accept', 'application/json')->post('/api/resident/complaints', [
+            'category' => 'Public safety',
+            'subject' => 'Street light is out',
+            'description' => 'The street light is not working.',
+            'incident_date' => now()->subDay()->toDateString(),
+            'incident_time' => '14:30',
+            'location' => 'Main street',
+        ])->assertCreated()
+            ->assertJsonPath('complaint.incident_time', '14:30');
+
+        $this->assertDatabaseHas('complaints', [
+            'resident_id' => $resident->id,
+            'incident_time' => '14:30',
+        ]);
+    }
+
     public function test_priority_is_based_on_reported_severity_across_categories(): void
     {
         $resident = Resident::factory()->create(['verification_status' => 'verified']);

@@ -20,13 +20,19 @@ import {
 } from "../../services/residentApi";
 import { shouldPromptForFeatureFeedback } from "../../services/featureFeedback";
 import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
+import AttachmentPreviewButton from "../../components/resident/AttachmentPreviewButton";
 import { COMPLAINT_CATEGORIES } from "../../constants/complaintCategories";
+import {
+  clearInvalidFieldHighlight,
+  focusFirstInvalidField,
+} from "../../utils/formValidation";
 
 const EMPTY_FORM = {
   category: "",
   custom_category: "",
   subject: "",
   incident_date: "",
+  incident_time: "",
   location: "",
   involved_persons: "",
   description: "",
@@ -43,6 +49,15 @@ function formatDate(value) {
         month: "short",
         day: "numeric",
       });
+}
+
+function formatTime(value) {
+  if (!value) return "Not provided";
+  const [hours, minutes] = String(value).slice(0, 5).split(":").map(Number);
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return "Not provided";
+  const time = new Date();
+  time.setHours(hours, minutes, 0, 0);
+  return time.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
 function StatusBadge({ status }) {
@@ -219,6 +234,7 @@ function ComplaintRow({ complaint, token, onResubmitted, verified }) {
               label="Incident date"
               value={formatDate(complaint.incident_date)}
             />
+            <Detail label="Incident time" value={formatTime(complaint.incident_time)} />
             <Detail label="Incident location" value={complaint.location} />
             {complaint.involved_persons && (
               <Detail label="Person(s) involved" value={complaint.involved_persons} />
@@ -253,6 +269,9 @@ function ComplaintRow({ complaint, token, onResubmitted, verified }) {
                 wide
               />
             )}
+            {complaint.resolution_images?.length > 0 && (
+              <ResolutionImageDownloads complaint={complaint} token={token} />
+            )}
           </dl>
 
           {complaint.evidence_path && (
@@ -284,6 +303,48 @@ function ComplaintRow({ complaint, token, onResubmitted, verified }) {
   );
 }
 
+function ResolutionImageDownloads({ complaint, token }) {
+  const [downloadingIndex, setDownloadingIndex] = useState(null);
+  const [error, setError] = useState("");
+
+  const download = async (index) => {
+    setDownloadingIndex(index);
+    setError("");
+    try {
+      await downloadResidentFile(
+        `/resident/complaints/${complaint.id}/resolution-images/${index}`,
+        token,
+        `CMP-${String(complaint.id).padStart(5, "0")}-resolution-${index + 1}`,
+      );
+    } catch (downloadError) {
+      setError(downloadError.message);
+    } finally {
+      setDownloadingIndex(null);
+    }
+  };
+
+  return (
+    <div className="mt-4 border-t border-[#E6ECF5] pt-4 sm:col-span-2">
+      <p className="text-xs font-bold text-slate-700">Images attached to the resolution</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {complaint.resolution_images.map((_, index) => (
+          <button
+            key={`${complaint.id}-resolution-${index}`}
+            type="button"
+            onClick={() => download(index)}
+            disabled={downloadingIndex !== null}
+            className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-[#2455D6] disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+            {downloadingIndex === index ? "Preparing image..." : `Download image ${index + 1}`}
+          </button>
+        ))}
+      </div>
+      {error && <p role="alert" className="mt-2 text-xs font-medium text-red-700">{error}</p>}
+    </div>
+  );
+}
+
 function Complaints({
   token,
   complaints = [],
@@ -296,6 +357,7 @@ function Complaints({
   const [evidence, setEvidence] = useState(null);
   const [message, setMessage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [confirmationOpen, setConfirmationOpen] = useState(false);
   const [complaintSuccessOpen, setComplaintSuccessOpen] = useState(false);
   const [complaintReference, setComplaintReference] = useState("");
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -311,6 +373,7 @@ function Complaints({
   const [reloadHistory, setReloadHistory] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const fileInput = useRef(null);
+  const complaintFormRef = useRef(null);
   const feedbackTimerRef = useRef(null);
   const feedbackDelayElapsedRef = useRef(false);
   const feedbackEligibleRef = useRef(false);
@@ -332,6 +395,7 @@ function Complaints({
             categories.length ? categories : COMPLAINT_CATEGORIES,
           );
         }
+
       })
       .catch(() => {
         if (active) setComplaintCategories(COMPLAINT_CATEGORIES);
@@ -393,7 +457,7 @@ function Complaints({
     }
   };
 
-  const submitComplaint = async (event) => {
+  const submitComplaint = (event) => {
     event.preventDefault();
     if (!verified) {
       setMessage({
@@ -402,7 +466,20 @@ function Complaints({
       });
       return;
     }
+    if (focusFirstInvalidField(complaintFormRef.current)) {
+      setMessage({
+        type: "error",
+        text: "Please complete the highlighted required fields before continuing.",
+      });
+      return;
+    }
+    setMessage(null);
+    setConfirmationOpen(true);
+  };
 
+  const confirmComplaint = async () => {
+    if (!verified || submitting) return;
+    setConfirmationOpen(false);
     if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
     feedbackDelayElapsedRef.current = false;
     feedbackEligibleRef.current = false;
@@ -555,7 +632,14 @@ function Complaints({
             </p>
           </div>
         )}
-        <form id="new-complaint" className="mt-6" onSubmit={submitComplaint}>
+        <form
+          ref={complaintFormRef}
+          id="new-complaint"
+          className="mt-6"
+          noValidate
+          onSubmit={submitComplaint}
+          onInput={clearInvalidFieldHighlight}
+        >
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="text-sm font-bold text-slate-700">
@@ -577,7 +661,7 @@ function Complaints({
             {form.category === "Other Barangay Concern" && (
               <label className="block">
                 <span className="text-sm font-bold text-slate-700">
-                  Describe the category <span className="text-[#C74444">*</span>
+                  Describe the category <span className="text-[#C74444]">*</span>
                 </span>
                 <input
                   required
@@ -594,7 +678,7 @@ function Complaints({
               className={`block ${form.category === "Other Barangay Concern" ? "sm:col-span-2" : ""}`}
             >
               <span className="text-sm font-bold text-slate-700">
-                Subject <span className="text-[#C74444">*</span>
+                Subject <span className="text-[#C74444]">*</span>
               </span>
               <input
                 required
@@ -616,6 +700,16 @@ function Complaints({
                 name="incident_date"
                 max={new Date().toLocaleDateString("en-CA")}
                 value={form.incident_date}
+                onChange={updateField}
+                className={inputClass}
+              />
+            </label>
+            <label className="block">
+              <span className="text-sm font-bold text-slate-700">Incident time</span>
+              <input
+                type="time"
+                name="incident_time"
+                value={form.incident_time}
                 onChange={updateField}
                 className={inputClass}
               />
@@ -662,7 +756,7 @@ function Complaints({
 
           <label className="mt-5 block">
             <span className="text-sm font-bold text-slate-700">
-              What happened? <span className="text-[#C74444">*</span>
+              What happened? <span className="text-[#C74444]">*</span>
             </span>
             <textarea
               required
@@ -767,6 +861,62 @@ function Complaints({
           </button>
         </form>
       </section>
+      )}
+
+      {confirmationOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/60 p-4">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="complaint-confirmation-title"
+            className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl sm:p-8"
+          >
+            <h2 id="complaint-confirmation-title" className="text-xl font-bold text-[#172B4D]">
+              Review your complaint
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Check the information below before sending your complaint to barangay staff.
+            </p>
+            <dl className="mt-5 grid max-h-72 gap-4 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2">
+              <Detail label="Category" value={form.category === "Other Barangay Concern" ? form.custom_category : form.category} />
+              <Detail label="Subject" value={form.subject} />
+              <Detail label="Date of incident" value={formatDate(form.incident_date)} />
+              <Detail label="Incident time" value={formatTime(form.incident_time)} />
+              <Detail label="Incident location" value={form.location} />
+              {form.involved_persons && <Detail label="Person(s) involved" value={form.involved_persons} />}
+              <Detail label="Description" value={form.description} wide />
+              {form.relevant_information && <Detail label="Additional information" value={form.relevant_information} wide />}
+              {evidence ? (
+                <div className="min-w-0 sm:col-span-2">
+                  <dt className="text-xs font-bold uppercase tracking-wide text-slate-500">Supporting evidence</dt>
+                  <dd className="mt-1 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-800">
+                    <span className="min-w-0 truncate">{evidence.name}</span>
+                    <AttachmentPreviewButton file={evidence} fileName={evidence.name} />
+                  </dd>
+                </div>
+              ) : (
+                <Detail label="Supporting evidence" value="None attached" wide />
+              )}
+            </dl>
+            <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmationOpen(false)}
+                className="min-h-11 rounded-xl border border-slate-200 px-5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+              >
+                Go back
+              </button>
+              <button
+                type="button"
+                onClick={confirmComplaint}
+                disabled={submitting || !verified}
+                className="min-h-11 rounded-xl bg-[#2455D6] px-5 text-sm font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-wait disabled:opacity-60"
+              >
+                {submitting ? "Sending complaint..." : "Confirm and send"}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       {showHistory && (

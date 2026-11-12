@@ -16,10 +16,12 @@ class Complaint extends Model
         'subject',
         'description',
         'incident_date',
+        'incident_time',
         'location',
         'involved_persons',
         'relevant_information',
         'evidence_path',
+        'resolution_images',
         'status',
         'priority',
         'staff_remarks',
@@ -34,6 +36,7 @@ class Complaint extends Model
             'incident_date' => 'date',
             'resolved_at' => 'datetime',
             'status_updated_at' => 'datetime',
+            'resolution_images' => 'array',
         ];
     }
 

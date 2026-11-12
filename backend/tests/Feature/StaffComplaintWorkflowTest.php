@@ -94,6 +94,56 @@ class StaffComplaintWorkflowTest extends TestCase
         $this->assertNotNull($this->complaint->fresh()->resolved_at);
     }
 
+    public function test_complaint_officer_can_send_resident_remarks_without_changing_status(): void
+    {
+        Sanctum::actingAs($this->complaintOfficer);
+
+        $this->patchJson('/api/staff/complaints/'.$this->complaint->id.'/remarks', [
+            'staff_remarks' => 'We dispatched a tanod to check the area.',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'pending')
+            ->assertJsonPath('data.staff_remarks', 'We dispatched a tanod to check the area.');
+
+        $this->assertDatabaseHas('complaints', [
+            'id' => $this->complaint->id,
+            'status' => 'pending',
+            'staff_remarks' => 'We dispatched a tanod to check the area.',
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'resident_id' => $this->resident->id,
+            'type' => 'complaint_status_updated',
+            'title' => 'Progress update on complaint CMP-'.str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT),
+            'message' => "Barangay staff added a progress update to complaint CMP-".str_pad((string) $this->complaint->id, 5, '0', STR_PAD_LEFT).":\n\nWe dispatched a tanod to check the area.",
+        ]);
+    }
+
+    public function test_complaint_officer_can_attach_resolution_images_for_the_resident(): void
+    {
+        Storage::fake('local');
+        $this->complaint->update(['status' => 'in_progress']);
+        Sanctum::actingAs($this->complaintOfficer);
+
+        $response = $this->post('/api/staff/complaints/'.$this->complaint->id.'/status', [
+            '_method' => 'PATCH',
+            'status' => 'resolved',
+            'resolution_details' => 'The drainage was cleared.',
+            'resolution_images' => [
+                UploadedFile::fake()->createWithContent(
+                    'cleared-drainage.png',
+                    base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lWQAAAAASUVORK5CYII='),
+                ),
+            ],
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'resolved');
+
+        $imagePath = $response->json('data.resolution_images.0');
+        Storage::disk('local')->assertExists($imagePath);
+
+        Sanctum::actingAs($this->resident);
+        $this->get('/api/resident/complaints/'.$this->complaint->id.'/resolution-images/0')
+            ->assertOk();
+    }
+
     public function test_complaint_status_update_notifies_resident_with_staff_remarks(): void
     {
         $this->withoutMiddleware([

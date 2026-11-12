@@ -633,7 +633,7 @@ function Register({ isModal = false }) {
                   {pendingVerification
                     ? "Verify your contact"
                     : showVerificationChoice
-                      ? "Choose a verification method"
+                      ? "Email verification"
                       : currentStep.title}
                 </h2>
 
@@ -641,7 +641,7 @@ function Register({ isModal = false }) {
                   {pendingVerification
                     ? "Complete email verification to finish creating your account."
                     : showVerificationChoice
-                      ? "Choose whether to verify by email or phone. We’ll send the verification after you choose."
+                      ? "We’ll send a verification link to your email address."
                       : currentStep.description}
                 </p>
               </div>

@@ -584,6 +584,7 @@ class ResidentController extends Controller
             'subject' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:5000'],
             'incident_date' => ['required', 'date', 'before_or_equal:today'],
+            'incident_time' => ['nullable', 'date_format:H:i'],
             'location' => ['required', 'string', 'max:255'],
             'involved_persons' => ['nullable', 'string', 'max:1000'],
             'relevant_information' => ['nullable', 'string', 'max:5000'],

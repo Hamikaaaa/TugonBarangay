@@ -370,7 +370,7 @@ function StaffAccounts() {
                   <button
                     type="submit"
                     disabled={saving}
-                    className={`${primaryButtonClass} min-h-11 px-4 py-2.5`}
+                    className={`${primaryButtonClass} !bg-none !bg-[#2455D6] min-h-11 px-4 py-2.5 hover:!bg-[#1D46B5]`}
                   >
                     <Check className="h-4 w-4" aria-hidden="true" />
                     {saving ? "Creating..." : "Create account"}

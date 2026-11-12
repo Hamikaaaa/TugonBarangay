@@ -9,15 +9,10 @@ import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
 const API_URL = "http://127.0.0.1:8000/api";
 const STATUSES = [
-  ["all", "All requests"],
-  ["delayed", "Delayed"],
-  ["pending", "Pending"],
-  ["under_review", "Under review"],
-  ["processing", "Processing"],
-  ["for_correction", "For correction"],
-  ["ready_for_release", "Ready for release"],
-  ["completed", "Released"],
-  ["rejected", "Rejected"],
+  ["all", "All statuses"],
+  ["under_review", "Under Review"],
+  ["ready_for_release", "Ready for Release"],
+  ["completed", "Completed"],
 ];
 
 function DocumentRequestHistory() {
@@ -26,7 +21,7 @@ function DocumentRequestHistory() {
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditPagination, setAuditPagination] = useState({ current_page: 1, last_page: 1 });
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1 });
-  const [status, setStatus] = useState("all");
+  const [status, setStatus] = useState("under_review");
   const [search, setSearch] = useState("");
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [activeTab, setActiveTab] = useState("requests");
@@ -165,7 +160,7 @@ function DocumentRequestHistory() {
                           <th className="px-4 py-3">Handler</th>
                           <th className="px-4 py-3">Last status update</th>
                           <th className="px-4 py-3">Submitted</th>
-                          <th className="px-4 py-3">Details</th>
+                          <th className="px-4 py-3">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
@@ -190,7 +185,7 @@ function DocumentRequestHistory() {
                             <td className="px-4 py-3 text-slate-600">{formatDate(request.created_at)}</td>
                             <td className="px-4 py-3">
                               <button type="button" onClick={() => openRequest(request.id)} className="font-bold text-[#2455D6] hover:underline">
-                                View history
+                                {request.status === "completed" ? "View history" : "View details"}
                               </button>
                             </td>
                           </tr>
@@ -376,7 +371,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
               <p className="mt-1 text-xs leading-5 text-slate-600">Admins can review, prepare, release, and complete document requests. Existing compliance checks remain in effect.</p>
               {actionError && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{actionError}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
-                {currentRequest.status === "pending" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("under_review"))} className="rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Start review</button>}
+                {currentRequest.status === "pending" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("under_review"))} className="rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Begin processing</button>}
                 {currentRequest.status === "under_review" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("processing"))} className="rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Begin processing</button>}
                 {canEditDocument && <button type="button" onClick={() => setDocumentOpen(true)} className="rounded-lg border border-[#2455D6] bg-white px-3 py-2 text-xs font-bold text-[#2455D6]">{hasGeneratedDocument ? "Review / edit document" : "Generate document"}</button>}
                 {currentRequest.status === "processing" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("ready_for_release"))} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Mark ready for release</button>}
@@ -507,6 +502,7 @@ function authHeaders(token) {
 function statusClass(status) {
   return {
     pending: "bg-amber-50 text-amber-700",
+    under_review: "bg-blue-50 text-blue-700",
     processing: "bg-blue-50 text-blue-700",
     for_correction: "bg-violet-50 text-violet-700",
     ready_for_release: "bg-emerald-50 text-emerald-700",

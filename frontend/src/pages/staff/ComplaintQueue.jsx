@@ -10,9 +10,11 @@ import {
   Eye,
   FileText,
   ArrowLeft,
+  ImagePlus,
   LoaderCircle,
   Save,
   Search,
+  Send,
   ShieldAlert,
   X,
 } from "lucide-react";
@@ -37,6 +39,8 @@ const FILTER_STATUS_LABELS = {
   resubmitted: STATUS_LABELS.resubmitted,
   in_progress: STATUS_LABELS.in_progress,
   resolved: STATUS_LABELS.resolved,
+  rejected: STATUS_LABELS.rejected,
+  closed: STATUS_LABELS.closed,
 };
 const PROGRESS_STAGES = ["pending", "in_progress", "resolved"];
 const STATUS_COLORS = {
@@ -76,7 +80,10 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
   const [categoryCounts, setCategoryCounts] = useState([]);
   const [selected, setSelected] = useState(null);
   const [staffRemarks, setStaffRemarks] = useState("");
+  const [sentStaffRemarks, setSentStaffRemarks] = useState("");
   const [resolutionDetails, setResolutionDetails] = useState("");
+  const [resolutionImages, setResolutionImages] = useState([]);
+  const [resolutionImageError, setResolutionImageError] = useState("");
   const [classificationPriority, setClassificationPriority] = useState("normal");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState(initialStatus);
@@ -214,7 +221,10 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
         setComplaints([complaint]);
         setSelected(complaint);
         setStaffRemarks(complaint.staff_remarks || "");
+        setSentStaffRemarks(complaint.staff_remarks || "");
         setResolutionDetails(complaint.resolution_details || "");
+        setResolutionImages([]);
+        setResolutionImageError("");
         setClassificationPriority(complaint.priority || "normal");
         return;
       }
@@ -270,13 +280,17 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
     if (isAdmin && selected?.id === complaint.id) {
       setSelected(null);
       setStaffRemarks("");
+      setSentStaffRemarks("");
       setResolutionDetails("");
       return;
     }
 
     setSelected(complaint);
     setStaffRemarks(complaint.staff_remarks || "");
+    setSentStaffRemarks(complaint.staff_remarks || "");
     setResolutionDetails(complaint.resolution_details || "");
+    setResolutionImages([]);
+    setResolutionImageError("");
     setClassificationPriority(complaint.priority || "normal");
   };
 
@@ -285,23 +299,55 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
     setSubmitting(true);
     setError("");
     try {
+      const body = new FormData();
+      body.append("_method", "PATCH");
+      body.append("status", status);
+      body.append("staff_remarks", staffRemarks);
+      body.append("resolution_details", resolutionDetails);
+      if (status === "resolved") {
+        resolutionImages.forEach((image) => body.append("resolution_images[]", image));
+      }
       const response = await fetch(`${API_URL}${endpoint}/${selected.id}/status`, {
-        method: "PATCH",
-        headers: { ...authHeaders(token), "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status,
-          staff_remarks: staffRemarks,
-          resolution_details: resolutionDetails,
-        }),
+        method: "POST",
+        headers: authHeaders(token),
+        body,
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to update complaint.");
       setSelected(payload.data);
+      setSentStaffRemarks(staffRemarks.trim());
+      setResolutionImages([]);
+      setResolutionImageError("");
       setNotice(payload.message || "Complaint updated.");
       window.dispatchEvent(new Event("staff-complaint-updated"));
       await loadComplaints();
     } catch (updateError) {
       setError(updateError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const sendComplaintRemarks = async () => {
+    const remarks = staffRemarks.trim();
+    if (!selected || !token || !remarks || submitting || remarks === sentStaffRemarks) return;
+    setSubmitting(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}${endpoint}/${selected.id}/remarks`, {
+        method: "PATCH",
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ staff_remarks: remarks }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to send the progress update.");
+      setSelected(payload.data);
+      setStaffRemarks(payload.data.staff_remarks || remarks);
+      setSentStaffRemarks(payload.data.staff_remarks || remarks);
+      setNotice(payload.message || "Progress update sent to the resident.");
+      await loadComplaints();
+    } catch (remarksError) {
+      setError(remarksError.message);
     } finally {
       setSubmitting(false);
     }
@@ -346,7 +392,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
   const visibleStatus = useMemo(() => {
     const stats = [
       { label: "Total complaints", value: totalComplaints, icon: FileText, color: "blue" },
-      { label: "Needs review", value: counts.pending || 0, icon: Clock3, color: "amber" },
+      { label: "Needs review", value: Number(counts.pending || 0) + Number(counts.resubmitted || 0), icon: Clock3, color: "amber" },
       { label: "In progress", value: counts.in_progress || 0, icon: ShieldAlert, color: "blue" },
       { label: "Urgent priority", value: priorityCounts.urgent || 0, icon: AlertCircle, color: "red" },
       { label: "Resolved", value: counts.resolved || 0, icon: CheckCircle2, color: "green" },
@@ -793,6 +839,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                   <Detail label="Category" value={selected.category} />
                   <Detail label="Priority" value={selected.priority === "urgent" ? "Urgent review" : "Normal"} />
                   <Detail label="Incident date" value={formatDate(selected.incident_date)} />
+                  <Detail label="Incident time" value={formatTime(selected.incident_time)} />
                   <Detail label="Incident location" value={selected.location} />
                   <Detail label="Person(s) involved" value={selected.involved_persons} />
                   <Detail label="Description" value={selected.description} wide />
@@ -849,7 +896,10 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                   {selected.resolution_details && (
                     <p className="text-xs leading-5 text-slate-600"><strong className="text-slate-700">Resolution:</strong> {selected.resolution_details}</p>
                   )}
-                  {!selected.staff_remarks && !selected.resolution_details && (
+                  {selected.resolution_images?.length > 0 && (
+                    <ResolutionImageDownloads complaint={selected} token={token} isAdmin={isAdmin} />
+                  )}
+                  {!selected.staff_remarks && !selected.resolution_details && !selected.resolution_images?.length && (
                     <p className="text-xs text-slate-500">No staff progress notes recorded yet.</p>
                   )}
                 </div>
@@ -881,10 +931,62 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
               Staff remarks (shared with resident)
               <textarea value={staffRemarks} onChange={(event) => setStaffRemarks(event.target.value)} maxLength={2000} rows={3} className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-xs outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" placeholder="Write an update for the resident..." />
             </label>
+            <button
+              type="button"
+              onClick={sendComplaintRemarks}
+              disabled={submitting || !staffRemarks.trim() || staffRemarks.trim() === sentStaffRemarks}
+              className="mt-3 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1948B8] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {submitting ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
+              {submitting ? "Sending update..." : "Send update to resident"}
+            </button>
             <label className="mt-3 block text-xs font-semibold text-slate-600">
               Resolution / outcome details
               <textarea value={resolutionDetails} onChange={(event) => setResolutionDetails(event.target.value)} maxLength={5000} rows={3} className="mt-1.5 w-full rounded-xl border border-slate-200 p-3 text-xs outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" placeholder="Required to resolve and close the complaint..." />
             </label>
+            {selected.status === "in_progress" && (
+              <label className="mt-3 block text-xs font-semibold text-slate-600">
+                Resolution images (optional)
+                <span className="mt-1.5 flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-[#2455D6]">
+                  <ImagePlus size={15} aria-hidden="true" />
+                  <input
+                    type="file"
+                    multiple
+                    accept=".jpg,.jpeg,.png,image/jpeg,image/png"
+                    onChange={(event) => {
+                      const files = Array.from(event.target.files || []);
+                      const invalidFile = files.find((file) =>
+                        (
+                          !/^image\/(jpeg|png)$/i.test(file.type) &&
+                          !/\.(jpe?g|png)$/i.test(file.name)
+                        ) ||
+                        file.size > 5 * 1024 * 1024,
+                      );
+                      if (files.length > 5 || invalidFile) {
+                        setResolutionImages([]);
+                        setResolutionImageError(
+                          files.length > 5
+                            ? "Attach up to 5 resolution images."
+                            : "Resolution images must be JPG or PNG files up to 5 MB each.",
+                        );
+                        event.target.value = "";
+                        return;
+                      }
+                      setResolutionImages(files);
+                      setResolutionImageError("");
+                    }}
+                    className="min-w-0 flex-1 text-slate-600 file:mr-2 file:rounded-md file:border-0 file:bg-blue-50 file:px-2 file:py-1 file:text-xs file:font-bold file:text-[#2455D6]"
+                  />
+                </span>
+                <span className="mt-1 block font-normal text-slate-500">Attach up to 5 JPG or PNG images, maximum 5 MB each.</span>
+                {resolutionImages.length > 0 && (
+                  <span className="mt-2 block font-normal text-slate-600">
+                    Selected: {resolutionImages.map((image) => image.name).join(", ")}
+                  </span>
+                )}
+                {resolutionImageError && <span role="alert" className="mt-2 block text-red-700">{resolutionImageError}</span>}
+              </label>
+            )}
             <div className="mt-4 flex flex-wrap gap-2">
               {(TRANSITIONS[selected.status] || []).map((status) => {
                 const Icon = TRANSITION_ICONS[status];
@@ -1019,6 +1121,53 @@ function EvidenceDownload({ complaint, token, isAdmin }) {
         {busy ? "Downloading..." : "Download evidence"}
       </button>
       {error && <p role="alert" className="mt-1 text-xs text-red-600">{error}</p>}
+    </div>
+  );
+}
+
+function ResolutionImageDownloads({ complaint, token, isAdmin }) {
+  const [downloadingIndex, setDownloadingIndex] = useState(null);
+  const [error, setError] = useState("");
+
+  const download = async (index) => {
+    setDownloadingIndex(index);
+    setError("");
+    try {
+      const prefix = isAdmin ? "/admin" : "/staff";
+      const response = await fetch(
+        `${API_URL}${prefix}/complaints/${complaint.id}/resolution-images/${index}`,
+        { headers: authHeaders(token) },
+      );
+      if (!response.ok) {
+        const payload = await response.json();
+        throw new Error(payload.message || "Unable to download the resolution image.");
+      }
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      link.download = `CMP-${String(complaint.id).padStart(5, "0")}-resolution-${index + 1}`;
+      link.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (downloadError) {
+      setError(downloadError.message);
+    } finally {
+      setDownloadingIndex(null);
+    }
+  };
+
+  return (
+    <div className="text-xs text-slate-600">
+      <strong className="text-slate-700">Resolution images:</strong>
+      <ul className="mt-1 flex flex-wrap gap-2">
+        {complaint.resolution_images.map((_, index) => (
+          <li key={`${complaint.id}-resolution-${index}`}>
+            <button type="button" onClick={() => download(index)} disabled={downloadingIndex !== null} className="font-semibold text-[#2455D6] hover:underline disabled:opacity-50">
+              {downloadingIndex === index ? "Downloading..." : `Image ${index + 1}`}
+            </button>
+          </li>
+        ))}
+      </ul>
+      {error && <p role="alert" className="mt-1 text-red-600">{error}</p>}
     </div>
   );
 }

@@ -22,7 +22,9 @@ class AdminDocumentRequestHistoryController extends Controller
 
         $query = DocumentRequest::query()->with(['resident', 'type', 'assignedStaff']);
 
-        if (($validated['status'] ?? null) === 'delayed') {
+        if (($validated['status'] ?? null) === 'under_review') {
+            $query->whereIn('status', ['pending', 'under_review', 'processing']);
+        } elseif (($validated['status'] ?? null) === 'delayed') {
             $query->whereIn('status', ['pending', 'under_review', 'processing'])
                 ->where('status_changed_at', '<=', Carbon::now()->subDays(3));
         } elseif (!empty($validated['status']) && $validated['status'] !== 'all') {
@@ -132,6 +134,7 @@ class AdminDocumentRequestHistoryController extends Controller
                 'processing' => (int) ($statusCounts['processing'] ?? 0),
                 'for_correction' => (int) ($statusCounts['for_correction'] ?? 0),
                 'ready_for_release' => (int) ($statusCounts['ready_for_release'] ?? 0),
+                'completed' => (int) ($statusCounts['completed'] ?? 0),
                 'rejected' => (int) ($statusCounts['rejected'] ?? 0),
                 'released' => DocumentRequest::whereNotNull('released_at')->count(),
                 'delayed' => DocumentRequest::whereIn('status', ['pending', 'under_review', 'processing'])

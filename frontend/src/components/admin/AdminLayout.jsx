@@ -174,6 +174,8 @@ function AdminSidebar({
   const [openMenuOverride, setOpenMenuOverride] = useState(null);
   const [pendingEscalationCount, setPendingEscalationCount] = useState(null);
   const [pendingVerificationCount, setPendingVerificationCount] = useState(null);
+  const [documentRequestCount, setDocumentRequestCount] = useState(null);
+  const [complaintCount, setComplaintCount] = useState(null);
   const activeNavigationItem = navigation.find((item) =>
     isActiveNavigationItem(item, activePath),
   );
@@ -213,12 +215,33 @@ function AdminSidebar({
         // Keep the last known count if the server is temporarily unavailable.
       }
     };
+    const loadAttentionCounts = async () => {
+      if (!token) return;
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/admin/notifications", {
+          headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+        });
+        if (!response.ok) return;
+        const payload = await response.json();
+        const items = payload.items || [];
+        const documents = items.find((item) => item.type === "document_requests");
+        const complaints = items.find((item) => item.type === "complaints");
+        if (!cancelled) {
+          setDocumentRequestCount(Number(documents?.count) || 0);
+          setComplaintCount(Number(complaints?.count) || 0);
+        }
+      } catch {
+        // Keep the last known counts while the notification endpoint is unavailable.
+      }
+    };
     loadEscalationCount();
     loadVerificationCount();
+    loadAttentionCounts();
     window.addEventListener("resident-verification-updated", loadVerificationCount);
     const timer = window.setInterval(() => {
       loadEscalationCount();
       loadVerificationCount();
+      loadAttentionCounts();
     }, 30000);
     return () => {
       cancelled = true;
@@ -351,6 +374,16 @@ function AdminSidebar({
                       })()}
                     </span>
                     {!collapsed && <span className="min-w-0 flex-1 truncate">{item.label}</span>}
+                    {!collapsed && item.label === "Document Request" && documentRequestCount > 0 && (
+                    <span aria-label={`${documentRequestCount} document requests need attention`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                      {documentRequestCount > 99 ? "99+" : documentRequestCount}
+                    </span>
+                    )}
+                    {!collapsed && item.label === "Complaints" && complaintCount > 0 && (
+                    <span aria-label={`${complaintCount} complaints need attention`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                      {complaintCount > 99 ? "99+" : complaintCount}
+                    </span>
+                    )}
                     {!collapsed && item.label === "Chatbot" && pendingEscalationCount > 0 && (
                       <span aria-label={`${pendingEscalationCount} pending escalated questions`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                         {pendingEscalationCount > 99 ? "99+" : pendingEscalationCount}
@@ -392,6 +425,16 @@ function AdminSidebar({
                         {child.path === "/admin/residents/verification" && pendingVerificationCount > 0 && (
                           <span aria-label={`${pendingVerificationCount} accounts pending verification`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
                             {pendingVerificationCount > 99 ? "99+" : pendingVerificationCount}
+                          </span>
+                        )}
+                        {child.path === "/admin/document-requests" && documentRequestCount > 0 && (
+                          <span aria-label={`${documentRequestCount} document requests need attention`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                            {documentRequestCount > 99 ? "99+" : documentRequestCount}
+                          </span>
+                        )}
+                        {child.path === "/admin/complaints/resident-complaints" && complaintCount > 0 && (
+                          <span aria-label={`${complaintCount} complaints need attention`} className="inline-flex min-w-5 items-center justify-center rounded-full bg-[#EF4444] px-1.5 py-0.5 text-[10px] font-bold leading-none text-white">
+                            {complaintCount > 99 ? "99+" : complaintCount}
                           </span>
                         )}
                       </button>
