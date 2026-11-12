@@ -16,6 +16,19 @@ class ResidentDocumentRequestTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_unverified_resident_cannot_submit_a_document_request(): void
+    {
+        $resident = Resident::factory()->create(['verification_status' => 'pending']);
+        Sanctum::actingAs($resident);
+
+        $this->postJson('/api/resident/requests', [])
+            ->assertForbidden()
+            ->assertJsonPath('message', 'Your account must be verified by barangay personnel before using this service.')
+            ->assertJsonPath('verification_status', 'pending');
+
+        $this->assertDatabaseCount('document_requests', 0);
+    }
+
     public function test_resident_can_submit_a_document_request_with_required_uploads(): void
     {
         Storage::fake('local');

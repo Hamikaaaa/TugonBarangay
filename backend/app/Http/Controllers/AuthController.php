@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Account;
 use App\Models\Admin;
 use App\Models\BarangayRegistry;
 use App\Models\PasswordResetVerification;
 use App\Models\RegistrationVerification;
 use App\Models\Resident;
 use App\Models\Staff;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -388,7 +388,9 @@ class AuthController extends Controller
             .'<p>If you did not request this, you can ignore this email.</p>';
 
         Mail::html($html, function ($message) use ($email) {
-            $message->to($email)->subject('Verify your TugonBarangay registration');
+            $message->from(config('mail.from.address'), 'TugonBarangay')
+                ->to($email)
+                ->subject('Verify your TugonBarangay registration');
         });
     }
 
@@ -412,11 +414,13 @@ class AuthController extends Controller
             .'<p>If you did not request a password change, do not share this code and you may ignore this email. Your password will not change unless the code is verified and a new password is submitted.</p>';
 
         Mail::html($html, function ($message) use ($email) {
-            $message->to($email)->subject('Password change verification code - TugonBarangay');
+            $message->from(config('mail.from.address'), 'TugonBarangay')
+                ->to($email)
+                ->subject('Password change verification code - TugonBarangay');
         });
     }
 
-    private function passwordResetAccount(PasswordResetVerification $verification): ?Model
+    private function passwordResetAccount(PasswordResetVerification $verification): ?Account
     {
         $model = match ($verification->account_type) {
             'residents' => Resident::class,

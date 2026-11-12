@@ -80,7 +80,7 @@ function Detail({ label, value, wide = false }) {
   );
 }
 
-function ComplaintRow({ complaint, token, onResubmitted }) {
+function ComplaintRow({ complaint, token, onResubmitted, verified }) {
   const [expanded, setExpanded] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState("");
@@ -95,6 +95,11 @@ function ComplaintRow({ complaint, token, onResubmitted }) {
     : complaint.status;
 
   const resubmitComplaint = async () => {
+    if (!verified) {
+      setResubmitError("Your account must be verified by barangay personnel before you can submit a complaint.");
+      return;
+    }
+
     setResubmitting(true);
     setResubmitMessage("");
     setResubmitError("");
@@ -170,7 +175,7 @@ function ComplaintRow({ complaint, token, onResubmitted }) {
           <button
             type="button"
             onClick={resubmitComplaint}
-            disabled={resubmitting}
+            disabled={resubmitting || !verified}
             className="mt-3 inline-flex min-h-10 items-center gap-2 rounded-lg bg-[#2455D6] px-4 text-sm font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-wait disabled:opacity-60"
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -390,6 +395,14 @@ function Complaints({
 
   const submitComplaint = async (event) => {
     event.preventDefault();
+    if (!verified) {
+      setMessage({
+        type: "error",
+        text: "Your account must be verified by barangay personnel before you can submit a complaint.",
+      });
+      return;
+    }
+
     if (feedbackTimerRef.current) window.clearTimeout(feedbackTimerRef.current);
     feedbackDelayElapsedRef.current = false;
     feedbackEligibleRef.current = false;
@@ -821,6 +834,7 @@ function Complaints({
                   complaint={complaint}
                   token={token}
                   onResubmitted={refreshHistory}
+                  verified={verified}
                 />
               ))}
             </div>

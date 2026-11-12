@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { PUROKS } from "../constants/puroks";
+import { REGISTRATION_VERIFIED_STORAGE_KEY } from "../utils/registrationVerification";
 
 const formSteps = [
   {
@@ -43,6 +44,7 @@ function Register({ isModal = false }) {
     useState(false);
   const [showVerificationChoice, setShowVerificationChoice] = useState(false);
   const [pendingVerification, setPendingVerification] = useState(null);
+  const [registrationComplete, setRegistrationComplete] = useState(false);
   const [verificationCode, setVerificationCode] = useState("");
   const [verificationLoading, setVerificationLoading] = useState(false);
   const [resendLoading, setResendLoading] = useState(false);
@@ -69,6 +71,22 @@ function Register({ isModal = false }) {
     const timer = window.setInterval(() => setVerificationNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [pendingVerification]);
+
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key !== REGISTRATION_VERIFIED_STORAGE_KEY || !event.newValue) {
+        return;
+      }
+
+      setPendingVerification(null);
+      setMessage("");
+      setError("");
+      setRegistrationComplete(true);
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   const update = (event) => {
     const { name, value } = event.target;
@@ -1096,6 +1114,21 @@ function Register({ isModal = false }) {
             setConsentType(null);
           }}
         />
+      )}
+
+      {registrationComplete && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/60 px-5 py-8">
+          <section
+            role="dialog"
+            aria-modal="true"
+            className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl"
+          >
+            <p role="status" className="text-lg font-semibold text-[#142A46]">
+              Email verified, you may now go back to the login page and and
+              close this tab
+            </p>
+          </section>
+        </div>
       )}
     </div>
   );

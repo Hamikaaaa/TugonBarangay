@@ -1,10 +1,14 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { REGISTRATION_VERIFIED_STORAGE_KEY } from "../utils/registrationVerification";
 
+const REGISTRATION_COMPLETE_MESSAGE =
+  "Email verified, you may now go back to the login page and and close this tab";
+
 function Login({ isModal = false }) {
   const { login } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
@@ -12,7 +16,11 @@ function Login({ isModal = false }) {
     password: "",
   });
 
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(
+    location.state?.registrationVerified === true
+      ? REGISTRATION_COMPLETE_MESSAGE
+      : "",
+  );
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,7 +34,7 @@ function Login({ isModal = false }) {
   useEffect(() => {
     const handleStorage = (event) => {
       if (event.key === REGISTRATION_VERIFIED_STORAGE_KEY && event.newValue) {
-        setMessage("Registration is complete. You may now log in.");
+        setMessage(REGISTRATION_COMPLETE_MESSAGE);
       }
     };
 

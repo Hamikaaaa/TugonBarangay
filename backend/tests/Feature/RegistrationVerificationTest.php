@@ -147,7 +147,9 @@ class RegistrationVerificationTest extends TestCase
         $this->assertSame(0, Resident::count());
 
         $transport = Mail::mailer()->getSymfonyTransport();
-        $message = $transport->messages()->last()->getOriginalMessage()->toString();
+        $originalMessage = $transport->messages()->last()->getOriginalMessage();
+        $this->assertSame('TugonBarangay', $originalMessage->getFrom()[0]->getName());
+        $message = $originalMessage->toString();
         $decodedMessage = quoted_printable_decode($message);
         $this->assertStringContainsString('VERIFY!', $decodedMessage);
         preg_match('~https?://[^\s"<]+/registration/verify/[^\s"<]+~', $decodedMessage, $matches);

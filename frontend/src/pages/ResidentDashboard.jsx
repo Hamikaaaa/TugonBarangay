@@ -35,6 +35,7 @@ function ResidentDashboard() {
               token={token}
               onRefresh={refreshDashboard}
               user={user}
+              verified={verified}
             />
           )}
           {view === "complaints" && (
