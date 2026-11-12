@@ -669,7 +669,7 @@ function DocumentTypes() {
                 {draft.requirements.length === 0 && <p className="text-xs text-slate-400">No upload requirements configured.</p>}
               </div>
             </div>
-            <button disabled={saving} className={primaryButtonClass}>{saving ? "Saving..." : "Save document"}</button>
+            <button disabled={saving} className={`${primaryButtonClass} !bg-none !bg-[#2455D6] hover:!bg-[#1D46B5]`}>{saving ? "Saving..." : "Save document"}</button>
           </form>
         ) : loading ? (
           <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">

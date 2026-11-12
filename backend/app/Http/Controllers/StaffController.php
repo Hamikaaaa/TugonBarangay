@@ -806,6 +806,8 @@ class StaffController extends Controller
             'status' => ['required', 'string', 'in:pending,in_progress,resolved'],
             'staff_remarks' => ['nullable', 'string', 'max:2000'],
             'resolution_details' => ['nullable', 'string', 'max:5000'],
+            'resolution_images' => ['sometimes', 'array', 'max:5'],
+            'resolution_images.*' => ['image', 'mimes:jpg,jpeg,png', 'max:5120'],
         ]);
 
         if ($validated['status'] === 'resolved' && blank($validated['resolution_details'] ?? null)) {
@@ -814,52 +816,74 @@ class StaffController extends Controller
             ], 422);
         }
 
-        $transitioned = DB::transaction(function () use ($complaint, $validated): bool {
-            $complaint = Complaint::query()
-                ->lockForUpdate()
-                ->findOrFail($complaint->id);
-            $transitions = [
-                'pending' => ['in_progress'],
-                'resubmitted' => ['in_progress'],
-                'in_progress' => ['resolved'],
-                'resolved' => [],
-            ];
-            if (!in_array($validated['status'], $transitions[$complaint->status] ?? [], true)) {
-                return false;
-            }
+        $storedImagePaths = [];
+        try {
+            $transitioned = DB::transaction(function () use ($complaint, $validated, $request, &$storedImagePaths): bool {
+                $complaint = Complaint::query()
+                    ->lockForUpdate()
+                    ->findOrFail($complaint->id);
+                $transitions = [
+                    'pending' => ['in_progress'],
+                    'resubmitted' => ['in_progress'],
+                    'in_progress' => ['resolved'],
+                    'resolved' => [],
+                ];
+                if (!in_array($validated['status'], $transitions[$complaint->status] ?? [], true)) {
+                    return false;
+                }
 
-            $complaint->status = $validated['status'];
-            $complaint->status_updated_at = now();
-            $complaint->staff_remarks = $validated['staff_remarks'] ?? null;
-            $complaint->resolution_details = $validated['resolution_details'] ?? null;
-            $complaint->resolved_at = $validated['status'] === 'resolved'
-                ? ($complaint->resolved_at ?? now())
-                : null;
-            $complaint->save();
+                foreach ($request->file('resolution_images', []) as $image) {
+                    $path = $image->store(
+                        "complaints/{$complaint->resident_id}/resolutions/{$complaint->id}",
+                        'local',
+                    );
+                    if (!$path) {
+                        throw new \RuntimeException('Unable to store a complaint resolution image.');
+                    }
+                    $storedImagePaths[] = $path;
+                }
 
-            $statusLabel = str_replace('_', ' ', ucfirst($validated['status']));
-            $caseReference = 'CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT);
-            $message = $validated['status'] === 'resolved'
-                ? "The status of your complaint {$caseReference} is now Resolved and closed."
-                : "The status of your complaint {$caseReference} is now {$statusLabel}.";
-            if (filled($validated['staff_remarks'] ?? null)) {
-                $message .= "\n\nStaff remarks: ".$validated['staff_remarks'];
-            }
-            if (filled($validated['resolution_details'] ?? null)) {
-                $message .= "\n\nCase resolution: ".$validated['resolution_details'];
-            }
+                $complaint->status = $validated['status'];
+                $complaint->status_updated_at = now();
+                $complaint->staff_remarks = $validated['staff_remarks'] ?? null;
+                $complaint->resolution_details = $validated['resolution_details'] ?? null;
+                $complaint->resolution_images = array_values(array_merge(
+                    $complaint->resolution_images ?? [],
+                    $storedImagePaths,
+                ));
+                $complaint->resolved_at = $validated['status'] === 'resolved'
+                    ? ($complaint->resolved_at ?? now())
+                    : null;
+                $complaint->save();
 
-            ResidentNotification::create([
-                'resident_id' => $complaint->resident_id,
-                'type' => 'complaint_status_updated',
-                'title' => "Update on complaint {$caseReference}",
-                'message' => $message,
-            ]);
+                $statusLabel = str_replace('_', ' ', ucfirst($validated['status']));
+                $caseReference = 'CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT);
+                $message = $validated['status'] === 'resolved'
+                    ? "The status of your complaint {$caseReference} is now Resolved and closed."
+                    : "The status of your complaint {$caseReference} is now {$statusLabel}.";
+                if (filled($validated['staff_remarks'] ?? null)) {
+                    $message .= "\n\nStaff remarks: ".$validated['staff_remarks'];
+                }
+                if (filled($validated['resolution_details'] ?? null)) {
+                    $message .= "\n\nCase resolution: ".$validated['resolution_details'];
+                }
 
-            return true;
-        });
+                ResidentNotification::create([
+                    'resident_id' => $complaint->resident_id,
+                    'type' => 'complaint_status_updated',
+                    'title' => "Update on complaint {$caseReference}",
+                    'message' => $message,
+                ]);
+
+                return true;
+            });
+        } catch (\Throwable $error) {
+            Storage::disk('local')->delete($storedImagePaths);
+            throw $error;
+        }
 
         if (!$transitioned) {
+            Storage::disk('local')->delete($storedImagePaths);
             return response()->json([
                 'message' => 'This complaint status transition is not allowed.',
             ], 409);
@@ -867,6 +891,36 @@ class StaffController extends Controller
 
         return response()->json([
             'message' => 'Complaint updated successfully.',
+            'data' => $complaint->fresh()->load('user'),
+        ]);
+    }
+
+    public function sendComplaintStaffRemarks(Request $request, Complaint $complaint)
+    {
+        $validated = $request->validate([
+            'staff_remarks' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $complaint = DB::transaction(function () use ($complaint, $validated): Complaint {
+            $complaint = Complaint::query()
+                ->lockForUpdate()
+                ->findOrFail($complaint->id);
+            $complaint->staff_remarks = trim($validated['staff_remarks']);
+            $complaint->save();
+
+            $caseReference = 'CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT);
+            ResidentNotification::create([
+                'resident_id' => $complaint->resident_id,
+                'type' => 'complaint_status_updated',
+                'title' => "Progress update on complaint {$caseReference}",
+                'message' => "Barangay staff added a progress update to complaint {$caseReference}:\n\n{$complaint->staff_remarks}",
+            ]);
+
+            return $complaint;
+        });
+
+        return response()->json([
+            'message' => 'Progress update sent to the resident.',
             'data' => $complaint->fresh()->load('user'),
         ]);
     }
@@ -888,6 +942,27 @@ class StaffController extends Controller
         }, $filename, [
             'Cache-Control' => 'private, no-store',
             'Content-Type' => $mimeType,
+        ]);
+    }
+
+    public function downloadComplaintResolutionImage(Request $request, Complaint $complaint, int $image)
+    {
+        if ($request->user()->role === 'resident') {
+            abort_unless($complaint->resident_id === $request->user()->id, 404);
+        }
+        $path = $complaint->resolution_images[$image] ?? null;
+        $disk = Storage::disk('local');
+        abort_unless($path && $disk->exists($path), 404);
+        $stream = $disk->readStream($path);
+        abort_unless(is_resource($stream), 404);
+        $extension = pathinfo($path, PATHINFO_EXTENSION);
+
+        return response()->streamDownload(function () use ($stream): void {
+            fpassthru($stream);
+            fclose($stream);
+        }, "complaint-resolution-{$complaint->id}-".($image + 1).($extension ? ".{$extension}" : ''), [
+            'Cache-Control' => 'private, no-store',
+            'Content-Type' => mime_content_type($disk->path($path)) ?: 'application/octet-stream',
         ]);
     }
 

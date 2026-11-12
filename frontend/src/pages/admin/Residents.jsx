@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
+  Download,
   FileSpreadsheet,
   Search,
   ShieldCheck,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { readSheet } from "read-excel-file/browser";
+import writeXlsxFile from "write-excel-file/browser";
 import { useLocation, useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
@@ -22,6 +24,17 @@ import { primaryButtonClass } from "../../utils/buttonStyles";
 import { PUROKS } from "../../constants/puroks";
 
 const API_URL = "http://127.0.0.1:8000/api";
+const REGISTRY_TEMPLATE_HEADERS = [
+  "first_name",
+  "middle_name",
+  "last_name",
+  "suffix",
+  "date_of_birth",
+  "sex",
+  "purok",
+  "address",
+  "mobile_number",
+];
 
 function Residents() {
   const { token } = useAuth();
@@ -157,6 +170,15 @@ function Residents() {
     return () => window.clearInterval(timer);
   }, [isDashboard, isAccounts, isVerification, loadAccounts, loadDashboardStats, loadPendingResidents, loadRegistry]);
 
+  useEffect(() => {
+    if (isAccounts || isDashboard || isVerification) return undefined;
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput.trim());
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [isAccounts, isDashboard, isVerification, searchInput]);
+
   const setAccountActive = async (account) => {
     if (savingId) return;
     setSavingId(account.id);
@@ -180,6 +202,17 @@ function Residents() {
     event.preventDefault();
     setPage(1);
     setSearch(searchInput.trim());
+  };
+
+  const downloadRegistryTemplate = async () => {
+    setError("");
+    try {
+      await writeXlsxFile([REGISTRY_TEMPLATE_HEADERS]).toFile(
+        "barangay-resident-import-template.xlsx",
+      );
+    } catch (downloadError) {
+      setError(downloadError.message || "Unable to download the Excel template.");
+    }
   };
 
   const submitRegistryResident = async (event) => {
@@ -529,7 +562,6 @@ function Residents() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
-              <form onSubmit={applySearch} className="flex min-w-0 flex-1 gap-2">
                 <label className="relative min-w-0 flex-1 sm:w-80">
                   <span className="sr-only">
                     Search masterlist by ID, name, address, purok, or mobile
@@ -545,10 +577,6 @@ function Residents() {
                     className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10"
                   />
                 </label>
-                <button type="submit" className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5]">
-                  Search
-                </button>
-              </form>
               <input
                 ref={registryExcelRef}
                 type="file"
@@ -563,6 +591,14 @@ function Residents() {
               >
                 <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />
                 Import Excel
+              </button>
+              <button
+                type="button"
+                onClick={downloadRegistryTemplate}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+              >
+                <Download className="h-4 w-4" aria-hidden="true" />
+                Download Template
               </button>
               <button type="button" onClick={() => { setRegistryFormErrors({}); setShowRegistryForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5]">
                 <UserPlus className="h-4 w-4" aria-hidden="true" /> Add resident
@@ -729,7 +765,7 @@ function Residents() {
               {registryFormErrors.message && <p role="alert" className="text-sm text-red-600">{registryFormErrors.message}</p>}
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button type="button" onClick={() => setShowRegistryForm(false)} disabled={registrySaving} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Cancel</button>
-                <button type="submit" disabled={registrySaving} className={`${primaryButtonClass} px-5 disabled:cursor-wait disabled:opacity-60`}>{registrySaving ? "Saving..." : "Register resident"}</button>
+                <button type="submit" disabled={registrySaving} className={`${primaryButtonClass} !bg-none !bg-[#2455D6] px-5 hover:!bg-[#1D46B5] disabled:cursor-wait disabled:opacity-60`}>{registrySaving ? "Saving..." : "Register resident"}</button>
               </div>
             </form>
           </section>

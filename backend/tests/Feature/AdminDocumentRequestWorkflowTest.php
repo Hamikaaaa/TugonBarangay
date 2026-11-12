@@ -128,6 +128,41 @@ class AdminDocumentRequestWorkflowTest extends TestCase
             ->assertJsonPath('data.0.status', 'completed');
     }
 
+    public function test_admin_under_review_filter_groups_request_preparation_stages(): void
+    {
+        DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'status' => 'under_review',
+        ]);
+        DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'status' => 'processing',
+        ]);
+        DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'status' => 'ready_for_release',
+        ]);
+        DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'status' => 'completed',
+        ]);
+        $admin = Admin::create([
+            'name' => 'History Admin',
+            'email' => 'history-filter-admin@example.com',
+            'password' => 'password123',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $response = $this->getJson('/api/admin/document-requests?status=under_review')
+            ->assertOk()
+            ->assertJsonCount(3, 'data');
+
+        $this->assertEqualsCanonicalizing(
+            ['pending', 'under_review', 'processing'],
+            collect($response->json('data'))->pluck('status')->all(),
+        );
+    }
+
     public function test_admin_overview_reports_delays_staff_workload_and_audit_history(): void
     {
         $officer = Staff::factory()->create([

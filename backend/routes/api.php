@@ -39,6 +39,7 @@ Route::middleware(['auth:sanctum', 'role:resident'])->prefix('resident')->group(
     Route::patch('/complaints/{complaint}/resubmit', [ResidentController::class, 'resubmitComplaint'])
         ->middleware('verified');
     Route::get('/complaints/{complaint}/evidence', [ResidentController::class, 'downloadComplaintEvidence']);
+    Route::get('/complaints/{complaint}/resolution-images/{image}', [\App\Http\Controllers\StaffController::class, 'downloadComplaintResolutionImage'])->whereNumber('image');
     Route::get('/notifications', [ResidentController::class, 'notifications']);
     Route::patch('/notifications/read-all', [ResidentController::class, 'markAllNotificationsRead']);
     Route::patch('/notifications/{notification}', [ResidentController::class, 'updateNotification']);
@@ -107,8 +108,10 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/complaints/summon-history', [\App\Http\Controllers\BlotterController::class, 'summonEntries']);
     Route::get('/complaints/summon-history/{summonEntry}/template', [\App\Http\Controllers\BlotterController::class, 'downloadSummonEntryTemplate']);
     Route::patch('/complaints/{complaint}/status', [\App\Http\Controllers\StaffController::class, 'updateComplaintStatus']);
+    Route::patch('/complaints/{complaint}/remarks', [\App\Http\Controllers\StaffController::class, 'sendComplaintStaffRemarks']);
     Route::patch('/complaints/{complaint}/classification', [\App\Http\Controllers\StaffController::class, 'updateComplaintClassification']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);
+    Route::get('/complaints/{complaint}/resolution-images/{image}', [\App\Http\Controllers\StaffController::class, 'downloadComplaintResolutionImage'])->whereNumber('image');
     Route::get('/blotter/entries', [\App\Http\Controllers\BlotterController::class, 'index']);
 });
 
@@ -148,5 +151,7 @@ Route::middleware(['auth:sanctum', 'role:staff', 'designation:Complaint Manageme
     Route::get('/complaints/{complaint}', [\App\Http\Controllers\StaffController::class, 'showComplaint']);
     Route::patch('/complaints/{complaint}/classification', [\App\Http\Controllers\StaffController::class, 'updateComplaintClassification']);
     Route::patch('/complaints/{complaint}/status', [\App\Http\Controllers\StaffController::class, 'updateComplaintStatus']);
+    Route::patch('/complaints/{complaint}/remarks', [\App\Http\Controllers\StaffController::class, 'sendComplaintStaffRemarks']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);
+    Route::get('/complaints/{complaint}/resolution-images/{image}', [\App\Http\Controllers\StaffController::class, 'downloadComplaintResolutionImage'])->whereNumber('image');
 });

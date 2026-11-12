@@ -6,8 +6,14 @@ import {
   residentApi,
 } from "../../services/residentApi";
 import { shouldPromptForFeatureFeedback } from "../../services/featureFeedback";
+import {
+  clearInvalidFieldHighlight,
+  focusFirstInvalidField,
+  focusInvalidField,
+} from "../../utils/formValidation";
 import { RequestRow } from "../../components/resident/ResidentUI";
 import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
+import AttachmentPreviewButton from "../../components/resident/AttachmentPreviewButton";
 
 const APPLICANT_FIELDS = {
   full_name: { label: "Full Name", type: "text" },
@@ -964,6 +970,11 @@ function Documents({ requests, token, onRefresh, user, verified }) {
       return;
     }
     if (submitting) return;
+    if (focusFirstInvalidField(formRef.current)) {
+      setMessage("Please complete the highlighted required fields before continuing.");
+      setMessageTone("error");
+      return;
+    }
     if (!selectedDocument) {
       setMessage("Choose a document type before submitting your request.");
       setMessageTone("error");
@@ -1134,8 +1145,7 @@ function Documents({ requests, token, onRefresh, user, verified }) {
             : window.document.querySelector(
                 `[data-validation-field="${validationField.key}"]`,
               );
-          control?.scrollIntoView({ behavior: "smooth", block: "center" });
-          control?.focus({ preventScroll: true });
+          focusInvalidField(control);
         });
       } else {
         setMessage(getFriendlyRequestError(error, selectedDocument));
@@ -1147,6 +1157,32 @@ function Documents({ requests, token, onRefresh, user, verified }) {
   };
   const requestLimitReached =
     requestCapacity !== null && requestCapacity.available === 0;
+  const requestReviewFields = selectedDocument
+    ? [
+        ...selectedDocument.applicantFields.map((key) => ({
+          label:
+            selectedDocument.applicantFieldConfigs?.find((field) => field.key === key)?.label ||
+            APPLICANT_FIELDS[key]?.label ||
+            key,
+          value: formFields[key],
+        })),
+        ...selectedDocument.fields
+          .filter(
+            (field) =>
+              field.submit !== false &&
+              (!field.showWhen || conditionMatches(field.showWhen, formFields)),
+          )
+          .map((field) => ({
+            label: field.label,
+            value:
+              field.key === "purpose" &&
+              formFields.purpose === "Other" &&
+              selectedDocument.fields.some((item) => item.key === "purpose_other")
+                ? formFields.purpose_other
+                : formFields[field.key],
+          })),
+      ].filter(({ value }) => value !== undefined && String(value).trim())
+    : [];
 
   return (
     <div className="space-y-6 pb-8">
@@ -1259,14 +1295,22 @@ function Documents({ requests, token, onRefresh, user, verified }) {
           </div>
         )}
 
-        <form ref={formRef} id="new-document-request" onSubmit={submitRequest}>
+        <form
+          ref={formRef}
+          id="new-document-request"
+          noValidate
+          onSubmit={submitRequest}
+          onInput={clearInvalidFieldHighlight}
+        >
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="text-sm font-bold text-slate-700">
                 Document type
+                <span className="ml-1 text-red-600" aria-hidden="true">*</span>
               </span>
               <select
                 required
+                data-validation-field="document_type"
                 value={documentType}
                 disabled={catalogTypes === null || Boolean(editingRequest)}
                 onChange={(event) => {
@@ -1494,6 +1538,11 @@ function Documents({ requests, token, onRefresh, user, verified }) {
                         <label key={field.key} className="block">
                           <span className="text-sm font-bold text-slate-700">
                             {field.label}
+                            {required && (
+                              <span className="ml-1 text-red-600" aria-hidden="true">
+                                *
+                              </span>
+                            )}
                             {!required && (
                               <span className="ml-1 font-normal text-slate-400">
                                 (optional)
@@ -1603,6 +1652,11 @@ function Documents({ requests, token, onRefresh, user, verified }) {
                       <div key={requirement.key} className="block">
                         <label htmlFor={inputId} className="text-sm font-bold text-slate-700">
                           {label}
+                          {required && (
+                            <span className="ml-1 text-red-600" aria-hidden="true">
+                              *
+                            </span>
+                          )}
                           {!required && (
                             <span className="ml-1 font-normal text-slate-400">
                               (optional)
@@ -1919,6 +1973,50 @@ function Documents({ requests, token, onRefresh, user, verified }) {
                 ? `Send your corrections for ${selectedDocument?.label || "this document"} to barangay staff for review?`
                 : `Submit your request for ${selectedDocument?.label || "this document"}? Barangay staff will review it before processing.`}
             </p>
+            <div className="mt-5 max-h-64 space-y-4 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <dl className="grid gap-x-4 gap-y-3 sm:grid-cols-2">
+                {requestReviewFields.map(({ label, value }) => (
+                  <div key={label} className="min-w-0">
+                    <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</dt>
+                    <dd className="mt-1 break-words text-sm text-slate-800">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Supporting documents</p>
+                <ul className="mt-2 space-y-1 text-sm text-slate-700">
+                  {visibleRequirements.map((requirement) => (
+                    <li key={requirement.key} className="flex justify-between gap-3">
+                      <span>{requirement.label}</span>
+                      {requirementFiles[requirement.key] ? (
+                        <span className="text-right">
+                          <span className="mb-1 block max-w-48 truncate text-slate-500">
+                            {requirementFiles[requirement.key].name}
+                          </span>
+                          <AttachmentPreviewButton
+                            file={requirementFiles[requirement.key]}
+                            fileName={requirementFiles[requirement.key].name}
+                          />
+                        </span>
+                      ) : editingRequest?.details?.requirements?.[requirement.key]?.original_name ? (
+                        <span className="text-right">
+                          <span className="mb-1 block max-w-48 truncate text-slate-500">
+                            {editingRequest.details.requirements[requirement.key].original_name} (current)
+                          </span>
+                          <AttachmentPreviewButton
+                            token={token}
+                            endpoint={`/resident/requests/${editingRequest.id}/requirements/${requirement.key}`}
+                            fileName={editingRequest.details.requirements[requirement.key].original_name}
+                          />
+                        </span>
+                      ) : (
+                        <span className="text-right text-slate-500">Not attached</span>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
             <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
