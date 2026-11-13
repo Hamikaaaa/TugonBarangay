@@ -1,25 +1,25 @@
 name: deploy to tugonbarangay.wuaze.com
 
 on:
-workflow_dispatch:
-push:
-branches:
-- main
+  workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   deploy:
     name: Deploy to tugonbarangay.wuaze.com
     runs-on: ubuntu-latest
 
-steps:
-- name: get latest code
-  uses: actions/checkout@v4
+    steps:
+      - name: get latest code
+        uses: actions/checkout@v4
 
 
-- name: sync files via FTP
-  uses: SamKirkland/FTP-Deploy-Action@4.3.5
-with:
-    server: ftpupload.net
-    username: ${{ secrets.FTP_USERNAME }}
-    password: ${{ secrets.FTP_PASSWORD }}
-    local-dir: /htdocs/
+      - name: sync files via FTP
+        uses: SamKirkland/FTP-Deploy-Action@4.3.5
+        with:
+          server: ftpupload.net
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          server-dir: /htdocs/
