@@ -302,7 +302,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
       const body = new FormData();
       body.append("_method", "PATCH");
       body.append("status", status);
-      body.append("staff_remarks", staffRemarks);
+      body.append("staff_remarks", staffRemarks.trim() || sentStaffRemarks);
       body.append("resolution_details", resolutionDetails);
       if (status === "resolved") {
         resolutionImages.forEach((image) => body.append("resolution_images[]", image));
@@ -342,10 +342,11 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to send the progress update.");
       setSelected(payload.data);
-      setStaffRemarks(payload.data.staff_remarks || remarks);
-      setSentStaffRemarks(payload.data.staff_remarks || remarks);
+      const savedRemarks = payload.data.staff_remarks || remarks;
+      setSentStaffRemarks(savedRemarks);
       setNotice(payload.message || "Progress update sent to the resident.");
       await loadComplaints();
+      setStaffRemarks("");
     } catch (remarksError) {
       setError(remarksError.message);
     } finally {
