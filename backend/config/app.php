@@ -52,8 +52,8 @@ return [
     |
     */
 
-    'url' => env('APP_URL', 'http://localhost'),
-    'frontend_url' => env('FRONTEND_URL', 'http://localhost:5173'),
+    'url' => env('APP_URL', 'https://tugonbarangay.wuaze.com'),
+'frontend_url' => env('FRONTEND_URL', 'https://tugonbarangay.wuaze.com'),
 
     /*
     |--------------------------------------------------------------------------
