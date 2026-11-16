@@ -1,4 +1,4 @@
-import { Bell, ChevronRight } from "lucide-react";
+import { Bell, ChevronRight, LogOut } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { residentApi } from "../../services/residentApi";
 
@@ -333,6 +333,17 @@ function ResidentNav({
               />
             ))}
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setMobileMenuOpen(false);
+              onLogout();
+            }}
+            className="mx-auto mt-2 flex w-full max-w-[1440px] items-center gap-2 rounded-full px-4 py-3 text-left text-sm font-semibold text-[#E52B32] transition hover:bg-red-50"
+          >
+            <LogOut className="h-4 w-4" aria-hidden="true" />
+            Sign out
+          </button>
         </nav>
       )}
     </header>
