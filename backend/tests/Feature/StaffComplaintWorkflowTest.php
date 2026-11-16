@@ -94,6 +94,27 @@ class StaffComplaintWorkflowTest extends TestCase
         $this->assertNotNull($this->complaint->fresh()->resolved_at);
     }
 
+    public function test_admin_review_can_start_a_pending_complaint_without_clearing_existing_notes(): void
+    {
+        $this->complaint->update([
+            'staff_remarks' => 'Previously saved progress note.',
+            'resolution_details' => 'Previously recorded outcome.',
+        ]);
+        $admin = Admin::create([
+            'name' => 'Complaint Admin',
+            'email' => 'complaint-admin@example.com',
+            'password' => 'password123',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->patchJson('/api/admin/complaints/'.$this->complaint->id.'/status', [
+            'status' => 'in_progress',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.staff_remarks', 'Previously saved progress note.')
+            ->assertJsonPath('data.resolution_details', 'Previously recorded outcome.');
+    }
+
     public function test_complaint_officer_can_send_resident_remarks_without_changing_status(): void
     {
         Sanctum::actingAs($this->complaintOfficer);

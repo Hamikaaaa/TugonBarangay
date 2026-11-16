@@ -22,7 +22,6 @@ import { useLocation, useNavigate } from "react-router-dom";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { COMPLAINT_CATEGORIES } from "../../constants/complaintCategories";
-import { primaryButtonClass } from "../../utils/buttonStyles";
 
 const API_URL = "https://tugonbarangay.wuaze.com/api";
 const STATUS_LABELS = {
@@ -323,6 +322,37 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
       await loadComplaints();
     } catch (updateError) {
       setError(updateError.message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const reviewComplaint = async (complaint) => {
+    if (selected?.id === complaint.id) {
+      selectComplaint(complaint);
+      return;
+    }
+
+    selectComplaint(complaint);
+    if (!isAdmin || complaint.status !== "pending" || !token || submitting) return;
+
+    setSubmitting(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`${API_URL}${endpoint}/${complaint.id}/status`, {
+        method: "PATCH",
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "in_progress" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to start reviewing this complaint.");
+      setSelected(payload.data);
+      setNotice(payload.message || "Complaint moved to in progress.");
+      window.dispatchEvent(new Event("staff-complaint-updated"));
+      await loadComplaints();
+    } catch (reviewError) {
+      setError(reviewError.message);
     } finally {
       setSubmitting(false);
     }
@@ -712,7 +742,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                           {isAdmin ? (
                             <button
                               type="button"
-                              onClick={() => selectComplaint(complaint)}
+                              onClick={() => void reviewComplaint(complaint)}
                               aria-expanded={selected?.id === complaint.id}
                               className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-[#2455D6] hover:bg-[#EEF4FF] hover:text-[#2455D6] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
                             >
@@ -997,9 +1027,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                     type="button"
                     disabled={submitting || (status === "resolved" && !resolutionDetails.trim())}
                     onClick={() => updateComplaint(status)}
-                    className={isAdmin
-                      ? primaryButtonClass
-                      : "inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1948B8] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-50"}
+                    className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1948B8] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {submitting ? (
                       <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />

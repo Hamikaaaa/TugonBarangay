@@ -6,6 +6,13 @@ class Resident extends Account
 {
     protected const ROLE = 'resident';
 
+    protected function casts(): array
+    {
+        return array_merge(parent::casts(), [
+            'last_login_at' => 'datetime',
+        ]);
+    }
+
     protected $fillable = [
         'name',
         'first_name',
