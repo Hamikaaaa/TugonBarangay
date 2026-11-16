@@ -332,18 +332,18 @@ function ResidentNav({
                 mobile
               />
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                onLogout();
+              }}
+              className="col-span-full mt-1 flex min-h-12 w-full items-center gap-2 rounded-full border border-red-100 bg-red-50/60 px-4 py-3 text-left text-sm font-semibold text-[#E52B32] transition hover:bg-red-50"
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+              Log out
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setMobileMenuOpen(false);
-              onLogout();
-            }}
-            className="mx-auto mt-2 flex w-full max-w-[1440px] items-center gap-2 rounded-full px-4 py-3 text-left text-sm font-semibold text-[#E52B32] transition hover:bg-red-50"
-          >
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-            Sign out
-          </button>
         </nav>
       )}
     </header>
