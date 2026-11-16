@@ -1,5 +1,20 @@
-<IfModule mod_rewrite.c>
-RewriteEngine On
 
-RewriteRule ^(.*)$ public/$1 [L]
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Block access to private Laravel directories
+    RewriteRule ^(app|bootstrap|config|database|resources|routes|storage|tests|vendor)(/|$) - [F,L,NC]
+
+    # Do not redirect requests already inside public
+    RewriteRule ^public/ - [L]
+
+    # Redirect backend requests to Laravel public
+    RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
+
+# Block sensitive files
+<FilesMatch "^\.|^(artisan|composer\.(json|lock)|phpunit\.xml|README\.md)$">
+    Require all denied
+</FilesMatch>

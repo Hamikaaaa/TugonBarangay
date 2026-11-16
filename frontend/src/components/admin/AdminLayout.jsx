@@ -188,7 +188,7 @@ function AdminSidebar({
       if (!token || loading) return;
       loading = true;
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/admin/bantaybot/stats", {
+        const response = await fetch("https://tugonbarangay.wuaze.com/api/admin/bantaybot/stats", {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         });
         if (!response.ok) return;
@@ -204,7 +204,7 @@ function AdminSidebar({
     const loadVerificationCount = async () => {
       if (!token) return;
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/admin/residents/registry-stats", {
+        const response = await fetch("https://tugonbarangay.wuaze.com/api/admin/residents/registry-stats", {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         });
         if (!response.ok) return;
@@ -218,7 +218,7 @@ function AdminSidebar({
     const loadAttentionCounts = async () => {
       if (!token) return;
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/admin/notifications", {
+        const response = await fetch("https://tugonbarangay.wuaze.com/api/admin/notifications", {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         });
         if (!response.ok) return;
@@ -528,7 +528,7 @@ function AdminHeader({ token, activePanel, onMenu, onNavigate }) {
   const loadNotifications = useCallback(async () => {
     if (!token) return;
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/admin/notifications", {
+      const response = await fetch("https://tugonbarangay.wuaze.com/api/admin/notifications", {
         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
       });
       const payload = await response.json();

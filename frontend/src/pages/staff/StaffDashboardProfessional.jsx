@@ -26,7 +26,7 @@ import FeeAssessment from "../../components/document/FeeAssessment";
 import StaffLayout from "./StaffLayout";
 import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 const DOCUMENT_TYPES_CACHE_KEY = "staff-document-types";
 const DOCUMENT_TYPES = [
   { label: "Dashboard", value: "" },

@@ -4,7 +4,7 @@ import { ArrowRight, BadgeCheck, Bell, Bot, Building2, Check, Clock3, FileText, 
 import { useAuth } from "../context/AuthContext";
 import { PUROKS } from "../constants/puroks";
 
-const API = "http://127.0.0.1:8000/api";
+const API = "https://tugonbarangay.wuaze.com/api";
 const docs = [
   ["Barangay Clearance", "For employment, transactions, and official purposes.", "Valid ID · proof of residency", BadgeCheck],
   ["Certificate of Residency", "Confirm your current residency in Barangay Tayud.", "Valid ID · proof of residency", Building2],

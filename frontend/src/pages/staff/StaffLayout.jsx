@@ -29,7 +29,7 @@ function StaffLayout({ title, navigationItems, notificationCounts = {}, activePa
     let active = true;
     const refresh = async () => {
       try {
-        const response = await fetch("http://127.0.0.1:8000/api/staff/complaints?per_page=1", {
+        const response = await fetch("https://tugonbarangay.wuaze.com/api/staff/complaints?per_page=1", {
           headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
         });
         const payload = await response.json();

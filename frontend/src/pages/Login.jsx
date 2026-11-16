@@ -57,7 +57,7 @@ function Login({ isModal = false }) {
 
     try {
       if (recoveryStage === "request") {
-        const response = await fetch("http://127.0.0.1:8000/api/password/forgot", {
+        const response = await fetch("https://tugonbarangay.wuaze.com/api/password/forgot", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -76,7 +76,7 @@ function Login({ isModal = false }) {
         setRecoveryStage("code");
         setMessage(data.message);
       } else if (recoveryStage === "code") {
-        const response = await fetch("http://127.0.0.1:8000/api/password/forgot/verify", {
+        const response = await fetch("https://tugonbarangay.wuaze.com/api/password/forgot/verify", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -95,7 +95,7 @@ function Login({ isModal = false }) {
         setRecoveryStage("password");
         setMessage(data.message);
       } else if (recoveryStage === "password") {
-        const response = await fetch("http://127.0.0.1:8000/api/password/forgot/reset", {
+        const response = await fetch("https://tugonbarangay.wuaze.com/api/password/forgot/reset", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -156,7 +156,7 @@ function Login({ isModal = false }) {
     setIsLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/login", {
+      const response = await fetch("https://tugonbarangay.wuaze.com/api/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

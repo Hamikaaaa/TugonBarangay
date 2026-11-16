@@ -9,7 +9,7 @@ import ComplaintQueue from "../staff/ComplaintQueue";
 import SummonsSettings from "./SummonsSettings";
 import SummonHistory from "./SummonHistory";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 
 function Complaints() {
   const location = useLocation();

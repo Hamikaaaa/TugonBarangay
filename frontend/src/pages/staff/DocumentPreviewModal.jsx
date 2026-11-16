@@ -288,7 +288,7 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false, full
     try {
       const area = user?.role === "admin" ? "admin" : "staff";
       const response = await fetch(
-        `http://127.0.0.1:8000/api/${area}/document-requests/${request.id}`,
+        `https://tugonbarangay.wuaze.com/api/${area}/document-requests/${request.id}`,
         {
           headers: {
             Accept: "application/json",
@@ -371,7 +371,7 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false, full
     let previewUrl = "";
     const area = user?.role === "admin" ? "admin" : "staff";
     fetch(
-      `http://127.0.0.1:8000/api/${area}/document-types/${request.type.id}/template`,
+      `https://tugonbarangay.wuaze.com/api/${area}/document-types/${request.type.id}/template`,
       {
         headers: {
           Accept: "application/json",
@@ -424,7 +424,7 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false, full
     let photoUrl = "";
     const area = user?.role === "admin" ? "admin" : "staff";
     fetch(
-      `http://127.0.0.1:8000/api/${area}/document-requests/${request.id}/requirements/applicant_photo`,
+      `https://tugonbarangay.wuaze.com/api/${area}/document-requests/${request.id}/requirements/applicant_photo`,
       {
         headers: {
           Accept: "application/json",

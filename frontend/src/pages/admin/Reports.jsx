@@ -14,7 +14,7 @@ import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
 import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 const SERVICE_SERIES = [
   { key: "document_requests", label: "Document requests", color: "#2455D6" },
   { key: "complaints", label: "Complaints, blotters & summons", color: "#7138E8" },
