@@ -52,14 +52,12 @@ class ResidentDocumentCorrectionTest extends TestCase
             "/api/resident/requests/{$documentRequest->id}/resubmit",
             [
                 'form_fields' => [
-                    'full_name' => 'Jane Doe',
+                    'first_name' => 'Jane',
+                    'middle_name' => 'Ann',
+                    'last_name' => 'Doe',
                     'address' => '123 Main Street',
+                    'place_of_birth' => 'Consolacion, Cebu',
                     'date_of_birth' => '1990-01-15',
-                    'age' => '36',
-                    'sex' => 'Female',
-                    'civil_status' => 'Single',
-                    'citizenship' => 'Filipino',
-                    'purok' => 'Purok 1',
                     'purpose' => 'Employment',
                 ],
                 'requirements' => [

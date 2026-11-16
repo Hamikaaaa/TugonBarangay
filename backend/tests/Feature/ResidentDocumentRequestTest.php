@@ -153,7 +153,35 @@ class ResidentDocumentRequestTest extends TestCase
             ]);
     }
 
-    public function test_clearance_does_not_require_address(): void
+    public function test_clearance_request_accepts_the_visible_address_without_a_hidden_purok_field(): void
+    {
+        Storage::fake('local');
+        $resident = Resident::factory()->create([
+            'verification_status' => 'verified',
+        ]);
+        Sanctum::actingAs($resident);
+
+        $this->post('/api/resident/requests', [
+            'document_type' => 'Barangay Certification',
+            'form_fields' => [
+                'first_name' => 'Jane',
+                'middle_name' => 'Ann',
+                'last_name' => 'Doe',
+                'address' => '123 Main Street',
+                'place_of_birth' => 'Consolacion, Cebu',
+                'date_of_birth' => '1990-01-15',
+                'purpose' => 'Employment',
+            ],
+            'requirements' => [
+                'valid_id' => UploadedFile::fake()->create('valid-id.pdf', 10, 'application/pdf'),
+                'purok_certificate' => UploadedFile::fake()->create('purok-certificate.pdf', 10, 'application/pdf'),
+            ],
+        ])->assertCreated()
+            ->assertJsonPath('request.details.form_fields.address', '123 Main Street')
+            ->assertJsonMissingPath('request.details.form_fields.purok');
+    }
+
+    public function test_clearance_requires_address_without_requiring_a_purok_form_field(): void
     {
         $resident = Resident::factory()->create([
             'verification_status' => 'verified',
@@ -163,21 +191,19 @@ class ResidentDocumentRequestTest extends TestCase
         $this->withHeader('Accept', 'application/json')->post('/api/resident/requests', [
             'document_type' => 'Barangay Certification',
             'form_fields' => [
-                'full_name' => 'Jane Doe',
+                'first_name' => 'Jane',
+                'middle_name' => 'Ann',
+                'last_name' => 'Doe',
+                'place_of_birth' => 'Consolacion, Cebu',
                 'date_of_birth' => '1990-01-15',
-                'age' => '36',
-                'sex' => 'Female',
-                'civil_status' => 'Single',
-                'purok' => 'Purok 1',
-                'citizenship' => 'Filipino',
                 'purpose' => 'Employment',
             ],
             'requirements' => [
                 'valid_id' => UploadedFile::fake()->create('valid-id.pdf', 10, 'application/pdf'),
                 'purok_certificate' => UploadedFile::fake()->create('purok-certificate.pdf', 10, 'application/pdf'),
             ],
-        ])->assertCreated()
-            ->assertJsonMissingPath('request.details.form_fields.address');
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors('form_fields.address');
     }
 
     public function test_resident_must_submit_the_selected_documents_required_form_fields(): void
