@@ -154,12 +154,16 @@ class AdminResidentRegistryTest extends TestCase
 
     public function test_resident_account_list_includes_the_sign_in_id(): void
     {
-        $resident = Resident::factory()->create();
+        $resident = Resident::factory()->create([
+            'last_login_at' => '2026-11-16 16:06:36',
+        ]);
 
-        $this->getJson('/api/admin/resident-accounts')
+        $response = $this->getJson('/api/admin/resident-accounts')
             ->assertOk()
             ->assertJsonPath('data.0.id', $resident->id)
             ->assertJsonPath('data.0.resident_id', $resident->resident_id);
+
+        $this->assertStringEndsWith('Z', $response->json('data.0.last_login_at'));
     }
 
     public function test_admin_can_edit_and_permanently_delete_a_resident_account(): void

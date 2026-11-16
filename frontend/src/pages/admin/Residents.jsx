@@ -574,7 +574,7 @@ function Residents() {
                 <td className="p-4 font-mono text-xs font-semibold">{account.resident_id || "—"}</td>
                 <td className="p-4">{account.created_at ? new Date(account.created_at).toLocaleDateString() : "—"}</td>
                 <td className="p-4">{account.verification_status}</td>
-                <td className="p-4">{account.last_login_at ? new Date(account.last_login_at).toLocaleString() : "Never"}</td>
+                <td className="p-4">{formatLastLogin(account.last_login_at)}</td>
                 <td className="p-4">{account.last_login_at ? "Login recorded" : <span className="font-semibold text-amber-700">No login recorded</span>}</td>
                 <td className="p-4"><span className={`rounded-full px-3 py-1.5 text-xs font-bold ${account.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{account.is_active ? "Enabled" : "Disabled"}</span></td>
                 <td className="p-4"><div className="flex flex-wrap gap-2">
@@ -888,7 +888,7 @@ function Residents() {
               </div>
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button type="button" onClick={() => setAccountEditing(null)} disabled={accountSaving} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 disabled:opacity-50">Cancel</button>
-                <button type="submit" disabled={accountSaving} className={`${primaryButtonClass} px-5 disabled:cursor-wait disabled:opacity-60`}>{accountSaving ? "Saving..." : "Save changes"}</button>
+                <button type="submit" disabled={accountSaving} className="inline-flex min-h-11 items-center justify-center rounded-xl bg-[#2455D6] px-5 text-sm font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-wait disabled:opacity-60">{accountSaving ? "Saving..." : "Save changes"}</button>
               </div>
             </form>
           </section>
@@ -1583,6 +1583,21 @@ function formatDate(value) {
     dateStyle: "medium",
     timeZone: "Asia/Manila",
   }).format(new Date(`${value.slice(0, 10)}T00:00:00`));
+}
+
+function formatLastLogin(value) {
+  if (!value) return "Never";
+  const timestamp = String(value);
+  const normalizedTimestamp = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(timestamp)
+    ? `${timestamp.replace(" ", "T")}Z`
+    : timestamp;
+  const date = new Date(normalizedTimestamp);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  return date.toLocaleString("en-PH", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "Asia/Manila",
+  });
 }
 
 export default Residents;

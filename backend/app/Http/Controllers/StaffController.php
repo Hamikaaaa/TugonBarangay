@@ -845,8 +845,12 @@ class StaffController extends Controller
 
                 $complaint->status = $validated['status'];
                 $complaint->status_updated_at = now();
-                $complaint->staff_remarks = $validated['staff_remarks'] ?? null;
-                $complaint->resolution_details = $validated['resolution_details'] ?? null;
+                if (array_key_exists('staff_remarks', $validated)) {
+                    $complaint->staff_remarks = $validated['staff_remarks'];
+                }
+                if (array_key_exists('resolution_details', $validated)) {
+                    $complaint->resolution_details = $validated['resolution_details'];
+                }
                 $complaint->resolution_images = array_values(array_merge(
                     $complaint->resolution_images ?? [],
                     $storedImagePaths,
