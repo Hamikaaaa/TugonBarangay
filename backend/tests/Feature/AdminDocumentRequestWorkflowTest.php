@@ -8,6 +8,8 @@ use App\Models\DocumentRequestEvent;
 use App\Models\Resident;
 use App\Models\Staff;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -101,6 +103,41 @@ class AdminDocumentRequestWorkflowTest extends TestCase
         $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
             'status' => 'ready_for_release',
         ])->assertOk()->assertJsonPath('data.status', 'ready_for_release');
+    }
+
+    public function test_admin_can_save_a_permit_inspection_and_mark_it_ready_for_release(): void
+    {
+        Storage::fake('local');
+        $this->request->update([
+            'document_type' => 'Fencing Permit',
+            'status' => 'processing',
+            'fee' => 530,
+            'details' => [
+                'fee_mode' => 'assessed',
+                'fee_assessed' => false,
+            ],
+        ]);
+        $admin = Admin::create([
+            'name' => 'Permit Admin',
+            'email' => 'permit-admin@example.com',
+            'password' => 'password123',
+        ]);
+        Sanctum::actingAs($admin);
+
+        $this->post('/api/admin/document-requests/'.$this->request->id.'/construction-inspection', [
+            '_method' => 'PATCH',
+            'inspection_report' => UploadedFile::fake()->create('inspection-report.pdf', 10, 'application/pdf'),
+            'councilor_go_ahead' => '1',
+            'staff_note' => 'Approved after inspection.',
+            'assessed_fee' => '530.00',
+        ])->assertOk()
+            ->assertJsonPath('data.details.inspection_report.decision', 'go_ahead')
+            ->assertJsonPath('data.details.fee_assessed', true);
+
+        $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
+            'status' => 'ready_for_release',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'ready_for_release');
     }
 
     public function test_admin_history_includes_closed_requests_and_supports_status_search(): void

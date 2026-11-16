@@ -7,8 +7,10 @@ import {
   ClipboardCheck,
   Download,
   FileSpreadsheet,
+  Pencil,
   Search,
   ShieldCheck,
+  Trash2,
   Users,
   UserPlus,
   X,
@@ -62,8 +64,14 @@ function Residents() {
   const [notice, setNotice] = useState("");
   const [showRegistryForm, setShowRegistryForm] = useState(false);
   const [registrySaving, setRegistrySaving] = useState(false);
+  const [registryEditingId, setRegistryEditingId] = useState(null);
   const [registryForm, setRegistryForm] = useState(emptyRegistryForm());
   const [registryFormErrors, setRegistryFormErrors] = useState({});
+  const [accountEditing, setAccountEditing] = useState(null);
+  const [accountForm, setAccountForm] = useState(emptyAccountForm());
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const [registryImportPreview, setRegistryImportPreview] = useState(null);
   const [registryImporting, setRegistryImporting] = useState(false);
   const registryExcelRef = useRef(null);
@@ -87,12 +95,12 @@ function Residents() {
     }
   }, [isDashboard, token]);
 
-  const loadRegistry = useCallback(async (silent = false) => {
+  const loadRegistry = useCallback(async (silent = false, requestedPage = page) => {
     if (!token || isVerification || isDashboard) return;
     if (!silent) { setLoading(true); setError(""); }
     try {
       const query = new URLSearchParams({
-        page: String(page),
+        page: String(requestedPage),
         per_page: "15",
       });
       if (search) query.set("search", search);
@@ -133,11 +141,11 @@ function Residents() {
     }
   }, [isDashboard, isVerification, token]);
 
-  const loadAccounts = useCallback(async (silent = false) => {
+  const loadAccounts = useCallback(async (silent = false, requestedPage = page) => {
     if (!token || !isAccounts) return;
     if (!silent) setLoading(true);
     try {
-      const query = new URLSearchParams({ page: String(page), per_page: "15" });
+      const query = new URLSearchParams({ page: String(requestedPage), per_page: "15" });
       if (search) query.set("search", search);
       const response = await fetch(`${API_URL}/admin/resident-accounts?${query}`, { headers: authHeaders(token) });
       const payload = await response.json();
@@ -198,6 +206,72 @@ function Residents() {
     }
   };
 
+  const editRegistryRecord = (record) => {
+    setRegistryEditingId(record.id);
+    setRegistryForm(Object.fromEntries(
+      Object.keys(emptyRegistryForm()).map((key) => [key, record[key] || ""]),
+    ));
+    setRegistryFormErrors({});
+    setShowRegistryForm(true);
+  };
+
+  const editResidentAccount = (account) => {
+    setAccountEditing(account);
+    setAccountForm(accountFormFrom(account));
+  };
+
+  const submitAccountEdit = async (event) => {
+    event.preventDefault();
+    if (!accountEditing || accountSaving) return;
+    setAccountSaving(true);
+    setError("");
+    setNotice("");
+    try {
+      const response = await fetch(`${API_URL}/admin/resident-accounts/${accountEditing.id}`, {
+        method: "PATCH",
+        headers: { ...authHeaders(token), "Content-Type": "application/json" },
+        body: JSON.stringify(accountForm),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to update resident account.");
+      setAccountEditing(null);
+      setNotice(payload.message || "Resident account updated.");
+      await loadAccounts();
+    } catch (saveError) {
+      setError(saveError.message);
+    } finally {
+      setAccountSaving(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmation || deleting) return;
+    const { type, record } = deleteConfirmation;
+    setDeleting(true);
+    setError("");
+    setNotice("");
+    try {
+      const endpoint = type === "registry"
+        ? `${API_URL}/admin/barangay-registry/${record.id}`
+        : `${API_URL}/admin/resident-accounts/${record.id}`;
+      const response = await fetch(endpoint, {
+        method: "DELETE",
+        headers: authHeaders(token),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || "Unable to delete this record.");
+      setDeleteConfirmation(null);
+      setNotice(payload.message);
+      setPage(1);
+      if (type === "registry") await loadRegistry(false, 1);
+      else await loadAccounts(false, 1);
+    } catch (deleteError) {
+      setError(deleteError.message);
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const applySearch = (event) => {
     event.preventDefault();
     setPage(1);
@@ -223,8 +297,11 @@ function Residents() {
     setError("");
     setNotice("");
     try {
-      const response = await fetch(`${API_URL}/admin/barangay-registry`, {
-        method: "POST",
+      const isEditing = registryEditingId !== null;
+      const response = await fetch(
+        `${API_URL}/admin/barangay-registry${isEditing ? `/${registryEditingId}` : ""}`,
+        {
+        method: isEditing ? "PUT" : "POST",
         headers: { ...authHeaders(token), "Content-Type": "application/json" },
         body: JSON.stringify(registryForm),
       });
@@ -237,10 +314,14 @@ function Residents() {
         return;
       }
       setShowRegistryForm(false);
+      setRegistryEditingId(null);
       setRegistryForm(emptyRegistryForm());
-      setNotice(payload.message || "Resident added to the barangay registry.");
-      setPage(1);
-      if (page === 1) await loadRegistry();
+      setNotice(payload.message || (isEditing ? "Registry record updated." : "Resident added to the barangay registry."));
+      if (isEditing) await loadRegistry();
+      else {
+        setPage(1);
+        if (page === 1) await loadRegistry();
+      }
     } catch (saveError) {
       setError(saveError.message);
     } finally {
@@ -496,7 +577,11 @@ function Residents() {
                 <td className="p-4">{account.last_login_at ? new Date(account.last_login_at).toLocaleString() : "Never"}</td>
                 <td className="p-4">{account.last_login_at ? "Login recorded" : <span className="font-semibold text-amber-700">No login recorded</span>}</td>
                 <td className="p-4"><span className={`rounded-full px-3 py-1.5 text-xs font-bold ${account.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{account.is_active ? "Enabled" : "Disabled"}</span></td>
-                <td className="p-4"><button type="button" onClick={() => setAccountActive(account)} disabled={savingId === account.id} className={`min-w-24 rounded-xl border px-3 py-2 text-xs font-bold transition disabled:cursor-wait disabled:opacity-50 ${account.is_active ? "border-red-100 text-red-700 hover:bg-red-50" : "border-emerald-100 text-emerald-700 hover:bg-emerald-50"}`}>{savingId === account.id ? "Saving..." : account.is_active ? "Disable" : "Enable"}</button></td>
+                <td className="p-4"><div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setAccountActive(account)} disabled={savingId === account.id || accountSaving || deleting} className={`min-w-24 rounded-xl border px-3 py-2 text-xs font-bold transition disabled:cursor-wait disabled:opacity-50 ${account.is_active ? "border-red-100 text-red-700 hover:bg-red-50" : "border-emerald-100 text-emerald-700 hover:bg-emerald-50"}`}>{savingId === account.id ? "Saving..." : account.is_active ? "Disable" : "Enable"}</button>
+                  <button type="button" onClick={() => editResidentAccount(account)} disabled={deleting} aria-label={`Edit ${account.name}`} className="inline-flex items-center gap-1 rounded-xl border border-blue-100 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"><Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit</button>
+                  <button type="button" onClick={() => setDeleteConfirmation({ type: "account", record: account })} disabled={deleting} aria-label={`Delete ${account.name}`} className="inline-flex items-center gap-1 rounded-xl border border-red-100 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete</button>
+                </div></td>
               </tr>})}</tbody>
             </table></div>
             <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
@@ -600,7 +685,7 @@ function Residents() {
                 <Download className="h-4 w-4" aria-hidden="true" />
                 Download Template
               </button>
-              <button type="button" onClick={() => { setRegistryFormErrors({}); setShowRegistryForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5]">
+              <button type="button" onClick={() => { setRegistryEditingId(null); setRegistryForm(emptyRegistryForm()); setRegistryFormErrors({}); setShowRegistryForm(true); }} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-4 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5]">
                 <UserPlus className="h-4 w-4" aria-hidden="true" /> Add resident
               </button>
               </div>
@@ -642,6 +727,14 @@ function Residents() {
                           </span>
                         </RegistryDetail>
                       </dl>
+                      <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
+                        <button type="button" onClick={() => editRegistryRecord(record)} disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-100 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50">
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
+                        </button>
+                        <button type="button" onClick={() => setDeleteConfirmation({ type: "registry", record })} disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg border border-red-100 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50">
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete
+                        </button>
+                      </div>
                     </article>
                   ))}
                 </div>
@@ -741,7 +834,7 @@ function Residents() {
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#071B3D]/55 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !registrySaving) setShowRegistryForm(false); }}>
           <section role="dialog" aria-modal="true" aria-labelledby="registry-create-title" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-7">
             <div className="mb-5 flex items-start justify-between gap-3">
-              <div><h2 id="registry-create-title" className="text-xl font-bold text-[#172B4D]">Add resident to registry</h2><p className="mt-1 text-sm text-slate-500">Enter the resident’s official details for the barangay masterlist.</p></div>
+              <div><h2 id="registry-create-title" className="text-xl font-bold text-[#172B4D]">{registryEditingId ? "Edit masterlist resident" : "Add resident to registry"}</h2><p className="mt-1 text-sm text-slate-500">Enter the resident’s official details for the barangay masterlist.</p></div>
               <button type="button" aria-label="Close registration form" onClick={() => setShowRegistryForm(false)} disabled={registrySaving} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X className="h-5 w-5" /></button>
             </div>
             <form onSubmit={submitRegistryResident} className="space-y-4">
@@ -765,9 +858,60 @@ function Residents() {
               {registryFormErrors.message && <p role="alert" className="text-sm text-red-600">{registryFormErrors.message}</p>}
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                 <button type="button" onClick={() => setShowRegistryForm(false)} disabled={registrySaving} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600">Cancel</button>
-                <button type="submit" disabled={registrySaving} className={`${primaryButtonClass} !bg-none !bg-[#2455D6] px-5 hover:!bg-[#1D46B5] disabled:cursor-wait disabled:opacity-60`}>{registrySaving ? "Saving..." : "Register resident"}</button>
+                <button type="submit" disabled={registrySaving} className={`${primaryButtonClass} !bg-none !bg-[#2455D6] px-5 hover:!bg-[#1D46B5] disabled:cursor-wait disabled:opacity-60`}>{registrySaving ? "Saving..." : registryEditingId ? "Save changes" : "Register resident"}</button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+      {accountEditing && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#071B3D]/55 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !accountSaving) setAccountEditing(null); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby="account-edit-title" className="max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-7">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div><h2 id="account-edit-title" className="text-xl font-bold text-[#172B4D]">Edit resident account</h2><p className="mt-1 text-sm text-slate-500">Update the resident’s account and profile information.</p></div>
+              <button type="button" aria-label="Close account editor" onClick={() => setAccountEditing(null)} disabled={accountSaving} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 disabled:opacity-50"><X className="h-5 w-5" /></button>
+            </div>
+            <form onSubmit={submitAccountEdit} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <RegistryInput label="First name" name="first_name" value={accountForm.first_name} onChange={updateRegistryField(setAccountForm)} required />
+                <RegistryInput label="Middle name" name="middle_name" value={accountForm.middle_name} onChange={updateRegistryField(setAccountForm)} />
+                <RegistryInput label="Last name" name="last_name" value={accountForm.last_name} onChange={updateRegistryField(setAccountForm)} required />
+                <RegistryInput label="Suffix" name="suffix" value={accountForm.suffix} onChange={updateRegistryField(setAccountForm)} placeholder="Jr., Sr., III" />
+                <RegistryInput label="Date of birth" name="date_of_birth" type="date" value={accountForm.date_of_birth} onChange={updateRegistryField(setAccountForm)} />
+                <label className="block text-sm font-semibold text-slate-700">Sex
+                  <select name="sex" value={accountForm.sex} onChange={updateRegistryField(setAccountForm)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10"><option value="">Not specified</option><option value="Female">Female</option><option value="Male">Male</option><option value="Other">Other</option></select>
+                </label>
+                <RegistryInput label="Purok" name="purok" value={accountForm.purok} onChange={updateRegistryField(setAccountForm)} />
+                <RegistryInput label="Mobile number" name="mobile_number" type="tel" value={accountForm.mobile_number} onChange={updateRegistryField(setAccountForm)} placeholder="09XXXXXXXXX" />
+                <div className="sm:col-span-2"><RegistryInput label="Address" name="address" value={accountForm.address} onChange={updateRegistryField(setAccountForm)} /></div>
+                <div className="sm:col-span-2"><RegistryInput label="Email address" name="email" type="email" value={accountForm.email} onChange={updateRegistryField(setAccountForm)} required /></div>
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+                <button type="button" onClick={() => setAccountEditing(null)} disabled={accountSaving} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 disabled:opacity-50">Cancel</button>
+                <button type="submit" disabled={accountSaving} className={`${primaryButtonClass} px-5 disabled:cursor-wait disabled:opacity-60`}>{accountSaving ? "Saving..." : "Save changes"}</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {deleteConfirmation && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-[#071B3D]/55 p-4 backdrop-blur-sm" onMouseDown={(event) => { if (event.target === event.currentTarget && !deleting) setDeleteConfirmation(null); }}>
+          <section role="alertdialog" aria-modal="true" aria-labelledby="resident-delete-title" className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <span className="rounded-xl bg-red-50 p-2 text-red-700"><Trash2 className="h-5 w-5" aria-hidden="true" /></span>
+              <div>
+                <h2 id="resident-delete-title" className="text-lg font-bold text-[#172B4D]">Delete {deleteConfirmation.type === "registry" ? "masterlist record" : "resident account"}?</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  {deleteConfirmation.type === "registry"
+                    ? `This permanently removes ${fullName(deleteConfirmation.record)} from the masterlist. It will not delete a resident login account.`
+                    : `This permanently deletes ${deleteConfirmation.record.name}'s account, including linked document requests, complaints, notifications, and feedback. This cannot be undone.`}
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setDeleteConfirmation(null)} disabled={deleting} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-600 disabled:opacity-50">Cancel</button>
+              <button type="button" onClick={confirmDelete} disabled={deleting} className="rounded-xl bg-red-700 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-red-800 disabled:cursor-wait disabled:opacity-50">{deleting ? "Deleting..." : "Delete permanently"}</button>
+            </div>
           </section>
         </div>
       )}
@@ -1273,6 +1417,37 @@ function emptyRegistryForm() {
     purok: "",
     address: "",
     mobile_number: "",
+  };
+}
+
+function emptyAccountForm() {
+  return {
+    first_name: "",
+    middle_name: "",
+    last_name: "",
+    suffix: "",
+    date_of_birth: "",
+    sex: "",
+    purok: "",
+    address: "",
+    mobile_number: "",
+    email: "",
+  };
+}
+
+function accountFormFrom(account) {
+  const nameParts = String(account.name || "").trim().split(/\s+/).filter(Boolean);
+  return {
+    first_name: account.first_name || nameParts[0] || "",
+    middle_name: account.middle_name || nameParts.slice(1, -1).join(" "),
+    last_name: account.last_name || (nameParts.length > 1 ? nameParts[nameParts.length - 1] : ""),
+    suffix: account.suffix || "",
+    date_of_birth: account.date_of_birth ? String(account.date_of_birth).slice(0, 10) : "",
+    sex: account.sex || "",
+    purok: account.purok || "",
+    address: account.address || "",
+    mobile_number: account.mobile_number || "",
+    email: account.email || "",
   };
 }
 

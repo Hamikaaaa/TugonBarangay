@@ -90,9 +90,13 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::get('/residents/registry-stats', [AdminController::class, 'residentRegistryStats']);
     Route::get('/barangay-registry', [AdminController::class, 'barangayRegistry']);
     Route::post('/barangay-registry', [AdminController::class, 'storeBarangayRegistry']);
+    Route::put('/barangay-registry/{barangayRegistry}', [AdminController::class, 'updateBarangayRegistry']);
+    Route::delete('/barangay-registry/{barangayRegistry}', [AdminController::class, 'deleteBarangayRegistry']);
     Route::post('/barangay-registry/import', [AdminController::class, 'importBarangayRegistry']);
     Route::get('/resident-accounts', [AdminController::class, 'residentAccounts']);
     Route::patch('/resident-accounts/{resident}/status', [AdminController::class, 'updateResidentAccountStatus']);
+    Route::patch('/resident-accounts/{resident}', [AdminController::class, 'updateResidentAccount']);
+    Route::delete('/resident-accounts/{resident}', [AdminController::class, 'deleteResidentAccount']);
     Route::get('/pending-residents', [AdminController::class, 'pendingResidents']);
     Route::patch('/residents/{user}/verify', [AdminController::class, 'verifyResident']);
     Route::patch('/residents/{user}/reject', [AdminController::class, 'rejectResident']);

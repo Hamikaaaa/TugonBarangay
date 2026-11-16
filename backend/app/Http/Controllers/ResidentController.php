@@ -224,10 +224,7 @@ class ResidentController extends Controller
         ];
 
         if ($configuredType) {
-            $applicantFields = array_values(array_filter(
-                $configuredType->applicant_fields ?? [],
-                fn (array $field) => ($field['enabled'] ?? true),
-            ));
+            $applicantFields = $this->configuredApplicantFields($configuredType);
             $documentFields = array_values(array_filter(
                 $configuredType->fields ?? [],
                 fn (array $field) => ($field['enabled'] ?? true),
@@ -412,11 +409,11 @@ class ResidentController extends Controller
 
         $documentType = $documentRequest->document_type;
         $configuredType = DocumentType::where('value', $documentType)->first();
+        $applicantFieldDefinitions = $configuredType
+            ? $this->configuredApplicantFields($configuredType)
+            : [];
         $applicantFields = $configuredType
-            ? array_column(array_values(array_filter(
-                $configuredType->applicant_fields ?? [],
-                fn (array $field) => ($field['enabled'] ?? true),
-            )), 'key')
+            ? array_column($applicantFieldDefinitions, 'key')
             : self::DOCUMENT_APPLICANT_FIELDS[$documentType];
         $documentFields = $configuredType
             ? array_column(array_values(array_filter(
@@ -445,10 +442,7 @@ class ResidentController extends Controller
             );
             $rules['form_fields'] = ['required', 'array:'.implode(',', $allFieldKeys)];
             $rules = array_merge($rules, $this->configuredDocumentRules(
-                array_values(array_filter(
-                    $configuredType->applicant_fields ?? [],
-                    fn (array $field) => ($field['enabled'] ?? true),
-                )),
+                $applicantFieldDefinitions,
                 array_values(array_filter(
                     $configuredType->fields ?? [],
                     fn (array $field) => ($field['enabled'] ?? true),
@@ -1220,6 +1214,38 @@ class ResidentController extends Controller
         }
 
         return $rules;
+    }
+
+    private function configuredApplicantFields(DocumentType $documentType): array
+    {
+        $fields = array_values(array_filter(
+            $documentType->applicant_fields ?? [],
+            fn (array $field) => ($field['enabled'] ?? true),
+        ));
+
+        if ($documentType->value !== 'Barangay Certification') {
+            return $fields;
+        }
+
+        $fields = array_values(array_filter(
+            $fields,
+            fn (array $field) => ($field['key'] ?? null) !== 'purok',
+        ));
+        $addressIndex = array_search('address', array_column($fields, 'key'), true);
+
+        if ($addressIndex === false) {
+            $fields[] = [
+                'key' => 'address',
+                'label' => 'Address',
+                'type' => 'text',
+                'required' => true,
+            ];
+        } else {
+            $fields[$addressIndex]['required'] = true;
+            $fields[$addressIndex]['residentVisible'] = true;
+        }
+
+        return $fields;
     }
 
     private function conditionMatches(array $condition, array $values): bool

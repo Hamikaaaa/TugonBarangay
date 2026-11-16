@@ -160,17 +160,7 @@ class AdminController extends Controller
 
     public function storeBarangayRegistry(Request $request)
     {
-        $validated = $request->validate([
-            'first_name' => ['required', 'string', 'max:255'],
-            'middle_name' => ['nullable', 'string', 'max:255'],
-            'last_name' => ['required', 'string', 'max:255'],
-            'suffix' => ['nullable', 'string', 'max:50'],
-            'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
-            'sex' => ['required', 'string', 'max:50'],
-            'purok' => ['required', 'string', 'max:255'],
-            'address' => ['nullable', 'string', 'max:255'],
-            'mobile_number' => ['required', 'regex:/^09\\d{9}$/'],
-        ]);
+        $validated = $this->validateRegistryRecord($request);
 
         if ($this->registryRecordExists($validated)) {
             return response()->json([
@@ -185,6 +175,47 @@ class AdminController extends Controller
             'message' => 'Resident added to the barangay registry.',
             'resident' => $record,
         ], 201);
+    }
+
+    public function updateBarangayRegistry(Request $request, BarangayRegistry $barangayRegistry)
+    {
+        $validated = $this->validateRegistryRecord($request);
+
+        if ($this->registryRecordExists($validated, $barangayRegistry->id)) {
+            return response()->json([
+                'message' => 'This resident is already in the barangay registry.',
+                'errors' => ['resident' => ['This resident is already in the barangay registry.']],
+            ], 422);
+        }
+
+        $barangayRegistry->update($validated);
+
+        return response()->json([
+            'message' => 'Barangay registry record updated.',
+            'resident' => $barangayRegistry->fresh(),
+        ]);
+    }
+
+    public function deleteBarangayRegistry(BarangayRegistry $barangayRegistry)
+    {
+        $barangayRegistry->delete();
+
+        return response()->json(['message' => 'Barangay registry record deleted.']);
+    }
+
+    private function validateRegistryRecord(Request $request): array
+    {
+        return $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'suffix' => ['nullable', 'string', 'max:50'],
+            'date_of_birth' => ['required', 'date', 'before_or_equal:today'],
+            'sex' => ['required', 'string', 'max:50'],
+            'purok' => ['required', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'mobile_number' => ['required', 'regex:/^09\\d{9}$/'],
+        ]);
     }
 
     public function importBarangayRegistry(Request $request)
@@ -249,15 +280,20 @@ class AdminController extends Controller
         ]);
     }
 
-    private function registryRecordExists(array $record): bool
+    private function registryRecordExists(array $record, ?int $exceptId = null): bool
     {
-        return BarangayRegistry::query()
+        $query = BarangayRegistry::query()
             ->where('first_name', $record['first_name'])
             ->where('last_name', $record['last_name'])
             ->whereDate('date_of_birth', $record['date_of_birth'])
             ->where('sex', $record['sex'])
-            ->where('purok', $record['purok'])
-            ->exists();
+            ->where('purok', $record['purok']);
+
+        if ($exceptId !== null) {
+            $query->where('id', '!=', $exceptId);
+        }
+
+        return $query->exists();
     }
 
     public function residentAccounts(Request $request)
@@ -267,7 +303,7 @@ class AdminController extends Controller
             'per_page' => ['nullable', 'integer', 'between:1,15'],
         ]);
         $query = Resident::query()
-            ->select(['id','resident_id','name','first_name','middle_name','last_name','email','verification_status','is_active','last_login_at','created_at'])
+            ->select(['id','resident_id','name','first_name','middle_name','last_name','suffix','date_of_birth','sex','purok','address','mobile_number','email','verification_status','is_active','last_login_at','created_at'])
             ->selectRaw('(SELECT COUNT(*) FROM residents AS same_name_accounts WHERE LOWER(TRIM(COALESCE(same_name_accounts.first_name, \'\'))) = LOWER(TRIM(COALESCE(residents.first_name, \'\'))) AND LOWER(TRIM(COALESCE(same_name_accounts.middle_name, \'\'))) = LOWER(TRIM(COALESCE(residents.middle_name, \'\'))) AND LOWER(TRIM(COALESCE(same_name_accounts.last_name, \'\'))) = LOWER(TRIM(COALESCE(residents.last_name, \'\')))) AS same_name_accounts');
         if (!empty($validated['search'])) {
             $term = trim($validated['search']);
@@ -288,6 +324,57 @@ class AdminController extends Controller
         $resident->update(['is_active' => $validated['is_active']]);
         if (!$resident->is_active) $resident->tokens()->delete();
         return response()->json(['message' => $resident->is_active ? 'Resident account enabled.' : 'Resident account disabled and active sessions revoked.']);
+    }
+
+    public function updateResidentAccount(Request $request, Resident $resident)
+    {
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['required', 'string', 'max:255'],
+            'suffix' => ['nullable', 'string', 'max:50'],
+            'date_of_birth' => ['nullable', 'date', 'before_or_equal:today'],
+            'sex' => ['nullable', 'string', 'max:50'],
+            'purok' => ['nullable', 'string', 'max:255'],
+            'address' => ['nullable', 'string', 'max:255'],
+            'mobile_number' => ['nullable', 'regex:/^09\\d{9}$/'],
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('residents', 'email')->ignore($resident->id),
+                Rule::unique('staff', 'email'),
+                Rule::unique('admins', 'email'),
+            ],
+        ]);
+
+        $nameParts = array_filter([
+            $validated['first_name'],
+            $validated['middle_name'] ?? null,
+            $validated['last_name'],
+            $validated['suffix'] ?? null,
+        ], fn (?string $part) => filled($part));
+
+        $resident->update($validated + ['name' => implode(' ', $nameParts)]);
+
+        return response()->json([
+            'message' => 'Resident account updated.',
+            'account' => $resident->fresh()->only([
+                'id', 'resident_id', 'name', 'first_name', 'middle_name', 'last_name',
+                'suffix', 'date_of_birth', 'sex', 'purok', 'address', 'mobile_number',
+                'email', 'verification_status', 'is_active', 'last_login_at', 'created_at',
+            ]),
+        ]);
+    }
+
+    public function deleteResidentAccount(Resident $resident)
+    {
+        $resident->tokens()->delete();
+        $resident->delete();
+
+        return response()->json([
+            'message' => 'Resident account and its linked records were permanently deleted.',
+        ]);
     }
 
     public function residentRegistryStats()

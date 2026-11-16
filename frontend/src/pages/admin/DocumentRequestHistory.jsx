@@ -321,12 +321,13 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
     setActionError("");
     try {
       const formData = new FormData();
+      formData.append("_method", "PATCH");
       if (inspectionFile) formData.append("inspection_report", inspectionFile);
       formData.append("councilor_go_ahead", inspectionGoAhead ? "1" : "0");
       formData.append("staff_note", inspectionNote);
       formData.append("assessed_fee", inspectionFee);
       const response = await fetch(`${API_URL}/admin/document-requests/${currentRequest.id}/construction-inspection`, {
-        method: "PATCH",
+        method: "POST",
         headers: authHeaders(token),
         body: formData,
       });

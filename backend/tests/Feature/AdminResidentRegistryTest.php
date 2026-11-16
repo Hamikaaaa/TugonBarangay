@@ -52,6 +52,38 @@ class AdminResidentRegistryTest extends TestCase
             ->assertJsonPath('data.0.first_name', 'Maria');
     }
 
+    public function test_admin_can_edit_and_delete_a_barangay_registry_record(): void
+    {
+        $record = BarangayRegistry::create([
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
+            'date_of_birth' => '1990-04-12',
+            'sex' => 'Female',
+            'purok' => 'Purok 2',
+            'mobile_number' => '09171234567',
+        ]);
+        $payload = [
+            'first_name' => 'Maria Elena',
+            'middle_name' => null,
+            'last_name' => 'Santos',
+            'suffix' => null,
+            'date_of_birth' => '1990-04-12',
+            'sex' => 'Female',
+            'purok' => 'Purok 2',
+            'address' => 'Updated address',
+            'mobile_number' => '09171234567',
+        ];
+
+        $this->putJson("/api/admin/barangay-registry/{$record->id}", $payload)
+            ->assertOk()
+            ->assertJsonPath('resident.first_name', 'Maria Elena')
+            ->assertJsonPath('resident.address', 'Updated address');
+
+        $this->deleteJson("/api/admin/barangay-registry/{$record->id}")
+            ->assertOk();
+        $this->assertDatabaseMissing('barangay_registry', ['id' => $record->id]);
+    }
+
     public function test_admin_can_bulk_import_registry_rows_and_duplicate_records_are_skipped(): void
     {
         BarangayRegistry::create([
@@ -128,6 +160,41 @@ class AdminResidentRegistryTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.0.id', $resident->id)
             ->assertJsonPath('data.0.resident_id', $resident->resident_id);
+    }
+
+    public function test_admin_can_edit_and_permanently_delete_a_resident_account(): void
+    {
+        $resident = Resident::factory()->create([
+            'first_name' => 'Jane',
+            'middle_name' => 'Ann',
+            'last_name' => 'Doe',
+            'email' => 'jane@example.com',
+        ]);
+        $documentRequest = \App\Models\DocumentRequest::factory()->create([
+            'resident_id' => $resident->id,
+        ]);
+
+        $this->patchJson("/api/admin/resident-accounts/{$resident->id}", [
+            'first_name' => 'Janet',
+            'middle_name' => 'Marie',
+            'last_name' => 'Doe',
+            'suffix' => null,
+            'date_of_birth' => '1990-04-12',
+            'sex' => 'Female',
+            'purok' => 'Purok 2',
+            'address' => 'Updated address',
+            'mobile_number' => '09171234567',
+            'email' => 'janet@example.com',
+        ])->assertOk()
+            ->assertJsonPath('account.name', 'Janet Marie Doe')
+            ->assertJsonPath('account.email', 'janet@example.com')
+            ->assertJsonPath('account.address', 'Updated address');
+
+        $this->deleteJson("/api/admin/resident-accounts/{$resident->id}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('residents', ['id' => $resident->id]);
+        $this->assertDatabaseMissing('document_requests', ['id' => $documentRequest->id]);
     }
 
     public function test_pending_account_review_includes_registry_match_and_admin_can_approve(): void
