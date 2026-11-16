@@ -43,7 +43,7 @@ export function AuthProvider({ children }) {
   const logout = async () => {
     try {
       if (token) {
-        await fetch("http://127.0.0.1:8000/api/logout", {
+        await fetch("https://tugonbarangay.wuaze.com/api/logout", {
           method: "POST",
           headers: {
             Accept: "application/json",

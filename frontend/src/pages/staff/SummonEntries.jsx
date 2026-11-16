@@ -6,7 +6,7 @@ import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import StaffLayout from "./StaffLayout";
 import useComplaintStaffNavigation from "../../hooks/useComplaintStaffNavigation";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 
 function displayDate(value) {
   if (!value) return "—";

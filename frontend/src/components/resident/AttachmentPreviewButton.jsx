@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Eye, X } from "lucide-react";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 
 function AttachmentPreviewButton({ file, fileName, token, endpoint }) {
   const [preview, setPreview] = useState(null);

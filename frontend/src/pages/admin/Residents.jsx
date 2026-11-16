@@ -23,7 +23,7 @@ import { useAuth } from "../../context/AuthContext";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 import { PUROKS } from "../../constants/puroks";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 const REGISTRY_TEMPLATE_HEADERS = [
   "first_name",
   "middle_name",

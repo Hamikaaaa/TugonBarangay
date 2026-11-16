@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight, Eye, FileText, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { DEFAULT_SUMMONS_SETTINGS } from "../../constants/summonsSettings";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 
 function authHeaders(token) {
   return { Accept: "application/json", Authorization: `Bearer ${token}` };

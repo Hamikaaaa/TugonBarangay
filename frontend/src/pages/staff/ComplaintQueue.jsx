@@ -24,7 +24,7 @@ import { useAuth } from "../../context/AuthContext";
 import { COMPLAINT_CATEGORIES } from "../../constants/complaintCategories";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 const STATUS_LABELS = {
   pending: "Pending",
   resubmitted: "Resubmitted",

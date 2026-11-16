@@ -2,7 +2,7 @@ import { Check, LoaderCircle, X } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 
 function AddComplaintCategory({ onClose, onCreated }) {
   const { token } = useAuth();

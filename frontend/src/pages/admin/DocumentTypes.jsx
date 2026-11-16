@@ -8,7 +8,7 @@ import { useAuth } from "../../context/AuthContext";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 import { BUSINESS_CLEARANCE_WORDING, CONSTRUCTION_PERMIT_WORDING, FENCING_PERMIT_WORDING, isLegacyBusinessClearanceWording } from "../../utils/documentWording";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 const fieldTypes = ["text", "textarea", "number", "date", "email", "tel", "select"];
 const fieldTypeLabels = {
   text: "Short answer",

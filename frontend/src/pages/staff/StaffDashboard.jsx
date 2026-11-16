@@ -3,7 +3,7 @@ import { useAuth } from "../../context/AuthContext";
 import DocumentPreviewModal from "./DocumentPreviewModal";
 import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 
 const STATUS_STYLES = {
   pending: "bg-amber-50 text-amber-700",

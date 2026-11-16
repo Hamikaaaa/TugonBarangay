@@ -262,7 +262,7 @@ function Register({ isModal = false }) {
     setLoading(true);
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/register", {
+      const response = await fetch("https://tugonbarangay.wuaze.com/api/register", {
         method: "POST",
         headers: {
           Accept: "application/json",
@@ -316,7 +316,7 @@ function Register({ isModal = false }) {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/register/verify-code",
+        "https://tugonbarangay.wuaze.com/api/register/verify-code",
         {
           method: "POST",
           headers: {
@@ -354,7 +354,7 @@ function Register({ isModal = false }) {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/api/register/resend-code",
+        "https://tugonbarangay.wuaze.com/api/register/resend-code",
         {
           method: "POST",
           headers: {

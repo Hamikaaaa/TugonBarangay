@@ -7,7 +7,7 @@ import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
 import { useAuth } from "../../context/AuthContext";
 import { formatDocumentRequestId } from "../../utils/documentRequestId";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 
 function AdminDocumentRequestsDashboard() {
   const { token } = useAuth();

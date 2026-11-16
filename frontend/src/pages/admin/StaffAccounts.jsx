@@ -14,7 +14,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import { useAuth } from "../../context/AuthContext";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 
-const API_URL = "http://127.0.0.1:8000/api";
+const API_URL = "https://tugonbarangay.wuaze.com/api";
 const DESIGNATIONS = [
   "Document Request Officer",
   "Complaint Management Officer",
