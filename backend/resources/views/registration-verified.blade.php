@@ -10,12 +10,14 @@
         <h1 style="margin-top:0">{{ $success ? 'Email verified!' : 'Verification link expired' }}</h1>
         <p style="line-height:1.6">
             {{ $success
-                ? 'Your registration is complete and your account is now pending barangay verification.'
+                ? 'Verification successful. You may close this tab and return to TugonBarangay website.'
                 : 'This verification link is invalid or has expired. Please start registration again.' }}
         </p>
-        <a href="{{ $loginUrl }}" style="display:inline-block;margin-top:16px;padding:12px 24px;border-radius:8px;background:#2455d6;color:#fff;text-decoration:none;font-weight:bold">
-            {{ $success ? 'Go to login' : 'Register again' }}
-        </a>
+        @unless ($success)
+            <a href="{{ $loginUrl }}" style="display:inline-block;margin-top:16px;padding:12px 24px;border-radius:8px;background:#2455d6;color:#fff;text-decoration:none;font-weight:bold">
+                Register again
+            </a>
+        @endunless
     </main>
 </body>
 </html>

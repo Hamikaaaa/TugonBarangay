@@ -12,8 +12,8 @@ function RegistrationVerified() {
         role="status"
         className="rounded-2xl bg-white px-8 py-6 text-center text-lg font-semibold text-[#142A46] shadow-sm"
       >
-        Email verified, you may now go back to the login page and and close this
-        tab
+        Verification successful. You may close this tab and return to
+        TugonBarangay website.
       </p>
     </main>
   );
