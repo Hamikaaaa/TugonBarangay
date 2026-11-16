@@ -1124,9 +1124,15 @@ function Register({ isModal = false }) {
             className="w-full max-w-md rounded-3xl bg-white p-8 text-center shadow-2xl"
           >
             <p role="status" className="text-lg font-semibold text-[#142A46]">
-              Email verified, you may now go back to the login page and and
-              close this tab
+              Account registered successfully. Log in to continue.
             </p>
+            <button
+              type="button"
+              onClick={() => navigate("/login")}
+              className="mt-6 flex h-12 w-full items-center justify-center rounded-xl bg-[#2455D6] px-5 text-sm font-bold text-white transition hover:bg-[#1D46B5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2455D6]"
+            >
+              Log in
+            </button>
           </section>
         </div>
       )}

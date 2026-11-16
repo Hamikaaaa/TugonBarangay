@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { REGISTRATION_VERIFIED_STORAGE_KEY } from "../utils/registrationVerification";
 
 const REGISTRATION_COMPLETE_MESSAGE =
-  "Email verified, you may now go back to the login page and and close this tab";
+  "Account registered successfully. You can log in now.";
 
 function Login({ isModal = false }) {
   const { login } = useAuth();
