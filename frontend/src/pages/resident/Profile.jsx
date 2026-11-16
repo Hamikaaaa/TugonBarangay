@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, UserRound } from "lucide-react";
+import { Check, LogOut, UserRound } from "lucide-react";
 import {
   inputClass,
   primaryButtonClass,
@@ -10,7 +10,7 @@ import { Avatar } from "../../components/resident/ResidentNav";
 import { useAuth } from "../../context/AuthContext";
 
 function Profile({ user, verified, token }) {
-  const { updateUser } = useAuth();
+  const { updateUser, logout } = useAuth();
   const [form, setForm] = useState({
     address: user?.address || "",
     mobile_number: user?.mobile_number || "",
@@ -89,6 +89,14 @@ function Profile({ user, verified, token }) {
             </p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={logout}
+          className="relative mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-700 transition hover:border-red-300 hover:bg-red-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600 sm:w-auto"
+        >
+          <LogOut className="h-4 w-4" aria-hidden="true" />
+          Sign out
+        </button>
       </header>
 
       <section className="overflow-hidden rounded-[26px] border border-slate-200/80 bg-white/90 p-6 shadow-[0_8px_28px_rgba(18,63,112,0.06)] backdrop-blur-sm sm:p-8">
