@@ -762,7 +762,7 @@ function BantayBot({ token, userId }) {
                 type="submit"
                 aria-label={asking ? t.finding : t.send}
                 disabled={asking || !question.trim()}
-                className={`${primaryButtonClass} h-10 w-10 shrink-0 justify-center rounded-xl px-0`}
+                className={`${primaryButtonClass} !bg-none !bg-[#2455D6] h-10 w-10 shrink-0 justify-center rounded-xl px-0 hover:!bg-[#1D46B5]`}
               >
                 <Send className="h-4 w-4" aria-hidden="true" />
               </button>
