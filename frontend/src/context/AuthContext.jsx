@@ -61,6 +61,7 @@ export function AuthProvider({ children }) {
 
       setUser(null);
       setToken(null);
+      window.location.replace("/");
     }
   };
 

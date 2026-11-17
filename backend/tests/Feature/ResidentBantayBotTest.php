@@ -26,6 +26,13 @@ class ResidentBantayBotTest extends TestCase
         $response = $this->getJson('/api/resident/faqs')->assertOk();
 
         $this->assertCount(95, $response->json());
+        $this->assertSame(
+            [],
+            ChatbotFaq::where('is_active', true)
+                ->where(fn ($query) => $query->whereNull('question_ceb')->orWhere('question_ceb', ''))
+                ->pluck('question')
+                ->all(),
+        );
         $response->assertJsonFragment([
             'category' => 'Complaint Management',
             'question' => 'How do I file a complaint?',

@@ -4,6 +4,7 @@ import RegistrationVerified from "./pages/RegistrationVerified";
 import ResidentDashboard from "./pages/ResidentDashboard";
 import Unauthorized from "./pages/Unauthorized";
 import ProtectedRoute from "./components/ProtectedRoute";
+import PublicOnlyRoute from "./components/PublicOnlyRoute";
 import { AuthProvider } from "./context/AuthContext";
 import StaffHome from "./pages/staff/StaffHome";
 import {
@@ -54,7 +55,14 @@ function App() {
           <Route path="/unauthorized" element={<Unauthorized />} />
 
           {/* Default */}
-          <Route path="/" element={<ServiceLanding />} />
+          <Route
+            path="/"
+            element={
+              <PublicOnlyRoute>
+                <ServiceLanding />
+              </PublicOnlyRoute>
+            }
+          />
 
           <Route
             path="/staff/dashboard"
