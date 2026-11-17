@@ -17,7 +17,12 @@ import {
 import { shouldPromptForFeatureFeedback } from "../../services/featureFeedback";
 import FeedbackPrompt from "../../components/resident/FeedbackPrompt";
 
-const createMessageId = () => crypto.randomUUID();
+const createMessageId = () => {
+  const randomUUID = globalThis.crypto?.randomUUID;
+  return typeof randomUUID === "function"
+    ? randomUUID.call(globalThis.crypto)
+    : `message-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
 const getCurrentTimestamp = () => new Date().toISOString();
 const CATEGORY_PRIORITY = [
   "Account & Verification",
