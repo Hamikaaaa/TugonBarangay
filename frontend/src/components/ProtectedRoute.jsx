@@ -22,7 +22,7 @@ function ProtectedRoute({ children, allowedRoles, allowedDesignations }) {
 
   // Not logged in
   if (!user || !token) {
-    return <Navigate to="/unauthorized" replace />;
+    return <Navigate to="/login" replace />;
   }
 
   // Logged in but doesn't have permission

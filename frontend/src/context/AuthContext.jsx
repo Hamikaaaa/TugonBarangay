@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 const AuthContext = createContext();
 
@@ -19,6 +19,17 @@ export function AuthProvider({ children }) {
   });
 
   const [token, setToken] = useState(() => localStorage.getItem("token") || sessionStorage.getItem("token"));
+
+  useEffect(() => {
+    if (!user || !token) return undefined;
+
+    const handleBackNavigation = () => {
+      window.location.replace("/unauthorized");
+    };
+
+    window.addEventListener("popstate", handleBackNavigation);
+    return () => window.removeEventListener("popstate", handleBackNavigation);
+  }, [user, token]);
 
   const login = (userData, authToken, remember = true) => {
     const storage = remember ? localStorage : sessionStorage;
