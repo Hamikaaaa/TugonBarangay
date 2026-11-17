@@ -17,7 +17,7 @@ class ResidentBantayBotTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_resident_can_browse_all_87_categorized_predefined_questions(): void
+    public function test_resident_can_browse_all_95_categorized_predefined_questions(): void
     {
         $resident = Resident::factory()->create();
         Sanctum::actingAs($resident);
@@ -25,7 +25,7 @@ class ResidentBantayBotTest extends TestCase
 
         $response = $this->getJson('/api/resident/faqs')->assertOk();
 
-        $this->assertCount(87, $response->json());
+        $this->assertCount(95, $response->json());
         $response->assertJsonFragment([
             'category' => 'Complaint Management',
             'question' => 'How do I file a complaint?',
@@ -48,7 +48,7 @@ class ResidentBantayBotTest extends TestCase
             'question' => 'requirements for Barangay Residency',
         ])->assertOk()
             ->assertJsonPath('matched', true)
-            ->assertJsonPath('faq.question', 'What information is needed for Barangay Residency?');
+            ->assertJsonPath('faq.question', 'What are the requirements for a Certificate of Residency?');
     }
 
     public function test_bot_returns_saved_cebuano_answer_for_a_bisaya_suggested_question(): void
@@ -114,7 +114,7 @@ class ResidentBantayBotTest extends TestCase
             'question' => 'How much do I have to pay for a residency certificate?',
         ])->assertOk()
             ->assertJsonPath('matched', true)
-            ->assertJsonPath('faq.question', 'How much is the Barangay Residency Certificate?');
+            ->assertJsonPath('faq.question', 'How much does a barangay document cost?');
 
         $this->postJson('/api/resident/bantaybot/ask', [
             'question' => 'How can I report a complaint?',

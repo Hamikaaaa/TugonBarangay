@@ -243,7 +243,7 @@ function BantayBot({ token, userId }) {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const feedbackTimersRef = useRef(new Set());
   const [language, setLanguage] = useState(getSavedLanguage);
-  const t = UI.en;
+  const t = UI[language];
 
   useEffect(() => () => {
     feedbackTimersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -764,7 +764,7 @@ function BantayBot({ token, userId }) {
                 disabled={asking || !question.trim()}
                 className={`${primaryButtonClass} !bg-none !bg-[#2455D6] h-10 w-10 shrink-0 justify-center rounded-xl px-0 hover:!bg-[#1D46B5]`}
               >
-                <Send className="h-4 w-4" aria-hidden="true" />
+                <Send className="h-5 w-5" aria-hidden="true" />
               </button>
             </div>
             <div className="mt-2 flex items-center justify-between gap-3 px-1">
