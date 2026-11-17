@@ -628,7 +628,7 @@ function ApplicantCamera({ stream, onCapture, onCancel }) {
           type="button"
           onClick={capturePhoto}
           disabled={!ready}
-          className={`${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+          className={`${primaryButtonClass} !bg-none !bg-[#2455D6] hover:!bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-50`}
         >
           Capture photo
         </button>
