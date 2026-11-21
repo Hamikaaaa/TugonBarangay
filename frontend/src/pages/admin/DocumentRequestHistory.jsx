@@ -190,7 +190,7 @@ function DocumentRequestHistory() {
                               <span className="mt-1 block text-xs text-slate-500">{request.resident?.email}</span>
                             </td>
                             <td className="px-4 py-3">
-                              <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusClass(request.status)}`}>
+                              <span className={`text-xs font-bold ${statusClass(request.status)}`}>
                                 {labelStatus(request.status)}
                               </span>
                               {request.is_delayed && <span className="ml-2 text-xs font-bold text-red-600">Delayed</span>}
@@ -522,13 +522,13 @@ function normalizeDocumentRequest(request) {
 
 function statusClass(status) {
   return {
-    pending: "bg-amber-50 text-amber-700",
-    under_review: "bg-blue-50 text-blue-700",
-    for_correction: "bg-violet-50 text-violet-700",
-    ready_for_release: "bg-emerald-50 text-emerald-700",
-    completed: "bg-emerald-50 text-emerald-700",
-    rejected: "bg-red-50 text-red-700",
-  }[status] || "bg-slate-100 text-slate-700";
+    pending: "text-amber-700",
+    under_review: "text-blue-700",
+    for_correction: "text-violet-700",
+    ready_for_release: "text-emerald-700",
+    completed: "text-emerald-700",
+    rejected: "text-red-700",
+  }[status] || "text-slate-700";
 }
 
 function tabClass(active) {

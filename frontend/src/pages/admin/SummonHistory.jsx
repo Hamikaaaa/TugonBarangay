@@ -211,6 +211,6 @@ function NoticeField({ label, value }) {
 
 function AttendanceValue({ value }) {
   const label = value === true ? "Yes" : value === false ? "No" : "Not marked";
-  const tone = value === true ? "bg-emerald-50 text-emerald-700" : value === false ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-500";
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${tone}`}>{label}</span>;
+  const tone = value === true ? "text-emerald-700" : value === false ? "text-red-700" : "text-slate-500";
+  return <span className={`text-xs font-bold ${tone}`}>{label}</span>;
 }

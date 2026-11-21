@@ -575,7 +575,7 @@ function Residents() {
                 <td className="p-4">{account.verification_status}</td>
                 <td className="p-4">{formatLastLogin(account.last_login_at)}</td>
                 <td className="p-4">{account.last_login_at ? "Login recorded" : <span className="font-semibold text-amber-700">No login recorded</span>}</td>
-                <td className="p-4"><span className={`rounded-full px-3 py-1.5 text-xs font-bold ${account.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{account.is_active ? "Enabled" : "Disabled"}</span></td>
+                <td className={`p-4 text-xs font-bold ${account.is_active ? "text-emerald-700" : "text-slate-600"}`}>{account.is_active ? "Enabled" : "Disabled"}</td>
                   <td className="p-4"><div className="flex flex-wrap justify-center gap-2">
                   <button type="button" onClick={() => setAccountActive(account)} disabled={savingId === account.id || accountSaving || deleting} className={`inline-flex h-9 min-w-24 items-center justify-center rounded-xl border px-3 text-xs font-bold transition disabled:cursor-wait disabled:opacity-50 ${account.is_active ? "border-red-100 text-red-700 hover:bg-red-50" : "border-emerald-100 text-emerald-700 hover:bg-emerald-50"}`}>{savingId === account.id ? "Saving..." : account.is_active ? "Disable" : "Enable"}</button>
                   <button type="button" onClick={() => editResidentAccount(account)} disabled={deleting} aria-label={`Edit ${account.name}`} className="inline-flex h-9 min-w-24 items-center justify-center rounded-xl border border-blue-100 px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50">Edit</button>
@@ -695,8 +695,8 @@ function Residents() {
               <>
                 <div className="divide-y divide-slate-100">
                   {registry.map((record) => (
-                    <article key={record.id} className="p-4 text-center transition hover:bg-[#F8FAFF] sm:p-5">
-                      <div className="flex flex-wrap items-center justify-center gap-2">
+                    <article key={record.id} className="p-4 text-left transition hover:bg-[#F8FAFF] sm:p-5">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-lg bg-[#EEF4FF] px-2.5 py-1.5 font-mono text-xs font-bold text-[#2455D6]">
                           {record.resident_id || "ID pending"}
                         </span>
@@ -704,7 +704,7 @@ function Residents() {
                           {fullName(record)}
                         </h4>
                       </div>
-                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-center sm:grid-cols-3 lg:grid-cols-6">
+                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-left sm:grid-cols-3 lg:grid-cols-6">
                         <RegistryDetail label="Birth date / sex">
                           <span>{formatDate(record.date_of_birth)}</span>
                           <span className="block text-slate-400">{record.sex || "Not provided"}</span>
@@ -721,12 +721,12 @@ function Residents() {
                           />
                         </RegistryDetail>
                         <RegistryDetail label="First-time job seeker">
-                          <span className={`inline-flex max-w-full rounded-full px-2.5 py-1 text-[10px] font-bold ${record.first_time_jobseeker_available ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-800"}`}>
+                          <span className={`text-[10px] font-bold ${record.first_time_jobseeker_available ? "text-emerald-700" : "text-amber-800"}`}>
                             {record.first_time_jobseeker_available ? "Available" : "Already availed"}
                           </span>
                         </RegistryDetail>
                       </dl>
-                      <div className="mt-4 flex justify-center gap-2 border-t border-slate-100 pt-3">
+                      <div className="mt-4 flex justify-start gap-2 border-t border-slate-100 pt-3">
                         <button type="button" onClick={() => editRegistryRecord(record)} disabled={deleting} className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
                           Edit
                         </button>
@@ -1321,16 +1321,16 @@ function DetailsCard({ title, resident, missing = false }) {
 
 function SystemAccountStatus({ status, count }) {
   const variants = {
-    no_account: { label: "No account", className: "bg-slate-100 text-slate-600" },
-    pending: { label: "Pending verification", className: "bg-amber-50 text-amber-800" },
-    verified: { label: "Verified account", className: "bg-emerald-50 text-emerald-700" },
-    rejected: { label: "Registration rejected", className: "bg-red-50 text-red-700" },
-    multiple_accounts: { label: `${count} matching accounts`, className: "bg-orange-50 text-orange-800" },
+    no_account: { label: "No account", className: "text-slate-600" },
+    pending: { label: "Pending verification", className: "text-amber-800" },
+    verified: { label: "Verified account", className: "text-emerald-700" },
+    rejected: { label: "Registration rejected", className: "text-red-700" },
+    multiple_accounts: { label: `${count} matching accounts`, className: "text-orange-800" },
   };
   const variant = variants[status] || variants.no_account;
 
   return (
-    <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold ${variant.className}`}>
+    <span className={`whitespace-nowrap text-[10px] font-bold ${variant.className}`}>
       {variant.label}
     </span>
   );
