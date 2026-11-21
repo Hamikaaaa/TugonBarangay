@@ -145,7 +145,7 @@ function DocumentRequestHistory() {
 
           {activeTab === "requests" ? (
             <div className="overflow-hidden rounded-b-2xl border border-t-0 border-slate-200 bg-white">
-              <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
+              <div className="border-b border-slate-100 p-4">
                 <label className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                   <input
@@ -155,25 +155,27 @@ function DocumentRequestHistory() {
                     className="w-full rounded-xl border border-slate-200 py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#2455D6]"
                   />
                 </label>
-                <select
-                  value={status}
-                  onChange={(event) => setStatus(event.target.value)}
-                  className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-700"
-                >
-                  {STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
               </div>
               {loading ? <p className="p-8 text-center text-sm text-slate-500">Loading request history...</p> : (
                 <>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-212.5 text-left text-sm">
-                      <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                      <thead className="bg-slate-50 text-[11px] tracking-wide text-slate-500">
                         <tr>
                           <th className="px-4 py-3">Request</th>
                           <th className="px-4 py-3">Resident</th>
-                          <th className="px-4 py-3">Status</th>
+                          <th className="min-w-40 px-4 py-2">
+                            <select
+                              value={status}
+                              onChange={(event) => setStatus(event.target.value)}
+                              aria-label="Filter document requests by status"
+                              className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold normal-case tracking-normal text-slate-700 outline-none focus:border-[#2455D6]"
+                            >
+                              {STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                            </select>
+                          </th>
                           <th className="px-4 py-3">Handler</th>
-                          <th className="px-4 py-3">Last status update</th>
+                          <th className="px-4 py-3">Last Status Update</th>
                           <th className="px-4 py-3">Submitted</th>
                           <th className="px-4 py-3">Actions</th>
                         </tr>
@@ -222,13 +224,13 @@ function DocumentRequestHistory() {
           ) : (
             <div className="overflow-x-auto rounded-b-2xl border border-t-0 border-slate-200 bg-white">
               <table className="w-full min-w-195 text-left text-sm">
-                <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
+                <thead className="bg-slate-50 text-[11px] tracking-wide text-slate-500">
                   <tr>
                     <th className="px-4 py-3">When</th>
                     <th className="px-4 py-3">Action</th>
                     <th className="px-4 py-3">Actor</th>
                     <th className="px-4 py-3">Request</th>
-                    <th className="px-4 py-3">Change / details</th>
+                    <th className="px-4 py-3">Change / Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">

@@ -563,7 +563,7 @@ function Residents() {
               Accounts with matching names are grouped together. Accounts without a recorded login appear first in each group so admins can review and disable extra accounts.
             </p>
             <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-4">Account</th><th className="p-4">Resident ID</th><th className="p-4">Registered</th><th className="p-4">Verification</th><th className="p-4">Last login</th><th className="p-4">Activity</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
+              <thead className="bg-slate-50 text-xs text-slate-500"><tr><th className="p-4">Account</th><th className="p-4">Resident Id</th><th className="p-4">Registered</th><th className="p-4">Verification</th><th className="p-4">Last Login</th><th className="p-4">Activity</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
               <tbody className="divide-y divide-slate-100">{accounts.map((account, index) => {
                 const nameKey = accountNameKey(account);
                 const previousNameKey = index > 0 ? accountNameKey(accounts[index - 1]) : null;
@@ -705,7 +705,7 @@ function Residents() {
                         </h4>
                       </div>
                       <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-left sm:grid-cols-3 lg:grid-cols-6">
-                        <RegistryDetail label="Birth date / sex">
+                        <RegistryDetail label="Birth Date / Sex">
                           <span>{formatDate(record.date_of_birth)}</span>
                           <span className="block text-slate-400">{record.sex || "Not provided"}</span>
                         </RegistryDetail>
@@ -714,13 +714,13 @@ function Residents() {
                           <span className="break-words">{record.address || "—"}</span>
                         </RegistryDetail>
                         <RegistryDetail label="Mobile">{record.mobile_number || "—"}</RegistryDetail>
-                        <RegistryDetail label="System account">
+                        <RegistryDetail label="System Account">
                           <SystemAccountStatus
                             status={record.system_account_status}
                             count={record.system_account_count}
                           />
                         </RegistryDetail>
-                        <RegistryDetail label="First-time job seeker">
+                        <RegistryDetail label="First-Time Job Seeker">
                           <span className={`text-[10px] font-bold ${record.first_time_jobseeker_available ? "text-emerald-700" : "text-amber-800"}`}>
                             {record.first_time_jobseeker_available ? "Available" : "Already availed"}
                           </span>
@@ -1339,7 +1339,7 @@ function SystemAccountStatus({ status, count }) {
 function RegistryDetail({ label, children }) {
   return (
     <div className="min-w-0">
-      <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+      <dt className="text-[10px] font-bold tracking-wide text-slate-400">
         {label}
       </dt>
       <dd className="mt-1 break-words text-xs font-medium leading-5 text-slate-700">

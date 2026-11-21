@@ -6,7 +6,6 @@ import {
   BriefcaseBusiness,
   Camera,
   CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   CircleAlert,
@@ -14,7 +13,6 @@ import {
   Eye,
   FileCheck2,
   FileText,
-  Filter,
   Search,
   X,
   XCircle,
@@ -91,9 +89,12 @@ const STATUS_META = {
 };
 
 const STATUS_FILTERS = [
+  ["pending", "Pending"],
   ["under_review", "Under Review"],
+  ["for_correction", "For Correction"],
   ["ready_for_release", "Ready for Release"],
   ["completed", "Completed"],
+  ["rejected", "Rejected"],
 ];
 
 function hasApprovedPermitInspection(request) {
@@ -570,7 +571,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
               </div>
             </div>
 
-            <div id="staff-request-queue" className="grid gap-3 border-b border-[#E6ECF5] bg-[#F6F8FC] p-4 lg:grid-cols-4">
+            <div id="staff-request-queue" className="grid gap-3 border-b border-[#E6ECF5] bg-[#F6F8FC] p-4 lg:grid-cols-3">
               <label className="relative block">
                 <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -580,14 +581,6 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                   className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-medium text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/15"
                 />
               </label>
-              <label className="relative">
-                <Filter size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <select value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(1); }} className="h-10 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-9 pr-9 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/15">
-                  <option value="all">All statuses</option>
-                  {STATUS_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-                <ChevronDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              </label>
               <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3">
                 <span className="shrink-0 text-[10px] font-bold text-slate-500">From</span>
                 <input type="date" value={dateFrom} max={dateTo || undefined} onChange={(event) => { setDateFrom(event.target.value); setRequestPage(1); }} className="min-w-0 flex-1 py-2 text-xs text-slate-600 outline-none" />
@@ -596,33 +589,38 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                 <span className="shrink-0 text-[10px] font-bold text-slate-500">To</span>
                 <input type="date" value={dateTo} min={dateFrom || undefined} onChange={(event) => { setDateTo(event.target.value); setRequestPage(1); }} className="min-w-0 flex-1 py-2 text-xs text-slate-600 outline-none" />
               </label>
-              {(dateFrom || dateTo || search) && (
-                <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); setSearch(""); setRequestPage(1); }} className="rounded-lg px-3 py-2 text-xs font-bold text-[#2455D6] transition hover:bg-[#2455D6]/5 hover:underline focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20">Clear filters</button>
+              {(dateFrom || dateTo || search || statusFilter !== "all") && (
+                <button type="button" onClick={() => { setDateFrom(""); setDateTo(""); setSearch(""); setStatusFilter("all"); setRequestPage(1); }} className="rounded-lg px-3 py-2 text-xs font-bold text-[#2455D6] transition hover:bg-[#2455D6]/5 hover:underline focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20">Clear filters</button>
               )}
             </div>
 
             <div className="overflow-x-auto">
               {loading ? (
                 <div className="p-12 text-center text-sm text-slate-500">Loading document requests...</div>
-              ) : filteredRequests.length === 0 ? (
-                <div className="p-14 text-center">
-                  <span className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><FileText size={22} /></span>
-                  <p className="mt-4 text-sm font-bold text-slate-700">No requests found</p>
-                  <p className="mt-1 text-xs text-slate-500">Try changing your search, status filter, or document type.</p>
-                </div>
               ) : (
                 <table className="w-full min-w-[980px] border-collapse text-left">
                   <thead>
-                    <tr className="border-b border-[#E6ECF5] bg-[#F6F8FC] text-[10px] font-bold uppercase tracking-[0.12em] text-[#55708F]">
-                      <th className="px-5 py-3.5">Request ID</th>
+                    <tr className="border-b border-[#E6ECF5] bg-[#F6F8FC] text-[10px] font-bold tracking-[0.12em] text-[#55708F]">
+                      <th className="px-5 py-3.5">Request Id</th>
                       <th className="px-5 py-3.5">Resident Name</th>
                       <th className="px-5 py-3.5">Document Type</th>
                       <th className="px-5 py-3.5">Date Requested</th>
-                      <th className="px-5 py-3.5">Status</th>
+                      <th className="min-w-40 px-3 py-2">
+                        <select
+                          value={statusFilter}
+                          onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(1); }}
+                          aria-label="Filter document requests by status"
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold tracking-normal text-slate-600 outline-none focus:border-[#2455D6]"
+                        >
+                          <option value="all">All statuses</option>
+                          {STATUS_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                        </select>
+                      </th>
                       <th className="px-5 py-3.5">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
+                    {!filteredRequests.length && <tr><td colSpan="6" className="px-5 py-10 text-center text-sm text-slate-500">No requests match these filters.</td></tr>}
                     {filteredRequests.map((request) => {
                       const status = STATUS_META[request.status] || STATUS_META.pending;
                       const isSelected = selectedRequest?.id === request.id;
@@ -1393,12 +1391,12 @@ function IdentityComparison({ review }) {
       {review?.fields?.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
           <table className="w-full min-w-[620px] text-left text-xs">
-            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-50 text-[10px] font-bold tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2.5">Field</th>
-                <th className="px-3 py-2.5">Resident profile</th>
-                <th className="px-3 py-2.5">Barangay registry</th>
-                <th className="px-3 py-2.5">Submitted request</th>
+                <th className="px-3 py-2.5">Resident Profile</th>
+                <th className="px-3 py-2.5">Barangay Registry</th>
+                <th className="px-3 py-2.5">Submitted Request</th>
                 <th className="px-3 py-2.5">Check</th>
               </tr>
             </thead>

@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   CheckCircle2,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Clock3,
@@ -100,11 +99,6 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
   const statusLocked = Object.hasOwn(STATUS_LABELS, initialStatus);
   // The blotter view keeps its own layout and does not show the summary cards.
   const isBlotterView = blotterHistory || statusFilter === "blotter";
-  const filterGridColumns = isAdmin
-    ? "xl:grid-cols-[minmax(0,1fr)_minmax(145px,170px)_minmax(145px,190px)_minmax(145px,170px)]"
-    : statusLocked
-      ? "xl:grid-cols-[minmax(0,1fr)_minmax(145px,190px)]"
-      : "xl:grid-cols-[minmax(0,1fr)_minmax(145px,170px)_minmax(145px,190px)]";
 
   useEffect(() => {
     if (!token) return undefined;
@@ -447,7 +441,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
     : isDashboard
       ? "Complaint dashboard"
       : statusLocked
-        ? `${STATUS_LABELS[initialStatus]} complaints`
+        ? statusFilter === "all" ? "Complaint queue" : `${STATUS_LABELS[statusFilter]} complaints`
         : "Complaint queue";
 
   return (
@@ -638,56 +632,69 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
         <div className="flex flex-col gap-4 border-b border-slate-200 px-4 py-5 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-base font-bold text-[#132A4A]">{isBlotterView ? "Blotter history" : "Resident complaints"}</h3>
-            <p className="mt-1 text-xs text-slate-500">{isBlotterView ? "Search and review barangay blotter entries recorded by staff." : statusLocked ? `Showing ${STATUS_LABELS[statusFilter]} complaints only. ` : ""}{categoryFilter ? `Showing ${categoryFilter} complaints. ` : ""}Search, filter, review evidence, and update case status.</p>
+            <p className="mt-1 text-xs text-slate-500">{isBlotterView ? "Search and review barangay blotter entries recorded by staff." : statusFilter !== "all" ? `Showing ${STATUS_LABELS[statusFilter]} complaints. ` : ""}{categoryFilter ? `Showing ${categoryFilter} complaints. ` : ""}Search, filter, review evidence, and update case status.</p>
           </div>
           <span className="rounded-lg bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">{pagination.total} complaints</span>
         </div>
-        <div className={`grid gap-3 border-b border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2 ${filterGridColumns}`}>
+        <div className="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-4">
           <label className="relative block">
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input value={search} onChange={(event) => { setLoading(true); setSearch(event.target.value); setPage(1); }} placeholder={isBlotterView ? "Search reference, resident, or incident..." : "Search case, resident, or category..."} className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-medium text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100" />
           </label>
-          {!blotterHistory && !statusLocked && (
-            <select value={statusFilter} onChange={(event) => { setLoading(true); setStatusFilter(event.target.value); setPage(1); }} aria-label="Filter by complaint status" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]">
-              <option value="all">All statuses</option>
-              {Object.entries(FILTER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          )}
-          {!isBlotterView && (
-            <CategoryFilterDropdown
-              value={categoryFilter}
-              categories={availableCategories}
-              onChange={(value) => { setLoading(true); setCategoryFilter(value); setPage(1); }}
-            />
-          )}
-          {isAdmin && !isBlotterView && (
-            <select value={priorityFilter} onChange={(event) => { setLoading(true); setPriorityFilter(event.target.value); setPage(1); }} aria-label="Filter by complaint priority" className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]">
-              <option value="all">All priorities</option>
-              <option value="normal">Normal priority</option>
-              <option value="urgent">Urgent priority</option>
-            </select>
-          )}
         </div>
         <div className="overflow-x-auto">
           {loading ? (
             <p className="p-12 text-center text-sm text-slate-500">Loading complaints...</p>
-          ) : complaints.length === 0 ? (
-            <div className="p-14 text-center">
-              <FileText className="mx-auto text-slate-400" size={24} />
-              <p className="mt-4 text-sm font-bold text-slate-700">{isBlotterView ? "No blotter entries found" : "No complaints found"}</p>
-              <p className="mt-1 text-xs text-slate-500">{isBlotterView ? "Record a new blotter entry from the blotter page or adjust the current filters." : "Try changing your search or status filter."}</p>
-            </div>
           ) : (
             <table className="w-full min-w-[820px] border-collapse text-left">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold tracking-[0.12em] text-slate-500">
                   <th className="px-5 py-3.5">Case</th>
                   <th className="px-5 py-3.5">Resident</th>
-                  {isBlotterView && <th className="px-5 py-3.5">Filed by</th>}
-                  {isBlotterView && <th className="px-5 py-3.5">Filed at</th>}
-                  <th className="px-5 py-3.5">Category</th>
-                  {!isBlotterView && <th className="px-5 py-3.5">Priority</th>}
-                  <th className="px-5 py-3.5">Status</th>
+                  {isBlotterView && <th className="px-5 py-3.5">Filed By</th>}
+                  {isBlotterView && <th className="px-5 py-3.5">Filed At</th>}
+                  <th className="min-w-44 px-3 py-2">
+                    {!isBlotterView ? (
+                      <select
+                        value={categoryFilter}
+                        onChange={(event) => { setCategoryFilter(event.target.value); setPage(1); }}
+                        aria-label="Filter complaints by category"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold tracking-normal text-slate-600 outline-none focus:border-[#2455D6]"
+                      >
+                        <option value="">All categories</option>
+                        {availableCategories.map((category) => <option key={category} value={category}>{category}</option>)}
+                      </select>
+                    ) : "Category"}
+                  </th>
+                  {!isBlotterView && (
+                    <th className="min-w-36 px-3 py-2">
+                      {isAdmin ? (
+                        <select
+                          value={priorityFilter}
+                          onChange={(event) => { setPriorityFilter(event.target.value); setPage(1); }}
+                          aria-label="Filter complaints by priority"
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold tracking-normal text-slate-600 outline-none focus:border-[#2455D6]"
+                        >
+                          <option value="all">All priorities</option>
+                          <option value="normal">Normal</option>
+                          <option value="urgent">Urgent</option>
+                        </select>
+                      ) : "Priority"}
+                    </th>
+                  )}
+                  <th className="min-w-36 px-3 py-2">
+                    {!isBlotterView ? (
+                      <select
+                        value={statusFilter}
+                        onChange={(event) => { setStatusFilter(event.target.value); setPage(1); }}
+                        aria-label="Filter complaints by status"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold tracking-normal text-slate-600 outline-none focus:border-[#2455D6]"
+                      >
+                        <option value="all">All statuses</option>
+                        {Object.entries(FILTER_STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                    ) : "Status"}
+                  </th>
                   {!isBlotterView ? (
                     <th className="px-5 py-3.5">Review</th>
                   ) : (
@@ -696,6 +703,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {!complaints.length && <tr><td colSpan={isBlotterView ? 7 : 6} className="px-5 py-10 text-center text-sm text-slate-500">{isBlotterView ? "No blotter entries match these filters." : "No complaints match these filters."}</td></tr>}
                 {complaints.map((complaint) => {
                   const isBlotterEntry = complaint._blotter;
                   return (
@@ -1039,72 +1047,6 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
         </div>
       )}
       </div>
-    </div>
-  );
-}
-
-function CategoryFilterDropdown({ value, categories, onChange }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
-  const menuId = useId();
-
-  useEffect(() => {
-    if (!open) return undefined;
-
-    const closeOnOutsideClick = (event) => {
-      if (!rootRef.current?.contains(event.target)) setOpen(false);
-    };
-    document.addEventListener("pointerdown", closeOnOutsideClick);
-    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
-  }, [open]);
-
-  const options = ["", ...categories];
-  const selectedLabel = value || "All categories";
-
-  return (
-    <div ref={rootRef} className="relative w-full" onKeyDown={(event) => {
-      if (event.key === "Escape") setOpen(false);
-    }}>
-      <button
-        type="button"
-        aria-label="Filter by complaint category"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={menuId}
-        onClick={() => setOpen((current) => !current)}
-        className="flex h-10 w-full items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3 text-left text-xs font-semibold text-slate-600 outline-none hover:border-[#2455D6]/50 focus:border-[#2455D6]"
-      >
-        <span className="truncate">{selectedLabel}</span>
-        <ChevronDown size={14} className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div
-          id={menuId}
-          role="listbox"
-          aria-label="Complaint categories"
-          className="absolute left-0 top-full z-40 mt-1 max-h-[216px] w-full overflow-y-auto overscroll-contain rounded-lg border border-slate-200 bg-white py-1 shadow-lg"
-        >
-          {options.map((category) => {
-            const selected = value === category;
-            const label = category || "All categories";
-            return (
-              <button
-                key={category || "all"}
-                type="button"
-                role="option"
-                aria-selected={selected}
-                onClick={() => {
-                  onChange(category);
-                  setOpen(false);
-                }}
-                className={`block min-h-9 w-full px-3 py-2 text-left text-xs ${selected ? "bg-blue-50 font-bold text-[#2455D6]" : "text-slate-700 hover:bg-slate-50"}`}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
