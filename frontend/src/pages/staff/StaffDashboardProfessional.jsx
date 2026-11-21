@@ -611,9 +611,9 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                   <p className="mt-1 text-xs text-slate-500">Try changing your search, status filter, or document type.</p>
                 </div>
               ) : (
-                <table className="w-full min-w-[980px] border-collapse text-center">
+                <table className="w-full min-w-[980px] border-collapse text-left">
                   <thead>
-                    <tr className="border-b border-[#E6ECF5] bg-[#F6F8FC] text-[10px] font-bold uppercase tracking-[0.12em] text-[#55708F]">
+                    <tr className="border-b border-[#E6ECF5] bg-[#F6F8FC] text-center text-[10px] font-bold uppercase tracking-[0.12em] text-[#55708F]">
                       <th className="px-5 py-3.5">Request ID</th>
                       <th className="px-5 py-3.5">Resident Name</th>
                       <th className="px-5 py-3.5">Document Type</th>
@@ -1393,8 +1393,8 @@ function IdentityComparison({ review }) {
       )}
       {review?.fields?.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="w-full min-w-[620px] text-center text-xs">
-            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+          <table className="w-full min-w-[620px] text-left text-xs">
+            <thead className="bg-slate-50 text-center text-[10px] font-bold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2.5">Field</th>
                 <th className="px-3 py-2.5">Resident profile</th>
