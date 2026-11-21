@@ -730,12 +730,12 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                       <td className="px-5 py-4 text-xs text-slate-600">{complaint.category}</td>
                       {!isBlotterView && (
                         <td className="px-5 py-4">
-                          <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${complaint.priority === "urgent" ? "bg-red-50 text-red-700" : "bg-slate-100 text-slate-600"}`}>
+                          <span className={`text-[10px] font-bold ${complaint.priority === "urgent" ? "text-red-700" : "text-slate-600"}`}>
                             {complaint.priority === "urgent" ? "Urgent" : "Normal"}
                           </span>
                         </td>
                       )}
-                      <td className="px-5 py-4"><StatusBadge status={complaint.status} /></td>
+                      <td className="px-5 py-4"><StatusBadge status={complaint.status} plain /></td>
                       {!isBlotterView ? (
                         <td className="px-5 py-4">
                           {isAdmin ? (
@@ -1197,15 +1197,15 @@ function Detail({ label, value, wide = false }) {
   return <div className={wide ? "sm:col-span-2" : ""}><dt className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">{label}</dt><dd className="mt-1.5 whitespace-pre-wrap break-words text-xs leading-5 text-slate-700">{value || "—"}</dd></div>;
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, plain = false }) {
   const color = status === "resolved" || status === "closed"
-    ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+    ? plain ? "text-emerald-700" : "bg-emerald-50 text-emerald-700 ring-emerald-200"
     : status === "rejected"
-      ? "bg-red-50 text-red-700 ring-red-200"
+      ? plain ? "text-red-700" : "bg-red-50 text-red-700 ring-red-200"
       : status === "in_progress"
-        ? "bg-blue-50 text-blue-700 ring-blue-200"
-        : "bg-amber-50 text-amber-700 ring-amber-200";
-  return <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ring-inset ${color}`}>{STATUS_LABELS[status] || (status || "Pending").replaceAll("_", " ")}</span>;
+        ? plain ? "text-blue-700" : "bg-blue-50 text-blue-700 ring-blue-200"
+        : plain ? "text-amber-700" : "bg-amber-50 text-amber-700 ring-amber-200";
+  return <span className={`${plain ? "" : "inline-flex rounded-full px-2.5 py-1 ring-1 ring-inset "}text-[10px] font-bold ${color}`}>{STATUS_LABELS[status] || (status || "Pending").replaceAll("_", " ")}</span>;
 }
 
 function formatDate(value) {

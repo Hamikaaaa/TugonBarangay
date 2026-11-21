@@ -22,9 +22,9 @@ import { primaryButtonClass } from "../../utils/buttonStyles";
 const API_URL = "https://tugonbarangay.wuaze.com/api";
 
 const STATUS_META = {
-  open: { label: "Open", className: "bg-amber-50 text-amber-700", icon: Clock3 },
-  resolved: { label: "Resolved", className: "bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
-  referred: { label: "Referred", className: "bg-blue-50 text-blue-700", icon: Archive },
+  open: { label: "Open", className: "bg-amber-50 text-amber-700", textClassName: "text-amber-700", icon: Clock3 },
+  resolved: { label: "Resolved", className: "bg-emerald-50 text-emerald-700", textClassName: "text-emerald-700", icon: CheckCircle2 },
+  referred: { label: "Referred", className: "bg-blue-50 text-blue-700", textClassName: "text-blue-700", icon: Archive },
 };
 
 const EMPTY_FORM = {
@@ -354,7 +354,7 @@ function BlotterManagement() {
                               type="button"
                               onClick={() => setStatusEditId(entry.id)}
                               aria-label={`Change status of ${entry.reference_code}`}
-                              className={`inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-bold transition ${meta.className} hover:opacity-90`}
+                              className={`text-xs font-bold transition ${meta.textClassName} hover:underline`}
                             >
                               {meta.label}
                             </button>

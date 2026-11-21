@@ -298,7 +298,7 @@ function Complaints() {
                           <td className="px-5 py-4 text-sm font-semibold text-[#172B4D]">{category.name}</td>
                           <td className="px-5 py-4 text-sm text-slate-600">{category.description || "-"}</td>
                           <td className="px-5 py-4">
-                            <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${category.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+                            <span className={`text-xs font-bold ${category.enabled ? "text-emerald-700" : "text-slate-500"}`}>
                               {category.enabled ? "Enabled" : "Disabled"}
                             </span>
                           </td>

@@ -82,12 +82,12 @@ const DOCUMENT_TYPE_ICONS = {
 };
 
 const STATUS_META = {
-  pending: { label: "Pending", className: "bg-[#FFF7E7] text-[#805900] ring-[#F1D9A8]", icon: Clock3 },
-  under_review: { label: "Under Review", className: "bg-[#EEF4FF] text-[#2455D6] ring-[#D9E6FF]", icon: Search },
-  for_correction: { label: "For Correction", className: "bg-violet-50 text-violet-700 ring-violet-200", icon: CircleAlert },
-  ready_for_release: { label: "Ready for Release", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", icon: FileCheck2 },
-  completed: { label: "Completed", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", icon: CheckCircle2 },
-  rejected: { label: "Rejected", className: "bg-[#FFF0EE] text-[#C74444] ring-[#F2D4D0]", icon: CircleAlert },
+  pending: { label: "Pending", className: "bg-[#FFF7E7] text-[#805900] ring-[#F1D9A8]", textClassName: "text-[#805900]", icon: Clock3 },
+  under_review: { label: "Under Review", className: "bg-[#EEF4FF] text-[#2455D6] ring-[#D9E6FF]", textClassName: "text-[#2455D6]", icon: Search },
+  for_correction: { label: "For Correction", className: "bg-violet-50 text-violet-700 ring-violet-200", textClassName: "text-violet-700", icon: CircleAlert },
+  ready_for_release: { label: "Ready for Release", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", textClassName: "text-[#21864A]", icon: FileCheck2 },
+  completed: { label: "Completed", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", textClassName: "text-[#21864A]", icon: CheckCircle2 },
+  rejected: { label: "Rejected", className: "bg-[#FFF0EE] text-[#C74444] ring-[#F2D4D0]", textClassName: "text-[#C74444]", icon: CircleAlert },
 };
 
 const STATUS_FILTERS = [
@@ -625,7 +625,6 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                   <tbody className="divide-y divide-slate-100">
                     {filteredRequests.map((request) => {
                       const status = STATUS_META[request.status] || STATUS_META.pending;
-                      const StatusIcon = status.icon;
                       const isSelected = selectedRequest?.id === request.id;
                       return (
                         <tr key={request.id} className={`group transition hover:bg-[#2455D6]/[0.03] ${isSelected ? "bg-[#2455D6]/[0.05]" : ""}`}>
@@ -642,8 +641,8 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                           <td className="px-5 py-4 text-xs font-semibold text-slate-600">{request.document_type_label || DOCUMENT_LABELS[request.document_type] || request.document_type}</td>
                           <td className="px-5 py-4 text-xs text-slate-500">{formatDate(request.created_at)}</td>
                           <td className="px-5 py-4">
-                            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ring-inset ${status.className}`}>
-                              <StatusIcon size={12} /> {status.label}
+                            <span className={`text-[10px] font-bold ${status.textClassName}`}>
+                              {status.label}
                             </span>
                           </td>
                           <td className="px-5 py-4">
