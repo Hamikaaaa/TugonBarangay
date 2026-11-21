@@ -6,7 +6,6 @@ import {
   ChevronRight,
   CircleAlert,
   Clock3,
-  Eye,
   FileText,
   LoaderCircle,
   Plus,
@@ -305,7 +304,7 @@ function BlotterManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] border-collapse text-left">
+              <table className="w-full min-w-[1000px] border-collapse text-center">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                     <th className="px-5 py-3.5">Reference</th>
@@ -315,7 +314,7 @@ function BlotterManagement() {
                     <th className="px-5 py-3.5">Time</th>
                     <th className="px-5 py-3.5">Location</th>
                     <th className="px-5 py-3.5">Status</th>
-                    <th className="px-5 py-3.5 text-right">Details</th>
+                    <th className="px-5 py-3.5">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -355,20 +354,19 @@ function BlotterManagement() {
                               type="button"
                               onClick={() => setStatusEditId(entry.id)}
                               aria-label={`Change status of ${entry.reference_code}`}
-                              className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold transition ${meta.className} hover:opacity-90 hover:underline`}
+                              className={`inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-bold transition ${meta.className} hover:opacity-90`}
                             >
                               {meta.label}
                             </button>
                           )}
                         </td>
-                        <td className="px-5 py-4 text-right">
+                        <td className="px-5 py-4">
                           <button
                             type="button"
                             onClick={() => setSelectedEntry(entry)}
                             aria-label={`View details of ${entry.reference_code}`}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-[#EEF4FF]"
+                            className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
                           >
-                            <Eye size={13} aria-hidden="true" />
                             View
                           </button>
                         </td>
@@ -592,7 +590,7 @@ function BlotterEntryDetails({ entry, onClose, token, onError }) {
         </div>
 
         <div className="px-6 py-5">
-          <dl className="grid gap-4 sm:grid-cols-2">
+          <dl className="grid gap-4 text-center sm:grid-cols-2">
             {details.map((detail) => (
               <div key={detail.label} className="min-w-0">
                 <dt className="text-[11px] font-semibold uppercase text-[#55708F]">{detail.label}</dt>

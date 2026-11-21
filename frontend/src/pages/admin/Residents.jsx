@@ -7,7 +7,6 @@ import {
   ClipboardCheck,
   Download,
   FileSpreadsheet,
-  Pencil,
   Search,
   ShieldCheck,
   Trash2,
@@ -563,13 +562,13 @@ function Residents() {
             <p className="border-b border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               Accounts with matching names are grouped together. Accounts without a recorded login appear first in each group so admins can review and disable extra accounts.
             </p>
-            <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left text-sm">
+            <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-center text-sm">
               <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-4">Account</th><th className="p-4">Resident ID</th><th className="p-4">Registered</th><th className="p-4">Verification</th><th className="p-4">Last login</th><th className="p-4">Activity</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
               <tbody className="divide-y divide-slate-100">{accounts.map((account, index) => {
                 const nameKey = accountNameKey(account);
                 const previousNameKey = index > 0 ? accountNameKey(accounts[index - 1]) : null;
                 const startsDuplicateGroup = account.same_name_accounts > 1 && nameKey !== previousNameKey;
-                return <tr key={account.id} className={startsDuplicateGroup ? "border-t-2 border-t-blue-200 bg-blue-50/30" : ""}>
+                return <tr key={account.id} className={startsDuplicateGroup ? "border-t-2 border-t-slate-200 bg-slate-50/50" : ""}>
                 <td className="p-4"><strong>{account.name}</strong>{account.same_name_accounts > 1 && <span className="ml-2 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">{account.same_name_accounts} accounts with this name</span>}<span className="block text-xs text-slate-500">{account.email}</span></td>
                 <td className="p-4 font-mono text-xs font-semibold">{account.resident_id || "—"}</td>
                 <td className="p-4">{account.created_at ? new Date(account.created_at).toLocaleDateString() : "—"}</td>
@@ -577,10 +576,10 @@ function Residents() {
                 <td className="p-4">{formatLastLogin(account.last_login_at)}</td>
                 <td className="p-4">{account.last_login_at ? "Login recorded" : <span className="font-semibold text-amber-700">No login recorded</span>}</td>
                 <td className="p-4"><span className={`rounded-full px-3 py-1.5 text-xs font-bold ${account.is_active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>{account.is_active ? "Enabled" : "Disabled"}</span></td>
-                <td className="p-4"><div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => setAccountActive(account)} disabled={savingId === account.id || accountSaving || deleting} className={`min-w-24 rounded-xl border px-3 py-2 text-xs font-bold transition disabled:cursor-wait disabled:opacity-50 ${account.is_active ? "border-red-100 text-red-700 hover:bg-red-50" : "border-emerald-100 text-emerald-700 hover:bg-emerald-50"}`}>{savingId === account.id ? "Saving..." : account.is_active ? "Disable" : "Enable"}</button>
-                  <button type="button" onClick={() => editResidentAccount(account)} disabled={deleting} aria-label={`Edit ${account.name}`} className="inline-flex items-center gap-1 rounded-xl border border-blue-100 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"><Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit</button>
-                  <button type="button" onClick={() => setDeleteConfirmation({ type: "account", record: account })} disabled={deleting} aria-label={`Delete ${account.name}`} className="inline-flex items-center gap-1 rounded-xl border border-red-100 px-3 py-2 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50"><Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete</button>
+                  <td className="p-4"><div className="flex flex-wrap justify-center gap-2">
+                  <button type="button" onClick={() => setAccountActive(account)} disabled={savingId === account.id || accountSaving || deleting} className={`inline-flex h-9 min-w-24 items-center justify-center rounded-xl border px-3 text-xs font-bold transition disabled:cursor-wait disabled:opacity-50 ${account.is_active ? "border-red-100 text-red-700 hover:bg-red-50" : "border-emerald-100 text-emerald-700 hover:bg-emerald-50"}`}>{savingId === account.id ? "Saving..." : account.is_active ? "Disable" : "Enable"}</button>
+                  <button type="button" onClick={() => editResidentAccount(account)} disabled={deleting} aria-label={`Edit ${account.name}`} className="inline-flex h-9 min-w-24 items-center justify-center rounded-xl border border-blue-100 px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50">Edit</button>
+                  <button type="button" onClick={() => setDeleteConfirmation({ type: "account", record: account })} disabled={deleting} aria-label={`Delete ${account.name}`} className="inline-flex h-9 min-w-24 items-center justify-center rounded-xl border border-red-100 px-3 text-xs font-bold text-red-700 hover:bg-red-50 disabled:opacity-50">Delete</button>
                 </div></td>
               </tr>})}</tbody>
             </table></div>
@@ -696,8 +695,8 @@ function Residents() {
               <>
                 <div className="divide-y divide-slate-100">
                   {registry.map((record) => (
-                    <article key={record.id} className="p-4 transition hover:bg-[#F8FAFF] sm:p-5">
-                      <div className="flex flex-wrap items-center gap-2">
+                    <article key={record.id} className="p-4 text-center transition hover:bg-[#F8FAFF] sm:p-5">
+                      <div className="flex flex-wrap items-center justify-center gap-2">
                         <span className="rounded-lg bg-[#EEF4FF] px-2.5 py-1.5 font-mono text-xs font-bold text-[#2455D6]">
                           {record.resident_id || "ID pending"}
                         </span>
@@ -705,7 +704,7 @@ function Residents() {
                           {fullName(record)}
                         </h4>
                       </div>
-                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 sm:grid-cols-3 lg:grid-cols-6">
+                      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-center sm:grid-cols-3 lg:grid-cols-6">
                         <RegistryDetail label="Birth date / sex">
                           <span>{formatDate(record.date_of_birth)}</span>
                           <span className="block text-slate-400">{record.sex || "Not provided"}</span>
@@ -727,12 +726,12 @@ function Residents() {
                           </span>
                         </RegistryDetail>
                       </dl>
-                      <div className="mt-4 flex justify-end gap-2 border-t border-slate-100 pt-3">
-                        <button type="button" onClick={() => editRegistryRecord(record)} disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-100 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-50 disabled:opacity-50">
-                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
+                      <div className="mt-4 flex justify-center gap-2 border-t border-slate-100 pt-3">
+                        <button type="button" onClick={() => editRegistryRecord(record)} disabled={deleting} className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
+                          Edit
                         </button>
-                        <button type="button" onClick={() => setDeleteConfirmation({ type: "registry", record })} disabled={deleting} className="inline-flex items-center gap-1.5 rounded-lg border border-red-100 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-50 disabled:opacity-50">
-                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Delete
+                        <button type="button" onClick={() => setDeleteConfirmation({ type: "registry", record })} disabled={deleting} className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50">
+                          Delete
                         </button>
                       </div>
                     </article>

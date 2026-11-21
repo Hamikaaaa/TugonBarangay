@@ -166,7 +166,7 @@ function DocumentRequestHistory() {
               {loading ? <p className="p-8 text-center text-sm text-slate-500">Loading request history...</p> : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-212.5 text-left text-sm">
+                    <table className="w-full min-w-212.5 text-center text-sm">
                       <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                         <tr>
                           <th className="px-4 py-3">Request</th>
@@ -199,7 +199,7 @@ function DocumentRequestHistory() {
                             <td className="px-4 py-3 text-slate-600">{formatDate(request.status_changed_at || request.updated_at)}</td>
                             <td className="px-4 py-3 text-slate-600">{formatDate(request.created_at)}</td>
                             <td className="px-4 py-3">
-                              <button type="button" onClick={() => openRequest(request.id)} className="font-bold text-[#2455D6] hover:underline">
+                              <button type="button" onClick={() => openRequest(request.id)} className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
                                 {request.status === "completed" ? "View history" : "View details"}
                               </button>
                             </td>
@@ -221,7 +221,7 @@ function DocumentRequestHistory() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-b-2xl border border-t-0 border-slate-200 bg-white">
-              <table className="w-full min-w-195 text-left text-sm">
+              <table className="w-full min-w-195 text-center text-sm">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-4 py-3">When</th>
@@ -238,7 +238,7 @@ function DocumentRequestHistory() {
                       <td className="px-4 py-3 font-semibold text-slate-700">{labelAction(event.action)}</td>
                       <td className="px-4 py-3">{event.actor_name} <span className="text-xs text-slate-400">({event.actor_role})</span></td>
                       <td className="px-4 py-3">
-                        <button type="button" onClick={() => openRequest(event.document_request_id)} className="font-bold text-[#2455D6] hover:underline">
+                        <button type="button" onClick={() => openRequest(event.document_request_id)} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
                           {formatDocumentRequestId(event.document_request_id)} · {event.document_request?.document_type_label || event.document_request?.document_type}
                         </button>
                       </td>
@@ -382,7 +382,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
             <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close request history"><X size={20} /></button>
           </div>
           <div className="overflow-y-auto p-5">
-            <section className="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+            <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
               <h4 className="font-bold text-[#172B4D]">Admin actions</h4>
               <p className="mt-1 text-xs leading-5 text-slate-600">Admins can review, prepare, release, and complete document requests. Existing compliance checks remain in effect.</p>
               {actionError && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{actionError}</p>}
@@ -393,7 +393,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
                 {currentRequest.status === "ready_for_release" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("completed"))} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Mark completed</button>}
               </div>
               {["pending", "under_review"].includes(currentRequest.status) && (
-                <div className="mt-4 grid gap-2 border-t border-blue-100 pt-4 sm:grid-cols-2">
+                <div className="mt-4 grid gap-2 border-t border-slate-200 pt-4 sm:grid-cols-2">
                   <label className="text-xs font-semibold text-slate-600">Review note / correction instructions
                     <textarea value={staffRemarks} onChange={(event) => setStaffRemarks(event.target.value)} maxLength={2000} className="mt-1 block min-h-16 w-full rounded-lg border border-slate-200 p-2 text-sm" />
                   </label>
@@ -407,7 +407,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
                 </div>
               )}
               {currentRequest.details?.fee_mode === "assessed" && ["pending", "under_review"].includes(currentRequest.status) && (
-                <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-blue-100 pt-4">
+                <div className="mt-4 flex flex-wrap items-end justify-center gap-2 border-t border-slate-200 pt-4">
                   <label className="text-xs font-semibold text-slate-600">Assessed fee (₱)
                     <input type="number" min="0" step="0.01" value={fee} onChange={(event) => setFee(event.target.value)} className="mt-1 block h-9 w-36 rounded-lg border border-slate-200 px-2 text-sm" />
                   </label>
@@ -415,7 +415,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
                 </div>
               )}
               {requiresInspection && currentRequest.status === "under_review" && (
-                <div className="mt-4 space-y-3 border-t border-blue-100 pt-4">
+                <div className="mt-4 space-y-3 border-t border-slate-200 pt-4">
                   <p className="text-xs font-bold text-slate-700">Permit inspection</p>
                   {existingInspection.file_path && <p className="text-xs text-slate-500">Current report: {existingInspection.original_name || "Uploaded report"}</p>}
                   <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(event) => setInspectionFile(event.target.files?.[0] || null)} className="block w-full text-xs text-slate-600" />
@@ -473,7 +473,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
             ) : <p className="mt-2 text-sm text-slate-500">No form details recorded.</p>}
 
             <h4 className="mt-7 font-bold text-[#172B4D]">Processing history</h4>
-            <ol className="mt-3 space-y-3 border-l-2 border-blue-100 pl-4">
+            <ol className="mt-3 space-y-3 border-l-2 border-slate-200 pl-4 text-left">
               {(currentRequest.events || []).map((event) => (
                 <li key={event.id} className="relative rounded-xl bg-slate-50 p-3">
                   <span className="absolute left-[-1.35rem] top-4 h-2.5 w-2.5 rounded-full bg-[#2455D6]" />
