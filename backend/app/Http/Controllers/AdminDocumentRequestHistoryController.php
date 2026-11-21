@@ -23,9 +23,9 @@ class AdminDocumentRequestHistoryController extends Controller
         $query = DocumentRequest::query()->with(['resident', 'type', 'assignedStaff']);
 
         if (($validated['status'] ?? null) === 'under_review') {
-            $query->whereIn('status', ['pending', 'under_review']);
+            $query->whereIn('status', ['pending', 'under_review', 'processing']);
         } elseif (($validated['status'] ?? null) === 'delayed') {
-            $query->whereIn('status', ['pending', 'under_review'])
+            $query->whereIn('status', ['pending', 'under_review', 'processing'])
                 ->where('status_changed_at', '<=', Carbon::now()->subDays(3));
         } elseif (!empty($validated['status']) && $validated['status'] !== 'all') {
             $query->where('status', $validated['status']);
@@ -47,7 +47,7 @@ class AdminDocumentRequestHistoryController extends Controller
         $results->getCollection()->each(function (DocumentRequest $documentRequest) {
             $documentRequest->setAttribute(
                 'is_delayed',
-                in_array($documentRequest->status, ['pending', 'under_review'], true)
+                in_array($documentRequest->status, ['pending', 'under_review', 'processing'], true)
                     && $documentRequest->status_changed_at?->lte(Carbon::now()->subDays(3)),
             );
             $documentRequest->setAttribute(
@@ -110,9 +110,9 @@ class AdminDocumentRequestHistoryController extends Controller
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
-        $activeStatuses = ['pending', 'under_review', 'for_correction', 'ready_for_release'];
+        $activeStatuses = ['pending', 'under_review', 'processing', 'for_correction', 'ready_for_release'];
         $delayedCutoff = Carbon::now()->subDays(3);
-        $workloadStatuses = ['under_review', 'for_correction', 'ready_for_release'];
+        $workloadStatuses = ['under_review', 'processing', 'for_correction', 'ready_for_release'];
 
         $workload = Staff::query()
             ->where('designation', Staff::DOCUMENT_REQUEST_OFFICER)
@@ -130,13 +130,13 @@ class AdminDocumentRequestHistoryController extends Controller
             'data' => [
                 'total' => DocumentRequest::count(),
                 'pending' => (int) ($statusCounts['pending'] ?? 0),
-                'under_review' => (int) ($statusCounts['under_review'] ?? 0),
+                'under_review' => (int) ($statusCounts['under_review'] ?? 0) + (int) ($statusCounts['processing'] ?? 0),
                 'for_correction' => (int) ($statusCounts['for_correction'] ?? 0),
                 'ready_for_release' => (int) ($statusCounts['ready_for_release'] ?? 0),
                 'completed' => (int) ($statusCounts['completed'] ?? 0),
                 'rejected' => (int) ($statusCounts['rejected'] ?? 0),
                 'released' => DocumentRequest::whereNotNull('released_at')->count(),
-                'delayed' => DocumentRequest::whereIn('status', ['pending', 'under_review'])
+                'delayed' => DocumentRequest::whereIn('status', ['pending', 'under_review', 'processing'])
                     ->where('status_changed_at', '<=', $delayedCutoff)
                     ->count(),
                 'active' => DocumentRequest::whereIn('status', $activeStatuses)->count(),

@@ -38,7 +38,7 @@ class StaffController extends Controller
             $status = $validated['status'];
             if ($status !== 'all') {
                 if ($status === 'under_review') {
-                    $query->whereIn('status', ['pending', 'under_review']);
+                    $query->whereIn('status', ['pending', 'under_review', 'processing']);
                 } else {
                     $query->where('status', $status);
                 }
@@ -103,7 +103,7 @@ class StaffController extends Controller
 
     public function documentRequestDashboard()
     {
-        $statuses = ['pending', 'under_review', 'for_correction', 'ready_for_release', 'completed', 'rejected'];
+        $statuses = ['pending', 'under_review', 'processing', 'for_correction', 'ready_for_release', 'completed', 'rejected'];
         $counts = DocumentRequest::query()
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
@@ -117,7 +117,12 @@ class StaffController extends Controller
                 $statusCounts = $typeRows->keyBy('status');
                 $result = ['value' => $documentType];
                 foreach ($statuses as $status) {
-                    $result[$status] = (int) ($statusCounts->get($status)?->count ?? 0);
+                    if ($status === 'processing') {
+                        continue;
+                    }
+
+                    $result[$status] = (int) ($statusCounts->get($status)?->count ?? 0)
+                        + ($status === 'under_review' ? (int) ($statusCounts->get('processing')?->count ?? 0) : 0);
                 }
 
                 return $result;
@@ -127,7 +132,9 @@ class StaffController extends Controller
             'data' => [
                 'total' => (int) $counts->sum(),
                 'counts' => collect($statuses)->mapWithKeys(fn (string $status) => [
-                    $status => (int) ($counts[$status] ?? 0),
+                    $status => $status === 'under_review'
+                        ? (int) ($counts[$status] ?? 0) + (int) ($counts['processing'] ?? 0)
+                        : (int) ($counts[$status] ?? 0),
                 ]),
                 'summary_by_type' => $countsByType,
                 'updated_at' => Carbon::now()->toIso8601String(),
@@ -162,7 +169,7 @@ class StaffController extends Controller
     public function saveConstructionInspection(Request $request, DocumentRequest $documentRequest)
     {
         abort_unless(in_array($documentRequest->document_type, ['Construction Permit', 'Fencing Permit'], true), 404);
-        abort_unless($documentRequest->status === 'under_review', 409, 'Permit inspection can only be recorded while the request is under review.');
+        abort_unless(in_array($documentRequest->status, ['under_review', 'processing'], true), 409, 'Permit inspection can only be recorded while the request is under review.');
 
         $details = $documentRequest->details ?? [];
         $existingReport = $details['inspection_report'] ?? [];
@@ -267,7 +274,7 @@ class StaffController extends Controller
 
     public function generateDocumentPreview(Request $request, DocumentRequest $documentRequest)
     {
-        if (!in_array($documentRequest->status, ['under_review', 'ready_for_release'], true)) {
+        if (!in_array($documentRequest->status, ['under_review', 'processing', 'ready_for_release'], true)) {
             return response()->json([
                 'message' => 'A document preview can only be generated while the request is under review or ready for release.',
             ], 409);
@@ -421,6 +428,7 @@ class StaffController extends Controller
         $validTransitions = [
             'pending' => ['under_review', 'for_correction', 'rejected'],
             'under_review' => ['ready_for_release', 'for_correction', 'rejected'],
+            'processing' => ['ready_for_release', 'for_correction', 'rejected'],
             'ready_for_release' => ['completed'],
             'completed' => [],
             'rejected' => [],
@@ -646,7 +654,7 @@ class StaffController extends Controller
             422,
             'This document type does not use an assessed fee.',
         );
-        abort_unless(in_array($documentRequest->status, ['pending', 'under_review'], true), 409, 'The fee can only be assessed before release.');
+        abort_unless(in_array($documentRequest->status, ['pending', 'under_review', 'processing'], true), 409, 'The fee can only be assessed before release.');
 
         $previousFee = (float) $documentRequest->fee;
         $documentRequest->fee = $validated['fee'];

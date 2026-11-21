@@ -184,7 +184,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
     {
         DocumentRequest::factory()->create([
             'resident_id' => $this->resident->id,
-            'status' => 'under_review',
+            'status' => 'processing',
         ]);
         DocumentRequest::factory()->create([
             'resident_id' => $this->resident->id,
@@ -210,7 +210,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
             ->assertJsonCount(3, 'data');
 
         $this->assertEqualsCanonicalizing(
-            ['pending', 'under_review', 'under_review'],
+            ['pending', 'under_review', 'processing'],
             collect($response->json('data'))->pluck('status')->all(),
         );
     }

@@ -203,7 +203,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.message || "Unable to load this document request.");
         if (!active) return;
-        let request = payload.data;
+        let request = normalizeDocumentRequest(payload.data);
         if (request.status === "pending") {
           const statusResponse = await fetch(`${API_URL}/staff/document-requests/${requestId}/status`, {
             method: "PATCH",
@@ -212,7 +212,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
           });
           const statusPayload = await statusResponse.json();
           if (!statusResponse.ok) throw new Error(statusPayload.message || "Unable to start reviewing this request.");
-          request = { ...request, ...statusPayload.data };
+          request = { ...request, ...normalizeDocumentRequest(statusPayload.data) };
         }
         setSelectedRequest(request);
         if (initialLoad) {
@@ -261,7 +261,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to load document requests.");
-      const nextRequests = payload.data || [];
+      const nextRequests = (payload.data || []).map(normalizeDocumentRequest);
       setRequests((current) => JSON.stringify(current) === JSON.stringify(nextRequests) ? current : nextRequests);
       setSelectedRequest((current) => {
         if (!current) return current;
@@ -369,6 +369,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
   };
 
   const handleFeeUpdated = (updatedRequest) => {
+    updatedRequest = normalizeDocumentRequest(updatedRequest);
     setSelectedRequest(updatedRequest);
     setRequests((current) =>
       current.map((request) => request.id === updatedRequest.id ? { ...request, ...updatedRequest } : request),
@@ -403,9 +404,10 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to generate document preview.");
-      setSelectedRequest(payload.data);
-      setStaffRemarks(payload.data.staff_remarks || "");
-      setPreviewRequest(payload.data);
+      const updatedRequest = normalizeDocumentRequest(payload.data);
+      setSelectedRequest(updatedRequest);
+      setStaffRemarks(updatedRequest.staff_remarks || "");
+      setPreviewRequest(updatedRequest);
     } catch (previewError) {
       setError(previewError.message);
     } finally {
@@ -422,9 +424,10 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Unable to save document edits.");
-    setSelectedRequest(payload.data);
-    setPreviewRequest(payload.data);
-    setRequests((current) => current.map((request) => request.id === payload.data.id ? { ...request, ...payload.data } : request));
+    const updatedRequest = normalizeDocumentRequest(payload.data);
+    setSelectedRequest(updatedRequest);
+    setPreviewRequest(updatedRequest);
+    setRequests((current) => current.map((request) => request.id === updatedRequest.id ? { ...request, ...updatedRequest } : request));
     setNotice("Document edits saved. Review the preview again before release.");
   };
 
@@ -474,12 +477,13 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to update request.");
 
-      setSelectedRequest(payload.data);
-      setStaffRemarks(payload.data.staff_remarks || "");
+      const updatedRequest = normalizeDocumentRequest(payload.data);
+      setSelectedRequest(updatedRequest);
+      setStaffRemarks(updatedRequest.staff_remarks || "");
       setRejectionReason(payload.data.rejection_reason || "");
       setNotice(payload.message);
       setTimeout(() => setNotice(""), 4000);
-      await Promise.all([loadRequests(1), loadDashboardSummary()]);
+      await Promise.all([loadRequests(requestPage, true), loadDashboardSummary()]);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -710,6 +714,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                       request={selectedRequest}
                       token={token}
                       onSaved={(updatedRequest) => {
+                        updatedRequest = normalizeDocumentRequest(updatedRequest);
                         setSelectedRequest(updatedRequest);
                         setRequests((current) => current.map((request) => request.id === updatedRequest.id ? { ...request, ...updatedRequest } : request));
                       }}
@@ -1469,6 +1474,12 @@ function formatDate(value) {
 
 function authHeaders(token) {
   return { Accept: "application/json", Authorization: `Bearer ${token}` };
+}
+
+function normalizeDocumentRequest(request) {
+  return request?.status === "processing"
+    ? { ...request, status: "under_review" }
+    : request;
 }
 
 export default StaffDashboardProfessional;
