@@ -895,7 +895,7 @@ function Chatbot() {
                       <button
                         type="submit"
                         disabled={replySaving || !replyDraft.trim()}
-                        className={`${primaryButtonClass} mt-3`}
+                        className={`${primaryButtonClass} !bg-none !bg-[#2455D6] mt-3 hover:!bg-[#1D46B5]`}
                       >
                         <Send className="h-4 w-4" aria-hidden="true" />
                         {replySaving ? "Sending..." : "Send answer"}
