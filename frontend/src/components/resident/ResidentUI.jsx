@@ -146,7 +146,6 @@ function RequestRow({ request, token }) {
     pending: "bg-[#FFF7E7] text-[#B87900]",
     "under review": "bg-[#EEF4FF] text-[#2455D6]",
     "for correction": "bg-violet-50 text-violet-700",
-    processing: "bg-[#EEF4FF] text-[#2455D6]",
     "ready for release": "bg-[#ECF9F1] text-[#21864A]",
     complete: "bg-[#ECF9F1] text-[#21864A]",
     completed: "bg-[#ECF9F1] text-[#21864A]",

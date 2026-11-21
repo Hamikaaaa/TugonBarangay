@@ -65,10 +65,10 @@ function FeeAssessment({ request, token, role, onUpdated }) {
             step="0.01"
             value={fee}
             onChange={(event) => setFee(event.target.value)}
-            disabled={!["pending", "under_review", "processing"].includes(request.status)}
+            disabled={!["pending", "under_review"].includes(request.status)}
             className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/15"
           />
-          {["pending", "under_review", "processing"].includes(request.status) && (
+          {["pending", "under_review"].includes(request.status) && (
             <button disabled={saving} className="rounded-lg bg-[#2455D6] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50">
               {saving ? "Saving" : "Save"}
             </button>

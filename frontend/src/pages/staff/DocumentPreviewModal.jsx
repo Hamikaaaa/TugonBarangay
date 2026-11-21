@@ -637,7 +637,7 @@ function DocumentPreviewModal({ request, onClose, onSave, readOnly = false, full
                 disabled={
                   saving ||
                   !onSave ||
-                  !["processing", "ready_for_release"].includes(request.status)
+                  !["under_review", "ready_for_release"].includes(request.status)
                 }
                 className="inline-flex items-center justify-center rounded-xl border border-[#E6ECF5] px-4 py-2.5 text-sm font-bold text-[#55708F] transition hover:bg-[#F6F8FC] hover:text-[#172B4D] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
               >

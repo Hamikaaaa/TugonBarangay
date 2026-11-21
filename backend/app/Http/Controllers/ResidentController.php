@@ -155,8 +155,8 @@ class ResidentController extends Controller
         return response()->json([
             'user' => $user,
             'stats' => [
-                'pending_requests' => (clone $requestQuery)->whereIn('status', ['pending', 'under_review'])->count(),
-                'processing_requests' => (clone $requestQuery)->where('status', 'processing')->count(),
+                'pending_requests' => (clone $requestQuery)->where('status', 'pending')->count(),
+                'under_review_requests' => (clone $requestQuery)->where('status', 'under_review')->count(),
                 'completed_requests' => (clone $requestQuery)->whereIn('status', ['completed', 'complete', 'ready_for_release'])->count(),
                 'open_complaints' => (clone $complaintQuery)->whereNotIn('status', ['resolved', 'closed', 'rejected'])->count(),
             ],

@@ -10,11 +10,11 @@ function Overview({ firstName, verified, dashboard, onNavigate, token, user }) {
   const requests = dashboard?.requests || [];
 
   const pending = stats.pending_requests || 0;
-  const processing = stats.processing_requests || 0;
+  const underReview = stats.under_review_requests || 0;
   const completed = stats.completed_requests || 0;
   const complaints = stats.open_complaints || 0;
 
-  const totalRequests = pending + processing + completed;
+  const totalRequests = pending + underReview + completed;
 
   const completionRate = totalRequests
     ? Math.round((completed / totalRequests) * 100)
@@ -66,8 +66,8 @@ function Overview({ firstName, verified, dashboard, onNavigate, token, user }) {
       label: "Pending",
     },
     {
-      number: processing,
-      label: "Processing",
+      number: underReview,
+      label: "Under Review",
     },
     {
       number: completed,
