@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Eye, FileText, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, X } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import { DEFAULT_SUMMONS_SETTINGS } from "../../constants/summonsSettings";
 
@@ -146,7 +146,7 @@ export default function SummonHistory() {
           <FileText size={19} className="text-[#2455D6]" />
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[850px] text-left text-sm">
+          <table className="w-full min-w-[850px] text-center text-sm">
             <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Complainant</th><th className="px-5 py-3">Attended</th><th className="px-5 py-3">Respondent</th><th className="px-5 py-3">Attended</th><th className="px-5 py-3">Hearing</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? <tr><td colSpan="8" className="p-10 text-center text-sm text-slate-500">Loading summon history…</td></tr> : entries.length === 0 ? <tr><td colSpan="8" className="p-12 text-center text-sm text-slate-500">No saved summons yet.</td></tr> : entries.map((entry) => (
@@ -158,7 +158,7 @@ export default function SummonHistory() {
                   <td className="px-5 py-4"><AttendanceValue value={entry.respondent_attended} /></td>
                   <td className="whitespace-nowrap px-5 py-4 text-slate-600">{formatDate(entry.hearing_date)}<span className="ml-2 text-xs text-slate-400">{formatTime(entry.hearing_time)}</span></td>
                   <td className="px-5 py-4 capitalize text-slate-600">{entry.status || "scheduled"}</td>
-                  <td className="px-5 py-4"><button type="button" onClick={() => viewNotice(entry)} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:border-[#2455D6] hover:bg-blue-50"><Eye size={14} /> View</button></td>
+                  <td className="px-5 py-4"><button type="button" onClick={() => viewNotice(entry)} className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">View</button></td>
                 </tr>
               ))}
             </tbody>
@@ -183,14 +183,14 @@ export default function SummonHistory() {
                   <div className="py-1 text-center"><p className="text-[9px] font-bold uppercase tracking-[0.18em] text-blue-700">Katarungang Pambarangay</p><h3 className="mt-1 text-base font-extrabold uppercase">{settings.notice_title}</h3><p>{settings.notice_subtitle}</p></div>
                   <div className="grid grid-cols-2 gap-2 rounded-lg bg-white/90 p-2.5 shadow-sm"><NoticeField label="Complainant" value={selected.complainant} /><NoticeField label="Respondent" value={selected.respondent} /><NoticeField label="Blotter reference" value={selected.reference_no || "Not provided"} /><NoticeField label="Nature of dispute" value={selected.nature_of_dispute || "Not provided"} /></div>
                   <p className="my-2">{renderText(settings.opening_text, settings)}</p>
-                  <div className="grid grid-cols-2 gap-2 rounded-lg border border-blue-100 bg-white/90 p-2.5"><NoticeField label="Date" value={formatDate(selected.hearing_date)} /><NoticeField label="Time" value={formatTime(selected.hearing_time)} /><div className="col-span-2"><NoticeField label="Venue" value={selected.venue} /></div>{selected.respondent_address && <div className="col-span-2"><NoticeField label="Respondent address" value={selected.respondent_address} /></div>}</div>
+                  <div className="grid grid-cols-2 gap-2 rounded-lg border border-slate-200 bg-white/90 p-2.5 text-center"><NoticeField label="Date" value={formatDate(selected.hearing_date)} /><NoticeField label="Time" value={formatTime(selected.hearing_time)} /><div className="col-span-2"><NoticeField label="Venue" value={selected.venue} /></div>{selected.respondent_address && <div className="col-span-2"><NoticeField label="Respondent address" value={selected.respondent_address} /></div>}</div>
                   <p className="my-2">{renderText(settings.closing_text, settings)}</p>
                   <div className="mt-auto pt-2 text-right"><div className="ml-auto w-56 border-b border-slate-600" /><p className="mt-1 font-bold uppercase">{selected.issued_by || "Authorized signatory"}</p><p className="text-[10px]">{settings.signatory_title}</p></div>
                 </div>
               </article>
             ) : (
               <div className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-                <div className="border-b border-blue-900 pb-4 text-center"><p className="text-xs uppercase text-slate-500">Republic of the Philippines</p><p className="mt-1 text-sm font-bold uppercase">Province of {settings.province}</p><p className="text-sm font-bold uppercase">Municipality of {settings.municipality}</p><h3 className="mt-1 font-extrabold uppercase">Barangay {settings.barangay_name}</h3><p className="text-xs">{settings.office_heading}</p></div>
+                <div className="border-b border-slate-200 pb-4 text-center"><p className="text-xs uppercase text-slate-500">Republic of the Philippines</p><p className="mt-1 text-sm font-bold uppercase">Province of {settings.province}</p><p className="text-sm font-bold uppercase">Municipality of {settings.municipality}</p><h3 className="mt-1 font-extrabold uppercase">Barangay {settings.barangay_name}</h3><p className="text-xs">{settings.office_heading}</p></div>
                 <div className="py-6 text-center"><p className="text-xs font-bold uppercase text-blue-700">Katarungang Pambarangay</p><h3 className="mt-1 text-lg font-extrabold uppercase">{settings.notice_title}</h3><p className="text-sm text-slate-500">{settings.notice_subtitle}</p></div>
                 <div className="grid grid-cols-2 gap-3 rounded-lg bg-slate-50 p-4 text-sm"><NoticeField label="Complainant" value={selected.complainant} /><NoticeField label="Respondent" value={selected.respondent} /><NoticeField label="Reference" value={selected.reference_no || "Not provided"} /><NoticeField label="Dispute" value={selected.nature_of_dispute || "Not provided"} /></div>
                 <p className="my-4 text-sm leading-6">{renderText(settings.opening_text, settings)}</p><div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 p-4 text-sm"><NoticeField label="Date" value={formatDate(selected.hearing_date)} /><NoticeField label="Time" value={formatTime(selected.hearing_time)} /><div className="col-span-2"><NoticeField label="Venue" value={selected.venue} /></div></div>

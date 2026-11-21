@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, CirclePlus, LoaderCircle, Pencil, Power, Search, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, CirclePlus, LoaderCircle, Search, X } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
@@ -277,13 +277,13 @@ function Complaints() {
                     />
                   </label>
                 </div>
-                <table className="w-full min-w-[620px] border-collapse text-left">
+                <table className="w-full min-w-[620px] border-collapse text-center">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                       <th className="px-5 py-3.5">Category</th>
                       <th className="px-5 py-3.5">Description</th>
                       <th className="px-5 py-3.5">Availability</th>
-                      <th className="px-5 py-3.5 text-right">Actions</th>
+                      <th className="px-5 py-3.5">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -303,40 +303,29 @@ function Complaints() {
                             </span>
                           </td>
                           <td className="px-5 py-4">
-                            <div className="flex flex-wrap justify-end gap-2">
+                            <div className="flex flex-wrap justify-center gap-2">
                               <button
                                 type="button"
                                 onClick={() => beginEditingCategory(category)}
                                 disabled={updatingId !== null || deletingId !== null}
-                                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-[#2455D6] hover:bg-[#EEF4FF] hover:text-[#2455D6] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                <Pencil size={14} aria-hidden="true" />
                                 Edit
                               </button>
                               <button
                                 type="button"
                                 onClick={() => toggleCategory(category)}
                                 disabled={updatingId !== null || deletingId !== null}
-                                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-[#2455D6] hover:bg-[#EEF4FF] hover:text-[#2455D6] disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                {updatingId === category.id ? (
-                                  <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
-                                ) : (
-                                  <Power size={14} aria-hidden="true" />
-                                )}
                                 {updatingId === category.id ? "Saving..." : category.enabled ? "Disable" : "Enable"}
                               </button>
                               <button
                                 type="button"
                                 onClick={() => deleteCategory(category)}
                                 disabled={updatingId !== null || deletingId !== null}
-                                className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 transition hover:border-red-300 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                               >
-                                {deletingId === category.id ? (
-                                  <LoaderCircle size={14} className="animate-spin" aria-hidden="true" />
-                                ) : (
-                                  <Trash2 size={14} aria-hidden="true" />
-                                )}
                                 {deletingId === category.id ? "Deleting..." : "Delete"}
                               </button>
                             </div>

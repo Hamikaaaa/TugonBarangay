@@ -97,7 +97,7 @@ export default function SummonEntries() {
           ) : (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[1050px] text-left text-sm">
+                <table className="w-full min-w-[1050px] text-center text-sm">
                   <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-3">Reference</th><th className="px-4 py-3">Parties & attendance</th><th className="px-4 py-3">Meeting</th><th className="px-4 py-3">Venue</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Prepared by</th></tr></thead>
                   <tbody className="divide-y divide-slate-100">
                     {entries.map((entry) => <tr key={entry.id} className="hover:bg-slate-50/70">

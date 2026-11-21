@@ -7,7 +7,6 @@ import {
   ChevronRight,
   Clock3,
   Download,
-  Eye,
   FileText,
   ArrowLeft,
   ImagePlus,
@@ -679,7 +678,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
               <p className="mt-1 text-xs text-slate-500">{isBlotterView ? "Record a new blotter entry from the blotter page or adjust the current filters." : "Try changing your search or status filter."}</p>
             </div>
           ) : (
-            <table className="w-full min-w-[820px] border-collapse text-left">
+            <table className="w-full min-w-[820px] border-collapse text-center">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                   <th className="px-5 py-3.5">Case</th>
@@ -690,9 +689,9 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                   {!isBlotterView && <th className="px-5 py-3.5">Priority</th>}
                   <th className="px-5 py-3.5">Status</th>
                   {!isBlotterView ? (
-                    <th className="px-5 py-3.5 text-right">Review</th>
+                    <th className="px-5 py-3.5">Review</th>
                   ) : (
-                    <th className="px-5 py-3.5 text-right">View</th>
+                    <th className="px-5 py-3.5">View</th>
                   )}
                 </tr>
               </thead>
@@ -707,7 +706,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                             ? complaint._reference
                             : `CMP-${String(complaint.id).padStart(5, "0")}`}
                         </p>
-                        <p className="mt-1 max-w-56 truncate text-xs font-semibold text-slate-700">
+                        <p className="mx-auto mt-1 max-w-56 truncate text-xs font-semibold text-slate-700">
                           {complaint.subject}
                         </p>
                       </td>
@@ -738,19 +737,14 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                       )}
                       <td className="px-5 py-4"><StatusBadge status={complaint.status} /></td>
                       {!isBlotterView ? (
-                        <td className="px-5 py-4 text-right">
+                        <td className="px-5 py-4">
                           {isAdmin ? (
                             <button
                               type="button"
                               onClick={() => void reviewComplaint(complaint)}
                               aria-expanded={selected?.id === complaint.id}
-                              className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-[#2455D6] hover:bg-[#EEF4FF] hover:text-[#2455D6] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
+                              className="inline-flex h-9 min-w-24 items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200"
                             >
-                              {selected?.id === complaint.id ? (
-                                <X size={14} aria-hidden="true" />
-                              ) : (
-                                <Eye size={14} aria-hidden="true" />
-                              )}
                               {selected?.id === complaint.id ? "Close" : "Review"}
                             </button>
                           ) : (
@@ -766,23 +760,21 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                                   },
                                 });
                               }}
-                              className="rounded-lg border border-slate-200 px-3 py-2 text-[10px] font-bold text-slate-600 hover:border-[#2455D6] hover:text-[#2455D6]"
+                              className="inline-flex h-9 min-w-24 items-center justify-center rounded-lg border border-slate-200 px-3 text-xs font-bold text-slate-700 hover:bg-slate-50"
                             >
-                              <Eye size={14} className="mr-1.5 inline-block" aria-hidden="true" />
                               Review
                             </button>
                           )}
                         </td>
                       ) : (
-                        <td className="px-5 py-4 text-right">
+                        <td className="px-5 py-4">
                           <button
                             type="button"
                             onClick={() => selectComplaint(complaint)}
                             aria-label="View blotter details"
-                            className="inline-flex min-h-9 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-bold text-slate-600 transition hover:border-[#2455D6] hover:bg-[#EEF4FF] hover:text-[#2455D6] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20"
+                            className="inline-flex h-9 min-w-24 items-center justify-center rounded-xl border border-slate-200 px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200"
                           >
-                            <Eye size={14} className="mr-1.5 inline-block" aria-hidden="true" />
-                            View details
+                            View
                           </button>
                         </td>
                       )}
@@ -852,7 +844,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
               </div>
               <StatusBadge status={selected.status} />
             </div>
-            <dl className="mt-5 grid gap-4 sm:grid-cols-2">
+            <dl className="mt-5 grid gap-4 text-center sm:grid-cols-2">
               {selected._blotter ? (
                 <>
                   <Detail label="Reference" value={selected._reference} />
