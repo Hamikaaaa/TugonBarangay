@@ -562,8 +562,8 @@ function Residents() {
             <p className="border-b border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-600">
               Accounts with matching names are grouped together. Accounts without a recorded login appear first in each group so admins can review and disable extra accounts.
             </p>
-            <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-center text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500"><tr><th className="p-4">Account</th><th className="p-4">Resident ID</th><th className="p-4">Registered</th><th className="p-4">Verification</th><th className="p-4">Last login</th><th className="p-4">Activity</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
+            <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left text-sm">
+              <thead className="bg-slate-50 text-center text-xs uppercase text-slate-500"><tr><th className="p-4">Account</th><th className="p-4">Resident ID</th><th className="p-4">Registered</th><th className="p-4">Verification</th><th className="p-4">Last login</th><th className="p-4">Activity</th><th className="p-4">Status</th><th className="p-4">Action</th></tr></thead>
               <tbody className="divide-y divide-slate-100">{accounts.map((account, index) => {
                 const nameKey = accountNameKey(account);
                 const previousNameKey = index > 0 ? accountNameKey(accounts[index - 1]) : null;
