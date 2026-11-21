@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Eye, Search, X } from "lucide-react";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
@@ -22,6 +22,7 @@ function DocumentRequestHistory() {
   const [auditEvents, setAuditEvents] = useState([]);
   const [auditPagination, setAuditPagination] = useState({ current_page: 1, last_page: 1 });
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1 });
+  const currentPageRef = useRef(1);
   const [status, setStatus] = useState("under_review");
   const [search, setSearch] = useState("");
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -38,9 +39,10 @@ function DocumentRequestHistory() {
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.message || "Unable to load document request history.");
-    setRequests(payload.data || []);
+    setRequests((payload.data || []).map(normalizeDocumentRequest));
+    currentPageRef.current = payload.current_page || 1;
     setPagination({
-      current_page: payload.current_page || 1,
+      current_page: currentPageRef.current,
       last_page: payload.last_page || 1,
     });
   }, [search, status, token]);
@@ -58,7 +60,7 @@ function DocumentRequestHistory() {
     });
   }, [token]);
 
-  const refreshDashboard = useCallback(async (page = pagination.current_page, silent = false) => {
+  const refreshDashboard = useCallback(async (page = currentPageRef.current, silent = false) => {
     if (!token) return;
     if (!silent) { setLoading(true); setError(""); }
     try {
@@ -68,7 +70,7 @@ function DocumentRequestHistory() {
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [loadAuditEvents, loadRequests, pagination.current_page, token]);
+  }, [loadAuditEvents, loadRequests, token]);
 
   useEffect(() => {
     // Load current dashboard data when search and status filters change.
@@ -91,7 +93,7 @@ function DocumentRequestHistory() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to load request details.");
-      let request = payload.data;
+      let request = normalizeDocumentRequest(payload.data);
       if (request.status === "pending") {
         const statusResponse = await fetch(`${API_URL}/admin/document-requests/${requestId}/status`, {
           method: "PATCH",
@@ -100,7 +102,7 @@ function DocumentRequestHistory() {
         });
         const statusPayload = await statusResponse.json();
         if (!statusResponse.ok) throw new Error(statusPayload.message || "Unable to start reviewing this request.");
-        request = { ...request, ...statusPayload.data, events: payload.data.events };
+        request = { ...request, ...normalizeDocumentRequest(statusPayload.data), events: payload.data.events };
         setRequests((current) => current.map((item) => item.id === request.id ? { ...item, ...request } : item));
       }
       setSelectedRequest(request);
@@ -303,7 +305,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
       if (!response.ok) throw new Error(payload.message || "Unable to update this document request.");
       const updatedRequest = {
         ...currentRequest,
-        ...payload.data,
+        ...normalizeDocumentRequest(payload.data),
         events: payload.data.events ?? currentRequest.events,
       };
       setCurrentRequest(updatedRequest);
@@ -346,11 +348,11 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to save the permit inspection.");
-      const updatedRequest = {
+      const updatedRequest = normalizeDocumentRequest({
         ...currentRequest,
         ...payload.data,
         events: payload.data.events ?? currentRequest.events,
-      };
+      });
       setCurrentRequest(updatedRequest);
       onUpdated(updatedRequest);
       setInspectionFile(null);
@@ -510,6 +512,12 @@ function Info({ label, value }) {
 
 function authHeaders(token) {
   return { Accept: "application/json", Authorization: `Bearer ${token}` };
+}
+
+function normalizeDocumentRequest(request) {
+  return request?.status === "processing"
+    ? { ...request, status: "under_review" }
+    : request;
 }
 
 function statusClass(status) {

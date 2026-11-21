@@ -99,11 +99,11 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         ]);
     }
 
-    public function test_under_review_filter_includes_pending_and_under_review_requests(): void
+    public function test_under_review_filter_includes_pending_review_and_legacy_processing_requests(): void
     {
         DocumentRequest::factory()->create([
             'resident_id' => $this->resident->id,
-            'status' => 'under_review',
+            'status' => 'processing',
         ]);
         DocumentRequest::factory()->create([
             'resident_id' => $this->resident->id,
@@ -117,6 +117,21 @@ class StaffDocumentRequestWorkflowTest extends TestCase
 
         $this->getJson('/api/staff/document-requests?status=pending')
             ->assertUnprocessable();
+    }
+
+    public function test_legacy_processing_request_can_move_to_ready_for_release(): void
+    {
+        Sanctum::actingAs($this->documentOfficer);
+        $this->request->update([
+            'document_type' => 'Barangay Residency',
+            'status' => 'processing',
+            'document_content' => ['resident_name' => 'Resident User'],
+            'document_generated_at' => now(),
+        ]);
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'ready_for_release',
+        ])->assertOk()->assertJsonPath('data.status', 'ready_for_release');
     }
 
     public function test_job_seeker_request_uses_the_same_identity_verification_as_barangay_certificate(): void
