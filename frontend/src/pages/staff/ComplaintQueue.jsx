@@ -678,7 +678,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
               <p className="mt-1 text-xs text-slate-500">{isBlotterView ? "Record a new blotter entry from the blotter page or adjust the current filters." : "Try changing your search or status filter."}</p>
             </div>
           ) : (
-            <table className="w-full min-w-[820px] border-collapse text-center">
+            <table className="w-full min-w-[820px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                   <th className="px-5 py-3.5">Case</th>
@@ -706,7 +706,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                             ? complaint._reference
                             : `CMP-${String(complaint.id).padStart(5, "0")}`}
                         </p>
-                        <p className="mx-auto mt-1 max-w-56 truncate text-xs font-semibold text-slate-700">
+                        <p className="mt-1 max-w-56 truncate text-xs font-semibold text-slate-700">
                           {complaint.subject}
                         </p>
                       </td>
