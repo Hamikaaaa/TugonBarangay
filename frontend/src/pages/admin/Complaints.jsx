@@ -277,7 +277,7 @@ function Complaints() {
                     />
                   </label>
                 </div>
-                <table className="w-full min-w-[620px] border-collapse text-right">
+                <table className="w-full min-w-[620px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                       <th className="px-5 py-3.5">Category</th>
@@ -303,7 +303,7 @@ function Complaints() {
                             </span>
                           </td>
                           <td className="px-5 py-4">
-                            <div className="flex flex-wrap justify-end gap-2">
+                            <div className="flex flex-wrap justify-start gap-2">
                               <button
                                 type="button"
                                 onClick={() => beginEditingCategory(category)}

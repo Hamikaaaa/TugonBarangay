@@ -678,7 +678,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
               <p className="mt-1 text-xs text-slate-500">{isBlotterView ? "Record a new blotter entry from the blotter page or adjust the current filters." : "Try changing your search or status filter."}</p>
             </div>
           ) : (
-            <table className="w-full min-w-[820px] border-collapse text-right">
+            <table className="w-full min-w-[820px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                   <th className="px-5 py-3.5">Case</th>
