@@ -146,8 +146,8 @@ export default function SummonHistory() {
           <FileText size={19} className="text-[#2455D6]" />
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[850px] text-left text-sm">
-            <thead className="bg-slate-50 text-center text-[10px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Complainant</th><th className="px-5 py-3">Attended</th><th className="px-5 py-3">Respondent</th><th className="px-5 py-3">Attended</th><th className="px-5 py-3">Hearing</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead>
+          <table className="w-full min-w-[850px] text-center text-sm">
+            <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Reference</th><th className="px-5 py-3">Complainant</th><th className="px-5 py-3">Attended</th><th className="px-5 py-3">Respondent</th><th className="px-5 py-3">Attended</th><th className="px-5 py-3">Hearing</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Actions</th></tr></thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? <tr><td colSpan="8" className="p-10 text-center text-sm text-slate-500">Loading summon history…</td></tr> : entries.length === 0 ? <tr><td colSpan="8" className="p-12 text-center text-sm text-slate-500">No saved summons yet.</td></tr> : entries.map((entry) => (
                 <tr key={entry.id} className="hover:bg-slate-50/70">

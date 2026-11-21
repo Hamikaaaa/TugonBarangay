@@ -277,9 +277,9 @@ function Complaints() {
                     />
                   </label>
                 </div>
-                <table className="w-full min-w-[620px] border-collapse text-left">
+                <table className="w-full min-w-[620px] border-collapse text-center">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-center text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                    <tr className="border-b border-slate-200 bg-slate-50 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                       <th className="px-5 py-3.5">Category</th>
                       <th className="px-5 py-3.5">Description</th>
                       <th className="px-5 py-3.5">Availability</th>
