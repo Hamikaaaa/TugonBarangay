@@ -304,7 +304,7 @@ function BlotterManagement() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] border-collapse text-left">
+              <table className="w-full min-w-[1000px] border-collapse text-right">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
                     <th className="px-5 py-3.5">Reference</th>

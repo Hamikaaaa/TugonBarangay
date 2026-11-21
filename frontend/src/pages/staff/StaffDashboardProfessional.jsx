@@ -611,7 +611,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                   <p className="mt-1 text-xs text-slate-500">Try changing your search, status filter, or document type.</p>
                 </div>
               ) : (
-                <table className="w-full min-w-[980px] border-collapse text-left">
+                <table className="w-full min-w-[980px] border-collapse text-right">
                   <thead>
                     <tr className="border-b border-[#E6ECF5] bg-[#F6F8FC] text-[10px] font-bold uppercase tracking-[0.12em] text-[#55708F]">
                       <th className="px-5 py-3.5">Request ID</th>
@@ -630,9 +630,9 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                         <tr key={request.id} className={`group transition hover:bg-[#2455D6]/[0.03] ${isSelected ? "bg-[#2455D6]/[0.05]" : ""}`}>
                           <td className="px-5 py-4 text-xs font-bold text-[#2455D6]">{formatDocumentRequestId(request.id)}</td>
                           <td className="px-5 py-4">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center justify-end gap-3">
                               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600">{(request.resident?.name || "R").charAt(0)}</span>
-                              <div>
+                              <div className="text-right">
                                 <p className="text-xs font-bold text-slate-800">{request.resident?.name || "Unknown resident"}</p>
                                 <p className="mt-0.5 text-[10px] text-slate-400">{request.resident?.email || "No email"}</p>
                               </div>
@@ -646,7 +646,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                             </span>
                           </td>
                           <td className="px-5 py-4">
-                            <div className="flex items-center justify-center gap-1.5">
+                            <div className="flex items-center justify-end gap-1.5">
                               <button type="button" onClick={() => viewRequest(request)} className="inline-flex h-9 min-w-24 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200" aria-label={`View details for request ${formatDocumentRequestId(request.id)}`}>
                                 View
                               </button>
@@ -1392,7 +1392,7 @@ function IdentityComparison({ review }) {
       )}
       {review?.fields?.length > 0 && (
         <div className="mt-4 overflow-x-auto rounded-lg border border-slate-200 bg-white">
-          <table className="w-full min-w-[620px] text-left text-xs">
+          <table className="w-full min-w-[620px] text-right text-xs">
             <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-3 py-2.5">Field</th>
