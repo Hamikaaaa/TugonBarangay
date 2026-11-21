@@ -166,7 +166,7 @@ function DocumentRequestHistory() {
               {loading ? <p className="p-8 text-center text-sm text-slate-500">Loading request history...</p> : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="w-full min-w-212.5 text-right text-sm">
+                    <table className="w-full min-w-212.5 text-left text-sm">
                       <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                         <tr>
                           <th className="px-4 py-3">Request</th>
@@ -221,7 +221,7 @@ function DocumentRequestHistory() {
             </div>
           ) : (
             <div className="overflow-x-auto rounded-b-2xl border border-t-0 border-slate-200 bg-white">
-              <table className="w-full min-w-195 text-right text-sm">
+              <table className="w-full min-w-195 text-left text-sm">
                 <thead className="bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="px-4 py-3">When</th>
