@@ -10,7 +10,6 @@ import {
   LoaderCircle,
   Plus,
   Search,
-  ShieldAlert,
   X,
 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -261,7 +260,7 @@ function BlotterManagement() {
             </button>
           </div>
 
-          <div className="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-4 sm:grid-cols-2">
+          <div className="grid gap-3 border-b border-slate-200 bg-slate-50/70 p-4">
             <label className="relative block">
               <Search
                 size={16}
@@ -275,49 +274,42 @@ function BlotterManagement() {
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs font-medium text-slate-700 outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-blue-100"
               />
             </label>
-            <select
-              value={statusFilter}
-              onChange={(event) => {
-                setLoading(true);
-                setStatusFilter(event.target.value);
-                setPage(1);
-              }}
-              aria-label="Filter by blotter status"
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none focus:border-[#2455D6]"
-            >
-              <option value="all">All statuses</option>
-              <option value="open">Open</option>
-              <option value="resolved">Resolved</option>
-              <option value="referred">Referred</option>
-            </select>
           </div>
 
           {loading ? (
             <p className="p-12 text-center text-sm text-slate-500">Loading blotter entries...</p>
-          ) : entries.length === 0 ? (
-            <div className="p-14 text-center">
-              <ShieldAlert className="mx-auto text-slate-400" size={24} />
-              <p className="mt-4 text-sm font-bold text-slate-700">No blotter entries found</p>
-              <p className="mt-1 text-xs text-slate-500">
-                Record a new entry or adjust the current filters.
-              </p>
-            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] border-collapse text-left">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-500">
+                  <tr className="border-b border-slate-200 bg-slate-50/70 text-[10px] font-bold tracking-[0.12em] text-slate-500">
                     <th className="px-5 py-3.5">Reference</th>
                     <th className="px-5 py-3.5">Resident</th>
                     <th className="px-5 py-3.5">Incident</th>
                     <th className="px-5 py-3.5">Date</th>
                     <th className="px-5 py-3.5">Time</th>
                     <th className="px-5 py-3.5">Location</th>
-                    <th className="px-5 py-3.5">Status</th>
+                    <th className="min-w-36 px-3 py-2">
+                      <select
+                        value={statusFilter}
+                        onChange={(event) => {
+                          setStatusFilter(event.target.value);
+                          setPage(1);
+                        }}
+                        aria-label="Filter blotter entries by status"
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold tracking-normal text-slate-600 outline-none focus:border-[#2455D6]"
+                      >
+                        <option value="all">All statuses</option>
+                        <option value="open">Open</option>
+                        <option value="resolved">Resolved</option>
+                        <option value="referred">Referred</option>
+                      </select>
+                    </th>
                     <th className="px-5 py-3.5">Details</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
+                  {!entries.length && <tr><td colSpan="8" className="px-5 py-10 text-center text-sm text-slate-500">No blotter entries match these filters.</td></tr>}
                   {entries.map((entry) => {
                     const meta = STATUS_META[entry.status] || STATUS_META.open;
                     return (
