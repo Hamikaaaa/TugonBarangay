@@ -109,7 +109,7 @@ class ResidentDocumentRequestTest extends TestCase
         DocumentRequest::factory()->create([
             'resident_id' => $resident->id,
             'document_type' => 'Request Limit Test',
-            'status' => 'processing',
+            'status' => 'under_review',
             'document_content' => ['full_name' => 'Jane Doe'],
             'document_generated_at' => now(),
         ]);

@@ -62,7 +62,6 @@ function AdminDocumentRequestsDashboard() {
     { label: "All requests", value: overview?.total, detail: "Every document type", icon: FileText, tone: "blue" },
     { label: "Pending", value: overview?.pending, detail: "Waiting for initial review", icon: Clock3, tone: "amber" },
     { label: "Under review", value: overview?.under_review, detail: "Being reviewed by staff", icon: Activity, tone: "violet" },
-    { label: "Processing", value: overview?.processing, detail: "Document being prepared", icon: Activity, tone: "violet" },
     { label: "For correction", value: overview?.for_correction, detail: "Waiting for resident update", icon: AlertTriangle, tone: "violet" },
     { label: "Ready for release", value: overview?.ready_for_release, detail: "Awaiting resident pickup", icon: FileCheck2, tone: "green" },
     { label: "Completed", value: overview?.completed, detail: "Released to the resident", icon: CheckCircle2, tone: "green" },

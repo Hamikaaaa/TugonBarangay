@@ -38,7 +38,7 @@ class StaffController extends Controller
             $status = $validated['status'];
             if ($status !== 'all') {
                 if ($status === 'under_review') {
-                    $query->whereIn('status', ['pending', 'under_review', 'processing']);
+                    $query->whereIn('status', ['pending', 'under_review']);
                 } else {
                     $query->where('status', $status);
                 }
@@ -103,7 +103,7 @@ class StaffController extends Controller
 
     public function documentRequestDashboard()
     {
-        $statuses = ['pending', 'under_review', 'processing', 'for_correction', 'ready_for_release', 'completed', 'rejected'];
+        $statuses = ['pending', 'under_review', 'for_correction', 'ready_for_release', 'completed', 'rejected'];
         $counts = DocumentRequest::query()
             ->selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
@@ -162,7 +162,7 @@ class StaffController extends Controller
     public function saveConstructionInspection(Request $request, DocumentRequest $documentRequest)
     {
         abort_unless(in_array($documentRequest->document_type, ['Construction Permit', 'Fencing Permit'], true), 404);
-        abort_unless($documentRequest->status === 'processing', 409, 'Permit inspection can only be recorded while the request is processing.');
+        abort_unless($documentRequest->status === 'under_review', 409, 'Permit inspection can only be recorded while the request is under review.');
 
         $details = $documentRequest->details ?? [];
         $existingReport = $details['inspection_report'] ?? [];
@@ -267,9 +267,9 @@ class StaffController extends Controller
 
     public function generateDocumentPreview(Request $request, DocumentRequest $documentRequest)
     {
-        if (!in_array($documentRequest->status, ['processing', 'ready_for_release'], true)) {
+        if (!in_array($documentRequest->status, ['under_review', 'ready_for_release'], true)) {
             return response()->json([
-                'message' => 'A document preview can only be generated while the request is processing or ready for release.',
+                'message' => 'A document preview can only be generated while the request is under review or ready for release.',
             ], 409);
         }
         if (in_array($documentRequest->document_type, ['Construction Permit', 'Fencing Permit'], true)
@@ -402,16 +402,25 @@ class StaffController extends Controller
     public function updateDocumentRequestStatus(Request $request, DocumentRequest $documentRequest)
     {
         $validated = $request->validate([
-            'status' => ['required', 'string', 'in:pending,under_review,processing,for_correction,ready_for_release,completed,rejected'],
+            'status' => ['required', 'string', 'in:pending,under_review,for_correction,ready_for_release,completed,rejected'],
             'staff_remarks' => ['sometimes', 'nullable', 'string', 'max:2000'],
             'rejection_reason' => ['sometimes', 'nullable', 'string', 'max:2000'],
         ]);
         $status = $validated['status'];
 
+        if ($status === 'under_review' && $documentRequest->status === 'under_review') {
+            $currentRequest = $documentRequest->fresh()->load(['resident', 'type', 'assignedStaff']);
+            $currentRequest->setAttribute('identity_review', $this->documentRequestIdentityReview($currentRequest));
+
+            return response()->json([
+                'message' => 'Document request is already under review.',
+                'data' => $currentRequest,
+            ]);
+        }
+
         $validTransitions = [
             'pending' => ['under_review', 'for_correction', 'rejected'],
-            'under_review' => ['processing', 'for_correction', 'rejected'],
-            'processing' => ['ready_for_release', 'for_correction', 'rejected'],
+            'under_review' => ['ready_for_release', 'for_correction', 'rejected'],
             'ready_for_release' => ['completed'],
             'completed' => [],
             'rejected' => [],
@@ -423,22 +432,22 @@ class StaffController extends Controller
             ], 409);
         }
 
-        if ($status === 'processing' && $documentRequest->document_type === 'Barangay Certification'
+        if ($status === 'ready_for_release' && $documentRequest->document_type === 'Barangay Certification'
             && Complaint::query()
                 ->where('resident_id', $documentRequest->resident_id)
                 ->whereIn('status', ['pending', 'in_progress'])
                 ->exists()) {
             return response()->json([
-                'message' => 'This Barangay Clearance cannot be approved for processing while the resident has a pending or in-progress complaint.',
+                'message' => 'This Barangay Clearance cannot be released while the resident has a pending or in-progress complaint.',
             ], 409);
         }
-        if ($status === 'processing' && $documentRequest->document_type === 'Barangay Certification'
+        if ($status === 'ready_for_release' && $documentRequest->document_type === 'Barangay Certification'
             && $this->hasOpenBlotterCase($documentRequest)) {
             return response()->json([
-                'message' => 'This Barangay Clearance cannot be approved for processing while the resident has an open or referred blotter case.',
+                'message' => 'This Barangay Clearance cannot be released while the resident has an open or referred blotter case.',
             ], 409);
         }
-        if ($status === 'processing'
+        if ($status === 'ready_for_release'
             && $documentRequest->document_type === 'Certificate of Good Moral Character') {
             $identityReview = $this->documentRequestIdentityReview($documentRequest);
             if ($identityReview['has_blocking_case'] || $identityReview['has_involved_person_match']) {
@@ -533,7 +542,7 @@ class StaffController extends Controller
             'status_changed_at' => now(),
         ];
         if ($request->user() instanceof Staff
-            && in_array($status, ['under_review', 'processing'], true)
+            && $status === 'under_review'
             && !$documentRequest->assigned_staff_id) {
             $update['assigned_staff_id'] = $request->user()->id;
         }
@@ -582,7 +591,6 @@ class StaffController extends Controller
 
         $messages = [
             'under_review' => ['Document request under review', 'Your document request is being reviewed by barangay staff.'],
-            'processing' => ['Document request approved', 'Your requirements were verified and your document request is now being processed.'],
             'for_correction' => ['Correction needed for your document request', $validated['staff_remarks'] ?? null],
             'ready_for_release' => ['Document ready for release', 'Your document is ready. Please claim it at the barangay office.'],
             'completed' => ['Document request completed', 'Your document request was marked complete after release.'],
@@ -638,7 +646,7 @@ class StaffController extends Controller
             422,
             'This document type does not use an assessed fee.',
         );
-        abort_unless(in_array($documentRequest->status, ['pending', 'under_review', 'processing'], true), 409, 'The fee can only be assessed before release.');
+        abort_unless(in_array($documentRequest->status, ['pending', 'under_review'], true), 409, 'The fee can only be assessed before release.');
 
         $previousFee = (float) $documentRequest->fee;
         $documentRequest->fee = $validated['fee'];

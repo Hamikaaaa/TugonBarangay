@@ -66,7 +66,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         $this->getJson('/api/staff/document-requests')->assertForbidden();
     }
 
-    public function test_document_officer_can_view_and_process_document_requests(): void
+    public function test_document_officer_can_view_and_review_document_requests(): void
     {
         Sanctum::actingAs($this->documentOfficer);
 
@@ -84,17 +84,9 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             ->assertOk()
             ->assertJsonPath('data.status', 'under_review');
 
-        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
-            'status' => 'processing',
-            'staff_remarks' => 'Requirements are complete.',
-        ])
-            ->assertOk()
-            ->assertJsonPath('data.status', 'processing');
-
         $this->assertDatabaseHas('document_requests', [
             'id' => $this->request->id,
-            'status' => 'processing',
-            'staff_remarks' => 'Requirements are complete.',
+            'status' => 'under_review',
             'assigned_staff_id' => $this->documentOfficer->id,
         ]);
         $this->assertDatabaseHas('document_request_events', [
@@ -102,12 +94,12 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'actor_id' => $this->documentOfficer->id,
             'actor_role' => 'staff',
             'action' => 'status_changed',
-            'from_status' => 'under_review',
-            'to_status' => 'processing',
+            'from_status' => 'pending',
+            'to_status' => 'under_review',
         ]);
     }
 
-    public function test_under_review_filter_includes_all_preparation_stages_without_a_pending_filter(): void
+    public function test_under_review_filter_includes_pending_and_under_review_requests(): void
     {
         DocumentRequest::factory()->create([
             'resident_id' => $this->resident->id,
@@ -115,7 +107,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         ]);
         DocumentRequest::factory()->create([
             'resident_id' => $this->resident->id,
-            'status' => 'processing',
+            'status' => 'under_review',
         ]);
         Sanctum::actingAs($this->documentOfficer);
 
@@ -317,7 +309,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
     {
         Sanctum::actingAs($this->documentOfficer);
 
-        $this->request->update(['status' => 'processing']);
+        $this->request->update(['status' => 'under_review']);
 
         $this->postJson('/api/staff/document-requests/'.$this->request->id.'/generate', [
             'document_content' => [
@@ -333,7 +325,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
 
         $this->assertDatabaseHas('document_requests', [
             'id' => $this->request->id,
-            'status' => 'processing',
+            'status' => 'under_review',
         ]);
         $this->assertDatabaseHas('notifications', [
             'resident_id' => $this->resident->id,
@@ -347,12 +339,17 @@ class StaffDocumentRequestWorkflowTest extends TestCase
             'staff_remarks' => 'Document reviewed, signed, and sealed.',
         ])->assertOk()
             ->assertJsonPath('data.status', 'ready_for_release');
+
+        $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
+            'status' => 'completed',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'completed');
     }
 
     public function test_clearance_preview_defaults_to_pending_and_cannot_be_released_without_a_confirmed_record_check(): void
     {
         Sanctum::actingAs($this->documentOfficer);
-        $this->request->update(['status' => 'processing']);
+        $this->request->update(['status' => 'under_review']);
 
         $this->postJson('/api/staff/document-requests/'.$this->request->id.'/generate', [
             'document_content' => ['date_of_birth' => '1990-01-15'],
@@ -368,7 +365,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
     public function test_pending_or_in_progress_complaints_keep_clearance_record_check_pending(): void
     {
         Sanctum::actingAs($this->documentOfficer);
-        $this->request->update(['status' => 'processing']);
+        $this->request->update(['status' => 'under_review']);
         Complaint::create([
             'resident_id' => $this->resident->id,
             'category' => 'Road and Public',
@@ -397,7 +394,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
     public function test_resolved_complaint_is_not_automatically_treated_as_an_adverse_finding(): void
     {
         Sanctum::actingAs($this->documentOfficer);
-        $this->request->update(['status' => 'processing']);
+        $this->request->update(['status' => 'under_review']);
         Complaint::create([
             'resident_id' => $this->resident->id,
             'category' => 'Road and Public',
@@ -431,7 +428,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
     public function test_clearance_referred_for_authorized_review_cannot_be_released(): void
     {
         Sanctum::actingAs($this->documentOfficer);
-        $this->request->update(['status' => 'processing']);
+        $this->request->update(['status' => 'under_review']);
 
         $this->postJson('/api/staff/document-requests/'.$this->request->id.'/generate', [
             'document_content' => [
@@ -452,7 +449,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         $residencyRequest = DocumentRequest::factory()->create([
             'resident_id' => $this->resident->id,
             'document_type' => 'Barangay Residency',
-            'status' => 'processing',
+            'status' => 'under_review',
             'details' => [
                 'form_fields' => [
                     'full_name' => 'Resident User',
@@ -493,7 +490,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         Sanctum::actingAs($this->documentOfficer);
 
         $this->request->update([
-            'status' => 'processing',
+            'status' => 'under_review',
             'document_content' => ['title' => 'Old preview'],
             'document_generated_at' => now(),
         ]);
@@ -528,10 +525,10 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         ]);
     }
 
-    public function test_document_officer_can_reject_a_request_during_processing(): void
+    public function test_document_officer_can_reject_a_request_during_review(): void
     {
         Sanctum::actingAs($this->documentOfficer);
-        $this->request->update(['status' => 'processing']);
+        $this->request->update(['status' => 'under_review']);
 
         $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
             'status' => 'rejected',
@@ -543,7 +540,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
         $this->assertDatabaseHas('document_request_events', [
             'document_request_id' => $this->request->id,
             'actor_id' => $this->documentOfficer->id,
-            'from_status' => 'processing',
+            'from_status' => 'under_review',
             'to_status' => 'rejected',
         ]);
     }
@@ -642,7 +639,7 @@ class StaffDocumentRequestWorkflowTest extends TestCase
     public function test_document_request_cannot_be_marked_ready_until_a_preview_has_been_generated(): void
     {
         Sanctum::actingAs($this->documentOfficer);
-        $this->request->update(['status' => 'processing']);
+        $this->request->update(['status' => 'under_review']);
 
         $this->patchJson('/api/staff/document-requests/'.$this->request->id.'/status', [
             'status' => 'ready_for_release',

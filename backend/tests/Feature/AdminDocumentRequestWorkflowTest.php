@@ -50,11 +50,11 @@ class AdminDocumentRequestWorkflowTest extends TestCase
             ->assertJsonPath('data.id', $this->request->id);
         $this->getJson('/api/staff/document-requests')->assertForbidden();
         $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
-            'status' => 'processing',
+            'status' => 'ready_for_release',
         ])->assertStatus(409);
     }
 
-    public function test_admin_can_process_requests_without_being_assigned_as_staff(): void
+    public function test_admin_can_prepare_requests_without_being_assigned_as_staff(): void
     {
         $this->request->update(['document_type' => 'Barangay Residency']);
         $admin = Admin::create([
@@ -68,14 +68,19 @@ class AdminDocumentRequestWorkflowTest extends TestCase
             'status' => 'under_review',
         ])->assertOk()->assertJsonPath('data.status', 'under_review');
 
-        $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
-            'status' => 'processing',
-        ])->assertOk()->assertJsonPath('data.status', 'processing');
         $this->assertNull($this->request->fresh()->assigned_staff_id);
 
         $this->postJson('/api/admin/document-requests/'.$this->request->id.'/generate', [
             'document_content' => ['resident_name' => 'Test Resident'],
         ])->assertOk()->assertJsonPath('data.document_content.resident_name', 'Test Resident');
+
+        $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
+            'status' => 'ready_for_release',
+        ])->assertOk()->assertJsonPath('data.status', 'ready_for_release');
+
+        $this->patchJson('/api/admin/document-requests/'.$this->request->id.'/status', [
+            'status' => 'completed',
+        ])->assertOk()->assertJsonPath('data.status', 'completed');
 
         $this->assertDatabaseHas('document_request_events', [
             'document_request_id' => $this->request->id,
@@ -89,7 +94,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
     {
         $this->request->update([
             'document_type' => 'Barangay Residency',
-            'status' => 'processing',
+            'status' => 'under_review',
             'document_content' => null,
             'document_generated_at' => null,
         ]);
@@ -110,7 +115,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
         Storage::fake('local');
         $this->request->update([
             'document_type' => 'Fencing Permit',
-            'status' => 'processing',
+            'status' => 'under_review',
             'fee' => 530,
             'details' => [
                 'fee_mode' => 'assessed',
@@ -163,6 +168,16 @@ class AdminDocumentRequestWorkflowTest extends TestCase
             ->assertOk()
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.status', 'completed');
+
+        DocumentRequest::factory()->create([
+            'resident_id' => $this->resident->id,
+            'document_type' => 'Barangay Residency',
+            'status' => 'rejected',
+        ]);
+        $this->getJson('/api/admin/document-requests?status=rejected')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.status', 'rejected');
     }
 
     public function test_admin_under_review_filter_groups_request_preparation_stages(): void
@@ -173,7 +188,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
         ]);
         DocumentRequest::factory()->create([
             'resident_id' => $this->resident->id,
-            'status' => 'processing',
+            'status' => 'under_review',
         ]);
         DocumentRequest::factory()->create([
             'resident_id' => $this->resident->id,
@@ -195,7 +210,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
             ->assertJsonCount(3, 'data');
 
         $this->assertEqualsCanonicalizing(
-            ['pending', 'under_review', 'processing'],
+            ['pending', 'under_review', 'under_review'],
             collect($response->json('data'))->pluck('status')->all(),
         );
     }
@@ -207,7 +222,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
             'designation' => Staff::DOCUMENT_REQUEST_OFFICER,
         ]);
         $this->request->update([
-            'status' => 'processing',
+            'status' => 'under_review',
             'assigned_staff_id' => $officer->id,
             'status_changed_at' => now()->subDays(4),
         ]);
@@ -216,7 +231,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
             $officer,
             'status_changed',
             'pending',
-            'processing',
+            'under_review',
         );
 
         $admin = Admin::create([
@@ -229,7 +244,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
         $this->getJson('/api/admin/document-requests/overview')
             ->assertOk()
             ->assertJsonPath('data.total', 1)
-            ->assertJsonPath('data.processing', 1)
+            ->assertJsonPath('data.under_review', 1)
             ->assertJsonPath('data.delayed', 1)
             ->assertJsonPath('data.staff_workload.0.name', 'Assigned Officer')
             ->assertJsonPath('data.staff_workload.0.active_requests', 1);
@@ -242,7 +257,7 @@ class AdminDocumentRequestWorkflowTest extends TestCase
         $this->getJson('/api/admin/document-requests/'.$this->request->id)
             ->assertOk()
             ->assertJsonPath('data.assigned_staff.name', 'Assigned Officer')
-            ->assertJsonPath('data.events.0.to_status', 'processing');
+            ->assertJsonPath('data.events.0.to_status', 'under_review');
     }
 
     public function test_admin_cannot_access_staff_daily_dashboard(): void
@@ -255,6 +270,19 @@ class AdminDocumentRequestWorkflowTest extends TestCase
         Sanctum::actingAs($admin);
 
         $this->getJson('/api/staff/document-request-dashboard')->assertForbidden();
+    }
+
+    public function test_legacy_processing_requests_are_normalized_to_under_review(): void
+    {
+        $this->request->update(['status' => 'processing']);
+
+        $migration = require database_path('migrations/2026_11_21_000001_normalize_document_request_processing_status.php');
+        $migration->up();
+
+        $this->assertDatabaseHas('document_requests', [
+            'id' => $this->request->id,
+            'status' => 'under_review',
+        ]);
     }
 
     public function test_document_request_officer_cannot_access_admin_request_oversight(): void

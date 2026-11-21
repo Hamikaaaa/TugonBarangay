@@ -297,7 +297,7 @@ class DocumentTypeConfigurationTest extends TestCase
         $request = DocumentRequest::factory()->create([
             'resident_id' => $resident->id,
             'document_type' => 'Business Permit',
-            'status' => 'processing',
+            'status' => 'under_review',
             'fee' => 0,
             'details' => ['fee_mode' => 'assessed', 'fee_assessed' => false],
         ]);

@@ -13,6 +13,7 @@ const STATUSES = [
   ["under_review", "Under Review"],
   ["ready_for_release", "Ready for Release"],
   ["completed", "Completed"],
+  ["rejected", "Rejected"],
 ];
 
 function DocumentRequestHistory() {
@@ -90,7 +91,19 @@ function DocumentRequestHistory() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.message || "Unable to load request details.");
-      setSelectedRequest(payload.data);
+      let request = payload.data;
+      if (request.status === "pending") {
+        const statusResponse = await fetch(`${API_URL}/admin/document-requests/${requestId}/status`, {
+          method: "PATCH",
+          headers: { ...authHeaders(token), "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "under_review" }),
+        });
+        const statusPayload = await statusResponse.json();
+        if (!statusResponse.ok) throw new Error(statusPayload.message || "Unable to start reviewing this request.");
+        request = { ...request, ...statusPayload.data, events: payload.data.events };
+        setRequests((current) => current.map((item) => item.id === request.id ? { ...item, ...request } : item));
+      }
+      setSelectedRequest(request);
     } catch (loadError) {
       setError(loadError.message);
     }
@@ -101,9 +114,9 @@ function DocumentRequestHistory() {
       <section className="space-y-6 pt-6">
         <AdminPageHeader
           actionsOnly
-          eyebrow="Read-only oversight"
+          eyebrow="Request management"
           title="Document request history"
-          description="Search past requests, inspect submitted information and processing history, and view generated document copies."
+          description="Search requests, inspect submitted information and review document history."
         />
 
         <DocumentRequestTabs />
@@ -275,7 +288,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
   const fields = currentRequest.details?.form_fields || {};
   const hasGeneratedDocument = currentRequest.document_content && Object.keys(currentRequest.document_content).length > 0;
   const canPreviewDocument = Boolean(currentRequest.document_type);
-  const canEditDocument = ["processing", "ready_for_release"].includes(currentRequest.status);
+  const canEditDocument = ["under_review", "ready_for_release"].includes(currentRequest.status);
 
   const updateRequest = async (endpoint, method, body) => {
     setWorking(true);
@@ -360,7 +373,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
         <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
           <div className="flex items-start justify-between border-b border-slate-200 p-5">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-[#2455D6]">Document request processing</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-[#2455D6]">Document request review</p>
               <h3 className="mt-1 text-xl font-bold text-[#172B4D]">{formatDocumentRequestId(currentRequest.id)} · {currentRequest.document_type_label || currentRequest.document_type}</h3>
               <p className="mt-1 text-sm text-slate-500">{currentRequest.resident?.name} · {labelStatus(currentRequest.status)}</p>
             </div>
@@ -372,13 +385,12 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
               <p className="mt-1 text-xs leading-5 text-slate-600">Admins can review, prepare, release, and complete document requests. Existing compliance checks remain in effect.</p>
               {actionError && <p role="alert" className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{actionError}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
-                {currentRequest.status === "pending" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("under_review"))} className="rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Begin processing</button>}
-                {currentRequest.status === "under_review" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("processing"))} className="rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Begin processing</button>}
+                {currentRequest.status === "under_review" && <span className="rounded-lg bg-[#EEF4FF] px-3 py-2 text-xs font-bold text-[#2455D6]">Verify details and prepare document</span>}
                 {canEditDocument && <button type="button" onClick={() => setDocumentOpen(true)} className="rounded-lg border border-[#2455D6] bg-white px-3 py-2 text-xs font-bold text-[#2455D6]">{hasGeneratedDocument ? "Review / edit document" : "Generate document"}</button>}
-                {currentRequest.status === "processing" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("ready_for_release"))} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Mark ready for release</button>}
+                {currentRequest.status === "under_review" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("ready_for_release"))} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Mark ready for release</button>}
                 {currentRequest.status === "ready_for_release" && <button type="button" disabled={working} onClick={() => runAction(() => updateStatus("completed"))} className="rounded-lg bg-emerald-700 px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Mark completed</button>}
               </div>
-              {["pending", "under_review", "processing"].includes(currentRequest.status) && (
+              {["pending", "under_review"].includes(currentRequest.status) && (
                 <div className="mt-4 grid gap-2 border-t border-blue-100 pt-4 sm:grid-cols-2">
                   <label className="text-xs font-semibold text-slate-600">Review note / correction instructions
                     <textarea value={staffRemarks} onChange={(event) => setStaffRemarks(event.target.value)} maxLength={2000} className="mt-1 block min-h-16 w-full rounded-lg border border-slate-200 p-2 text-sm" />
@@ -392,7 +404,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
                   </div>
                 </div>
               )}
-              {currentRequest.details?.fee_mode === "assessed" && ["pending", "under_review", "processing"].includes(currentRequest.status) && (
+              {currentRequest.details?.fee_mode === "assessed" && ["pending", "under_review"].includes(currentRequest.status) && (
                 <div className="mt-4 flex flex-wrap items-end gap-2 border-t border-blue-100 pt-4">
                   <label className="text-xs font-semibold text-slate-600">Assessed fee (₱)
                     <input type="number" min="0" step="0.01" value={fee} onChange={(event) => setFee(event.target.value)} className="mt-1 block h-9 w-36 rounded-lg border border-slate-200 px-2 text-sm" />
@@ -400,7 +412,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
                   <button type="button" disabled={working} onClick={() => runAction(saveFee)} className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 disabled:opacity-50">Save fee</button>
                 </div>
               )}
-              {requiresInspection && currentRequest.status === "processing" && (
+              {requiresInspection && currentRequest.status === "under_review" && (
                 <div className="mt-4 space-y-3 border-t border-blue-100 pt-4">
                   <p className="text-xs font-bold text-slate-700">Permit inspection</p>
                   {existingInspection.file_path && <p className="text-xs text-slate-500">Current report: {existingInspection.original_name || "Uploaded report"}</p>}
@@ -470,7 +482,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
                   <p className="mt-1 text-xs text-slate-600">{eventDescription(event)}</p>
                 </li>
               ))}
-              {!currentRequest.events?.length && <li className="text-sm text-slate-500">No processing events recorded.</li>}
+              {!currentRequest.events?.length && <li className="text-sm text-slate-500">No review events recorded.</li>}
             </ol>
           </div>
         </div>
@@ -504,7 +516,6 @@ function statusClass(status) {
   return {
     pending: "bg-amber-50 text-amber-700",
     under_review: "bg-blue-50 text-blue-700",
-    processing: "bg-blue-50 text-blue-700",
     for_correction: "bg-violet-50 text-violet-700",
     ready_for_release: "bg-emerald-50 text-emerald-700",
     completed: "bg-emerald-50 text-emerald-700",
@@ -517,7 +528,8 @@ function tabClass(active) {
 }
 
 function labelStatus(status = "") {
-  if (["pending", "under_review", "processing"].includes(status)) return "Under Review";
+  if (status === "pending") return "Pending";
+  if (status === "processing") return "Under Review";
   return status.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 

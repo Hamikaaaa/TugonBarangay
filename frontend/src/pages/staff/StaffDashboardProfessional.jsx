@@ -16,7 +16,6 @@ import {
   FileText,
   Filter,
   Search,
-  Settings2,
   X,
   XCircle,
 } from "lucide-react";
@@ -83,9 +82,8 @@ const DOCUMENT_TYPE_ICONS = {
 };
 
 const STATUS_META = {
-  pending: { label: "Under Review", className: "bg-[#FFF7E7] text-[#805900] ring-[#F1D9A8]", icon: Clock3 },
+  pending: { label: "Pending", className: "bg-[#FFF7E7] text-[#805900] ring-[#F1D9A8]", icon: Clock3 },
   under_review: { label: "Under Review", className: "bg-[#EEF4FF] text-[#2455D6] ring-[#D9E6FF]", icon: Search },
-  processing: { label: "Under Review", className: "bg-[#EAF1FF] text-[#123F70] ring-[#D9E6FF]", icon: Settings2 },
   for_correction: { label: "For Correction", className: "bg-violet-50 text-violet-700 ring-violet-200", icon: CircleAlert },
   ready_for_release: { label: "Ready for Release", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", icon: FileCheck2 },
   completed: { label: "Completed", className: "bg-[#ECF9F1] text-[#21864A] ring-[#CDEBD8]", icon: CheckCircle2 },
@@ -115,8 +113,7 @@ const WORKFLOW = [
 
 const WORKFLOW_GUIDANCE = {
   pending: "Start by checking the resident's information and uploaded requirements.",
-  under_review: "Confirm the details and requirements. If everything is valid, move the request to Processing.",
-  processing: "Generate and review the document. Once it is complete, mark it Ready for Release.",
+  under_review: "Verify the resident's details and requirements, then prepare the document. Mark it Ready for Release when verification is complete.",
   for_correction: "This request is paused while the resident submits the requested corrections.",
   ready_for_release: "The document is ready. Mark it Completed after the resident claims it.",
   completed: "The resident has claimed this document. No further action is available.",
@@ -206,7 +203,17 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
         const payload = await response.json();
         if (!response.ok) throw new Error(payload.message || "Unable to load this document request.");
         if (!active) return;
-        const request = payload.data;
+        let request = payload.data;
+        if (request.status === "pending") {
+          const statusResponse = await fetch(`${API_URL}/staff/document-requests/${requestId}/status`, {
+            method: "PATCH",
+            headers: { ...authHeaders(token), "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "under_review" }),
+          });
+          const statusPayload = await statusResponse.json();
+          if (!statusResponse.ok) throw new Error(statusPayload.message || "Unable to start reviewing this request.");
+          request = { ...request, ...statusPayload.data };
+        }
         setSelectedRequest(request);
         if (initialLoad) {
           setStaffRemarks(request.staff_remarks || "");
@@ -329,7 +336,6 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
     return {
       pending: scopedCounts?.pending ?? 0,
       under_review: scopedCounts?.under_review ?? 0,
-      processing: scopedCounts?.processing ?? 0,
       for_correction: scopedCounts?.for_correction ?? 0,
       ready_for_release: scopedCounts?.ready_for_release ?? 0,
       completed: scopedCounts?.completed ?? 0,
@@ -375,7 +381,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
       setError(`Upload the completed inspection report and confirm the councilor's go-ahead before generating the ${request.document_type}.`);
       return;
     }
-    if (request.status !== "processing") {
+    if (request.status !== "under_review") {
       setSelectedRequest(request);
       setStaffRemarks(request.staff_remarks || "");
       setRejectionReason(request.rejection_reason || "");
@@ -483,7 +489,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
 
   const currentIndex = selectedRequest
     ? WORKFLOW.findIndex((step) => step.status === (
-      ["pending", "processing"].includes(selectedRequest.status) ? "under_review" : selectedRequest.status
+      selectedRequest.status
     ))
     : -1;
   const offeredDocumentTypes = documentTypes.map(({ label, value }) => ({ label, value }));
@@ -537,7 +543,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
           {!requestId && (
             <>
           <section className="mb-7 grid gap-3 sm:grid-cols-2 xl:grid-cols-3" aria-label={`${activeDocumentLabel || "All document"} request workload`}>
-            <SummaryCard label="Under Review" value={Number(counts.pending || 0) + Number(counts.under_review || 0) + Number(counts.processing || 0)} icon={Search} color="blue" note="Requests being reviewed and prepared" onClick={() => quickFilter("under_review")} />
+        <SummaryCard label="Under Review" value={Number(counts.under_review || 0)} icon={Search} color="blue" note="Requests being reviewed and prepared" onClick={() => quickFilter("under_review")} />
             <SummaryCard label="Ready for Release" value={counts.ready_for_release} icon={FileCheck2} color="emerald" note="Awaiting resident pickup" onClick={() => quickFilter("ready_for_release")} />
             <SummaryCard label="Completed" value={counts.completed} icon={CheckCircle2} color="emerald" note="Resident has claimed the document" onClick={() => quickFilter("completed")} />
           </section>
@@ -689,7 +695,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                       }}
                       className="inline-flex h-9 items-center gap-2 rounded-xl bg-[#2455D6] px-3 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30"
                     >
-                      <Eye size={14} /> {selectedRequest.document_content ? "Preview document" : selectedRequest.status === "processing" ? "Generate and preview" : "Preview template"}
+                      <Eye size={14} /> {selectedRequest.document_content ? "Preview document" : selectedRequest.status === "under_review" ? "Generate and preview" : "Preview template"}
                     </a>
                   )}
                 </div>
@@ -761,7 +767,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                       <span className="text-[10px] font-bold uppercase tracking-wide text-[#55708F]">Current status</span>
                     </div>
                     <p className="mt-2 text-xs leading-5 text-slate-700">
-                      {selectedRequest.status === "processing" && requiresPermitInspection(selectedRequest)
+                      {selectedRequest.status === "under_review" && requiresPermitInspection(selectedRequest)
                         ? hasApprovedPermitInspection(selectedRequest)
                           ? `The councilor has given the inspection go-ahead. You can now prepare the ${selectedRequest.document_type}.`
                           : `Complete and save the inspection report. The ${selectedRequest.document_type} stays locked until the councilor gives the go-ahead.`
@@ -792,26 +798,21 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                     <div className="mb-3">
                       <h3 className="text-xs font-bold text-slate-800">Available action</h3>
                       <p className="mt-1 text-[11px] leading-4 text-slate-500">
-                        {selectedRequest.status === "pending" && "Select Start requirements review to begin processing."}
+                        {selectedRequest.status === "pending" && "Open request details to begin review."}
                         {selectedRequest.status === "under_review" && (selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_blocking_case
-                          ? "An unresolved complaint or open or referred case blocks approval of this Barangay Clearance."
-                          : selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_involved_person_match
-                            ? "A close name match was found in complaint records. Start processing to review the record-check outcome before printing or release."
-                          : "Select Approve and process after verifying the resident's details.")}
-                        {selectedRequest.status === "processing" && (selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_blocking_case
-                          ? "An unresolved complaint or open or referred case blocks clearance printing and release."
+                          ? "An unresolved complaint or open or referred case blocks clearance release."
                           : selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_involved_person_match && !selectedRequest.document_content?.derogatory_reviewed
                             ? "A close name match was found in complaint records. Select an outcome in the document preview and save it to complete the required review."
                           : selectedRequest.document_type === "Barangay Certification" && selectedRequest.document_content?.derogatory_status !== "no_derogatory_record"
                             ? "Confirm NO DEROGATORY RECORDS in the document preview before marking this clearance ready."
-                            : "Generate and review the document before marking it ready for release.")}
+                            : "Verify details and requirements, then generate and review the document before marking it ready for release.")}
                         {selectedRequest.status === "ready_for_release" && "Select Complete request only after the resident claims the document."}
                         {["for_correction", "completed", "rejected"].includes(selectedRequest.status) && "There is no staff status action available at this stage."}
                       </p>
                     </div>
-                    {["pending", "under_review", "processing", "ready_for_release"].includes(selectedRequest.status) && (
+                    {["pending", "under_review", "ready_for_release"].includes(selectedRequest.status) && (
                       <>
-                    {["pending", "under_review", "processing"].includes(selectedRequest.status) && (
+                    {selectedRequest.status === "under_review" && (
                       <>
                         <label htmlFor="staff-remarks" className="text-xs font-bold text-slate-800">Staff remarks</label>
                         <textarea
@@ -824,13 +825,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                       </>
                     )}
                     <div className="mt-3 grid gap-2">
-                      {selectedRequest.status === "pending" && (
-                        <button type="button" onClick={() => updateStatus("under_review")} disabled={submitting} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50"><Search size={14} /> {submitting ? "Updating request..." : "Start requirements review"}</button>
-                      )}
                       {selectedRequest.status === "under_review" && (
-                        <button type="button" onClick={() => updateStatus("processing")} disabled={submitting || (selectedRequest.document_type === "Barangay Certification" && selectedRequest.identity_review?.has_blocking_case)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50"><Settings2 size={14} /> {submitting ? "Updating request..." : "Approve requirements and start processing"}</button>
-                      )}
-                      {selectedRequest.status === "processing" && (
                         <>
                           <button type="button" onClick={() => openPreview(selectedRequest)} disabled={submitting || (requiresPermitInspection(selectedRequest) && !hasApprovedPermitInspection(selectedRequest))} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#2455D6] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#1D46B5] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/30 disabled:opacity-50"><Eye size={14} /> {requiresPermitInspection(selectedRequest) && !hasApprovedPermitInspection(selectedRequest) ? "Inspection report and go-ahead required" : "Generate and review document"}</button>
                           <button type="button" onClick={() => updateStatus("ready_for_release")} disabled={submitting || !selectedRequest.document_content || (selectedRequest.document_type === "Barangay Certification" && (selectedRequest.identity_review?.has_blocking_case || selectedRequest.document_content?.derogatory_status !== "no_derogatory_record" || (selectedRequest.identity_review?.has_involved_person_match && !selectedRequest.document_content?.derogatory_reviewed)))} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#CDEBD8] bg-[#ECF9F1] px-3 py-2 text-xs font-bold text-[#21864A] transition hover:bg-[#DDF3E5] disabled:opacity-50"><FileCheck2 size={14} /> Mark ready for release</button>
@@ -842,14 +837,14 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                       {selectedRequest.status === "ready_for_release" && (
                         <button type="button" onClick={() => updateStatus("completed")} disabled={submitting} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#21864A] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#176A39] focus:outline-none focus:ring-2 focus:ring-[#21864A]/30 disabled:opacity-50"><CheckCircle2 size={14} /> {submitting ? "Updating request..." : "Resident claimed document — complete request"}</button>
                       )}
-                      {["pending", "under_review", "processing"].includes(selectedRequest.status) && (
+                      {selectedRequest.status === "under_review" && (
                         <>
                           <button type="button" onClick={() => updateStatus("for_correction")} disabled={submitting || !staffRemarks.trim()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-[#F1D9A8] bg-[#FFF7E7] px-3 py-2 text-xs font-bold text-[#805900] transition hover:bg-[#FFF0D1] disabled:opacity-50"><CircleAlert size={14} /> Return to resident for correction</button>
                           <button type="button" onClick={() => updateStatus("rejected")} disabled={submitting || !staffRemarks.trim() || !rejectionReason.trim()} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-[#F2D4D0] bg-[#FFF0EE] px-3 py-2 text-xs font-bold text-[#C74444] transition hover:bg-[#FFE5E2] focus:outline-none focus:ring-2 focus:ring-[#C74444]/20 disabled:cursor-not-allowed disabled:opacity-50"><XCircle size={14} /> Reject request</button>
                         </>
                       )}
                     </div>
-                    {["pending", "under_review", "processing"].includes(selectedRequest.status) && (
+                    {selectedRequest.status === "under_review" && (
                       <>
                         <textarea value={rejectionReason} onChange={(event) => setRejectionReason(event.target.value)} placeholder="Rejection reason (required only if the issue cannot be corrected)..." className="mt-2 min-h-16 w-full resize-y rounded-lg border border-[#F2D4D0] bg-white p-3 text-xs outline-none focus:border-[#C74444] focus:ring-2 focus:ring-[#C74444]/15" />
                         <p className="mt-2 text-[10px] leading-4 text-slate-500">Staff remarks are required for correction or rejection. Rejection also requires a rejection reason.</p>
@@ -895,7 +890,7 @@ function PermitInspectionPanel({ request, token, onSaved }) {
   const [viewing, setViewing] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [error, setError] = useState("");
-  const editable = request.status === "processing";
+  const editable = request.status === "under_review";
   const saved = Boolean(existing.file_path);
 
   const saveReport = async (event) => {
