@@ -843,16 +843,16 @@ function Residents() {
                 <RegistryInput label="Last name" name="last_name" value={registryForm.last_name} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.last_name?.[0]} required />
                 <RegistryInput label="Suffix" name="suffix" value={registryForm.suffix} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.suffix?.[0]} placeholder="Jr., Sr., III" />
                 <RegistryInput label="Date of birth" name="date_of_birth" type="date" value={registryForm.date_of_birth} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.date_of_birth?.[0]} required />
-                <label className="block text-sm font-semibold text-slate-700">Sex
+                <label className="block text-sm font-semibold text-slate-700">Sex <span aria-hidden="true" className="text-red-600">*</span>
                   <select name="sex" value={registryForm.sex} onChange={updateRegistryField(setRegistryForm)} required className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10"><option value="">Select</option><option value="Male">Male</option><option value="Female">Female</option></select>
                   {registryFormErrors.sex?.[0] && <span className="mt-1 block text-xs font-normal text-red-600">{registryFormErrors.sex[0]}</span>}
                 </label>
-                <label className="block text-sm font-semibold text-slate-700">Purok
+                <label className="block text-sm font-semibold text-slate-700">Purok <span aria-hidden="true" className="text-red-600">*</span>
                   <select name="purok" value={registryForm.purok} onChange={updateRegistryField(setRegistryForm)} required className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-normal outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10"><option value="">Select purok</option>{PUROKS.map((purok) => <option key={purok} value={purok}>{purok}</option>)}</select>
                   {registryFormErrors.purok?.[0] && <span className="mt-1 block text-xs font-normal text-red-600">{registryFormErrors.purok[0]}</span>}
                 </label>
                 <RegistryInput label="Mobile number" name="mobile_number" type="tel" value={registryForm.mobile_number} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.mobile_number?.[0]} required placeholder="09XXXXXXXXX" />
-                <div className="sm:col-span-2"><RegistryInput label="Address" name="address" value={registryForm.address} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.address?.[0]} /></div>
+                <div className="sm:col-span-2"><RegistryInput label="Address" name="address" value={registryForm.address} onChange={updateRegistryField(setRegistryForm)} error={registryFormErrors.address?.[0]} required /></div>
               </div>
               {registryFormErrors.message && <p role="alert" className="text-sm text-red-600">{registryFormErrors.message}</p>}
               <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
@@ -1542,7 +1542,7 @@ function updateRegistryField(setForm) {
 function RegistryInput({ label, name, value, onChange, error, required = false, type = "text", placeholder }) {
   return (
     <label className="block text-sm font-semibold text-slate-700">
-      {label}
+      {label}{required && <> <span aria-hidden="true" className="text-red-600">*</span></>}
       <input name={name} type={type} value={value} onChange={onChange} required={required} placeholder={placeholder} max={type === "date" ? new Date().toISOString().slice(0, 10) : undefined} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-normal outline-none focus:border-[#2455D6] focus:ring-2 focus:ring-[#2455D6]/10" />
       {error && <span className="mt-1 block text-xs font-normal text-red-600">{error}</span>}
     </label>
