@@ -1358,18 +1358,18 @@ function RequestDetails({ request, token, onFeeUpdated }) {
         <DetailCard label="Purpose" value={details.form_fields?.purpose || details.purpose || details.notes || "Not provided"} />
         {details.fee_mode === "assessed" ? (
           ["Construction Permit", "Fencing Permit"].includes(request.document_type) ? (
-            <div className="rounded-xl border border-[#D9E6FF] bg-[#EEF4FF]/70 p-3">
-              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">Inspector-assessed fee</p>
-              <p className="mt-1.5 text-xs font-semibold text-slate-700">{details.fee_assessed ? `PHP ${Number(request.fee || 0).toFixed(2)} payable upon release` : "Recorded with the inspection report"}</p>
+            <div className="rounded-xl border border-[#BBD1FF] bg-[#EEF4FF] p-3 shadow-sm">
+              <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#2455D6]">Inspector-assessed fee</p>
+              <p className="mt-1.5 text-sm font-bold text-[#2455D6]">{details.fee_assessed ? `PHP ${Number(request.fee || 0).toFixed(2)} payable upon release` : "Recorded with the inspection report"}</p>
             </div>
           ) : (
             <FeeAssessment request={request} token={token} role="staff" onUpdated={onFeeUpdated} />
           )
         ) : (
-          <DetailCard
-            label={request.document_type === "Barangay Residency" ? "Fee (payable upon release)" : "Fee"}
-            value={`₱${Number(request.fee || 0).toFixed(2)}`}
-          />
+          <div className="rounded-xl border border-[#BBD1FF] bg-[#EEF4FF] p-3 shadow-sm">
+            <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#2455D6]">{request.document_type === "Barangay Residency" ? "Fee (payable upon release)" : "Fee"}</p>
+            <p className="mt-1.5 text-base font-bold text-[#2455D6]">₱{Number(request.fee || 0).toFixed(2)}</p>
+          </div>
         )}
       </div>
       </section>

@@ -243,7 +243,7 @@ function Profile({ user, verified, token }) {
             <button
               type="submit"
               disabled={saving || !isDirty}
-              className={primaryButtonClass}
+              className={`${primaryButtonClass} !bg-none !bg-[#2455D6] hover:!bg-[#1D46B5]`}
             >
               {saving ? "Saving..." : "Save changes"}
             </button>
