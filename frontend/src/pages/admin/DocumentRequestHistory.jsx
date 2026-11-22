@@ -384,6 +384,35 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
             <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label="Close request history"><X size={20} /></button>
           </div>
           <div className="overflow-y-auto p-5">
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#D9E6FF] bg-[#F6F8FC] p-4">
+              <div>
+                <h4 className="font-bold text-[#172B4D]">Generated document</h4>
+                <p className="mt-1 text-xs text-slate-500">
+                  {hasGeneratedDocument
+                            ? `Soft copy generated ${formatDateTime(currentRequest.document_generated_at)}.`
+                    : "No saved soft copy is available yet. You can still preview the document template."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDocumentOpen(true)}
+                disabled={!canPreviewDocument}
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <Eye size={14} aria-hidden="true" />
+                {hasGeneratedDocument ? "View Document" : "Preview Template"}
+              </button>
+            </div>
+
+            <h4 className="mt-7 font-bold text-[#172B4D]">Submitted information</h4>
+            {Object.keys(fields).length ? (
+              <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                {Object.entries(fields).map(([key, value]) => (
+                  <Info key={key} label={key.replaceAll("_", " ")} value={value} />
+                ))}
+              </dl>
+            ) : <p className="mt-2 text-sm text-slate-500">No form details recorded.</p>}
+
             <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-center">
               <h4 className="font-bold text-[#172B4D]">Admin actions</h4>
               <p className="mt-1 text-xs leading-5 text-slate-600">Admins can review, prepare, release, and complete document requests. Existing compliance checks remain in effect.</p>
@@ -444,35 +473,6 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
               {currentRequest.rejection_reason && <Info label="Rejection reason" value={currentRequest.rejection_reason} />}
               {currentRequest.staff_remarks && <Info label="Staff remarks" value={currentRequest.staff_remarks} />}
             </div>
-
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#D9E6FF] bg-[#F6F8FC] p-4">
-              <div>
-                <h4 className="font-bold text-[#172B4D]">Generated document</h4>
-                <p className="mt-1 text-xs text-slate-500">
-                  {hasGeneratedDocument
-                            ? `Soft copy generated ${formatDateTime(currentRequest.document_generated_at)}.`
-                    : "No saved soft copy is available yet. You can still preview the document template."}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDocumentOpen(true)}
-                disabled={!canPreviewDocument}
-                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <Eye size={14} aria-hidden="true" />
-                {hasGeneratedDocument ? "View Document" : "Preview Template"}
-              </button>
-            </div>
-
-            <h4 className="mt-7 font-bold text-[#172B4D]">Submitted information</h4>
-            {Object.keys(fields).length ? (
-              <dl className="mt-3 grid gap-3 sm:grid-cols-2">
-                {Object.entries(fields).map(([key, value]) => (
-                  <Info key={key} label={key.replaceAll("_", " ")} value={value} />
-                ))}
-              </dl>
-            ) : <p className="mt-2 text-sm text-slate-500">No form details recorded.</p>}
 
             <h4 className="mt-7 font-bold text-[#172B4D]">Processing history</h4>
             <ol className="mt-3 space-y-3 border-l-2 border-slate-200 pl-4 text-left">

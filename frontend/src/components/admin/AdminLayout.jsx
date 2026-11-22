@@ -638,6 +638,7 @@ function AdminHeader({ token, activePanel, onMenu, onNavigate }) {
               aria-controls="admin-notifications-panel"
             >
               <Bell size={17} aria-hidden="true" />
+              {notificationCount > 0 && <span className="absolute -right-1.5 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-[#E52B32] px-1 text-[10px] font-bold text-white ring-2 ring-white">{notificationCount > 99 ? "99+" : notificationCount}</span>}
             </button>
             {notificationsOpen && (
               <section id="admin-notifications-panel" className="absolute right-0 z-50 mt-3 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-xl" aria-label="Admin notifications">
@@ -645,7 +646,6 @@ function AdminHeader({ token, activePanel, onMenu, onNavigate }) {
                 {notifications.length ? <ul className="max-h-[min(60vh,24rem)] overflow-y-auto py-1">{notifications.map((item) => (
                   <li key={item.type}><button type="button" onClick={() => { setNotificationsOpen(false); onNavigate(item.path); }} className="flex w-full items-start justify-between gap-3 px-4 py-3 text-left hover:bg-[#F7F9FC]">
                     <span><span className="block text-xs font-bold text-[#172B4D]">{item.title}</span><span className="mt-1 block text-xs text-slate-500">{item.message}</span></span>
-                    <span className="rounded-full bg-[#FFF0F0] px-2 py-0.5 text-[10px] font-bold text-[#E45757]">{item.count}</span>
                   </button></li>
                 ))}</ul> : <p className="px-4 py-7 text-center text-xs text-slate-500">No outstanding admin tasks.</p>}
                 <div className="border-t border-slate-100 px-4 py-2 text-[10px] text-slate-400">Updates automatically</div>

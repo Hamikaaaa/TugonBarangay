@@ -8,6 +8,7 @@ import {
   Download,
   FileText,
   ArrowLeft,
+  Eye,
   ImagePlus,
   LoaderCircle,
   Save,
@@ -405,11 +406,47 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
     if (selected.created_at) {
       entries.push({ key: "filed", label: "Filed", at: selected.created_at });
     }
-    const statusAt = selected.status_updated_at || selected.updated_at;
-    if (statusAt) {
-      entries.push({ key: "status", label: STATUS_LABELS[selected.status] || selected.status, at: statusAt });
+    const events = selected.timeline_events || [];
+    events.forEach((event) => {
+      const metadata = event.metadata || {};
+      const status = metadata.status;
+      const priorityChange = event.action === "priority_changed";
+      const label = priorityChange
+        ? `Priority changed to ${metadata.to_priority === "urgent" ? "Urgent" : "Normal"}`
+        : status
+          ? (STATUS_LABELS[status] || status.replaceAll("_", " "))
+          : event.action === "staff_remark_added"
+            ? "Staff update"
+            : "Case update";
+      entries.push({
+        key: `event-${event.id}`,
+        label,
+        at: event.created_at,
+        actor: event.actor_name,
+        actorRole: event.actor_role,
+        remarks: metadata.staff_remarks,
+        outcome: metadata.resolution_details,
+        priorityChange: priorityChange ? metadata : null,
+        imageIndexes: metadata.image_indexes || [],
+      });
+    });
+    const hasCurrentStatusEvent = events.some((event) => event.action === "status_updated");
+    if (!hasCurrentStatusEvent && selected.status_updated_at) {
+      entries.push({ key: "legacy-status", label: STATUS_LABELS[selected.status] || selected.status, at: selected.status_updated_at });
     }
-    return entries;
+    const hasRemarks = events.some((event) => event.metadata?.staff_remarks);
+    const hasOutcome = events.some((event) => event.metadata?.resolution_details);
+    const hasImages = events.some((event) => event.metadata?.image_indexes?.length);
+    if (selected.staff_remarks && !hasRemarks) {
+      entries.push({ key: "legacy-remarks", label: "Staff update", at: selected.updated_at, remarks: selected.staff_remarks });
+    }
+    if (selected.resolution_details && !hasOutcome) {
+      entries.push({ key: "legacy-outcome", label: "Outcome recorded", at: selected.updated_at, outcome: selected.resolution_details });
+    }
+    if (selected.resolution_images?.length && !hasImages) {
+      entries.push({ key: "legacy-images", label: "Resolution pictures added", at: selected.updated_at, imageIndexes: selected.resolution_images.map((_, index) => index) });
+    }
+    return entries.sort((left, right) => new Date(left.at || 0) - new Date(right.at || 0));
   }, [selected]);
 
   const totalComplaints = Object.values(counts).reduce((sum, count) => sum + Number(count), 0);
@@ -889,6 +926,11 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
                       <div className="min-w-0">
                         <p className="font-semibold text-[#172B4D]">{entry.label}</p>
                         <p className="text-xs text-slate-500">{formatDateTime(entry.at)}</p>
+                        {(entry.actor || entry.actorRole) && <p className="text-xs text-slate-500">By {entry.actor || "Staff"}{entry.actorRole ? ` (${entry.actorRole})` : ""}</p>}
+                        {entry.remarks && <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-600"><strong className="text-slate-700">Remark:</strong> {entry.remarks}</p>}
+                        {entry.outcome && <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-600"><strong className="text-slate-700">Outcome:</strong> {entry.outcome}</p>}
+                        {entry.priorityChange && <p className="mt-1 text-xs text-slate-600">{entry.priorityChange.from_priority === "urgent" ? "Urgent" : "Normal"} → {entry.priorityChange.to_priority === "urgent" ? "Urgent" : "Normal"}</p>}
+                        {!!entry.imageIndexes?.length && <TimelineResolutionImages complaint={selected} imageIndexes={entry.imageIndexes} token={token} isAdmin={isAdmin} />}
                       </div>
                     </li>
                   ))}
@@ -1052,38 +1094,137 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
 }
 
 function EvidenceDownload({ complaint, token, isAdmin }) {
+  const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [url, setUrl] = useState("");
+  const [mimeType, setMimeType] = useState("");
   const [error, setError] = useState("");
-  const download = async () => {
-    setBusy(true);
-    setError("");
-    try {
-      const prefix = isAdmin ? "/admin" : "/staff";
-      const response = await fetch(`${API_URL}${prefix}/complaints/${complaint.id}/evidence`, { headers: authHeaders(token) });
-      if (!response.ok) {
-        const payload = await response.json();
-        throw new Error(payload.message || "Unable to download complaint evidence.");
+
+  useEffect(() => {
+    if (!open) return undefined;
+    let cancelled = false;
+    let objectUrl = "";
+    const loadEvidence = async () => {
+      setBusy(true);
+      setError("");
+      try {
+        const prefix = isAdmin ? "/admin" : "/staff";
+        const response = await fetch(`${API_URL}${prefix}/complaints/${complaint.id}/evidence`, { headers: authHeaders(token) });
+        if (!response.ok) {
+          const payload = await response.json();
+          throw new Error(payload.message || "Unable to load complaint evidence.");
+        }
+        const blob = await response.blob();
+        objectUrl = URL.createObjectURL(blob);
+        if (!cancelled) {
+          setUrl(objectUrl);
+          setMimeType(response.headers.get("Content-Type") || blob.type);
+        }
+      } catch (loadError) {
+        if (!cancelled) setError(loadError.message);
+      } finally {
+        if (!cancelled) setBusy(false);
       }
-      const objectUrl = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a");
-      link.href = objectUrl;
-      link.download = `CMP-${String(complaint.id).padStart(5, "0")}-evidence`;
-      link.click();
-      URL.revokeObjectURL(objectUrl);
-    } catch (downloadError) {
-      setError(downloadError.message);
-    } finally {
-      setBusy(false);
-    }
+    };
+    loadEvidence();
+    return () => {
+      cancelled = true;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [complaint.id, isAdmin, open, token]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
+
+  const download = () => {
+    if (!url) return;
+    const extension = mimeType.includes("pdf") ? "pdf" : mimeType.includes("png") ? "png" : mimeType.includes("jpeg") ? "jpg" : "file";
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `CMP-${String(complaint.id).padStart(5, "0")}-evidence.${extension}`;
+    link.click();
   };
 
   return (
     <div className="sm:col-span-2">
-      <button type="button" onClick={download} disabled={busy} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20 disabled:cursor-not-allowed disabled:opacity-50">
-        {busy ? <LoaderCircle size={14} className="animate-spin" aria-hidden="true" /> : <Download size={14} aria-hidden="true" />}
-        {busy ? "Downloading..." : "Download evidence"}
+      <button type="button" onClick={() => setOpen(true)} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-[#2455D6] transition hover:border-[#2455D6] hover:bg-[#EEF4FF] focus:outline-none focus:ring-2 focus:ring-[#2455D6]/20">
+        <Eye size={14} aria-hidden="true" />
+        View evidence
       </button>
-      {error && <p role="alert" className="mt-1 text-xs text-red-600">{error}</p>}
+      {open && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4" onMouseDown={(event) => { if (event.target === event.currentTarget) setOpen(false); }}>
+          <section role="dialog" aria-modal="true" aria-labelledby={`evidence-title-${complaint.id}`} className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <header className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+              <div>
+                <h3 id={`evidence-title-${complaint.id}`} className="font-bold text-[#172B4D]">Complaint evidence</h3>
+                <p className="mt-1 text-xs text-slate-500">CMP-{String(complaint.id).padStart(5, "0")}</p>
+              </div>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close evidence preview" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100"><X size={18} /></button>
+            </header>
+            <div className="flex min-h-64 flex-1 items-center justify-center overflow-auto bg-slate-50 p-4">
+              {busy && <p className="text-sm text-slate-500">Loading evidence...</p>}
+              {!busy && error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+              {!busy && !error && url && mimeType.startsWith("image/") && <img src={url} alt="Submitted complaint evidence" className="max-h-[65vh] max-w-full rounded-lg object-contain" />}
+              {!busy && !error && url && mimeType.includes("pdf") && <iframe src={url} title="Complaint evidence PDF" className="h-[65vh] w-full rounded-lg bg-white" />}
+              {!busy && !error && url && !mimeType.startsWith("image/") && !mimeType.includes("pdf") && <p className="text-sm text-slate-600">Preview is not available for this file type. Download the evidence to view it.</p>}
+            </div>
+            <footer className="flex justify-end gap-2 border-t border-slate-100 px-5 py-4">
+              <button type="button" onClick={() => setOpen(false)} className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-700">Close</button>
+              <button type="button" onClick={download} disabled={!url} className="inline-flex items-center gap-2 rounded-xl bg-[#2455D6] px-4 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"><Download size={14} aria-hidden="true" />Download evidence</button>
+            </footer>
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TimelineResolutionImages({ complaint, imageIndexes, token, isAdmin }) {
+  const [images, setImages] = useState([]);
+  const indexKey = imageIndexes.join(",");
+
+  useEffect(() => {
+    let cancelled = false;
+    const objectUrls = [];
+    const loadImages = async () => {
+      const prefix = isAdmin ? "/admin" : "/staff";
+      const loaded = await Promise.all(indexKey.split(",").filter(Boolean).map(Number).map(async (index) => {
+        try {
+          const response = await fetch(
+            `${API_URL}${prefix}/complaints/${complaint.id}/resolution-images/${index}`,
+            { headers: authHeaders(token) },
+          );
+          if (!response.ok) return { index, url: "" };
+          const url = URL.createObjectURL(await response.blob());
+          objectUrls.push(url);
+          return { index, url };
+        } catch {
+          return { index, url: "" };
+        }
+      }));
+      if (cancelled) objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      else setImages(loaded);
+    };
+    loadImages();
+    return () => {
+      cancelled = true;
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, [complaint.id, indexKey, isAdmin, token]);
+
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {images.map(({ index, url }) => url ? (
+        <a key={index} href={url} target="_blank" rel="noreferrer" aria-label={`View resolution image ${index + 1}`}>
+          <img src={url} alt={`Resolution evidence ${index + 1}`} className="h-16 w-16 rounded-lg border border-slate-200 object-cover" />
+        </a>
+      ) : <span key={index} className="text-xs text-slate-500">Image {index + 1} unavailable</span>)}
     </div>
   );
 }
