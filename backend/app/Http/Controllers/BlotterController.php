@@ -207,8 +207,7 @@ class BlotterController extends Controller
             'resident_id' => $resident?->id,
             'resident_name' => $residentName,
             'status' => $validated['status'] ?? 'open',
-            'recorded_by' => $request->user() instanceof \App\Models\Staff ? $request->user()->id : null,
-            'recorded_by_name' => $request->user()->name,
+            'recorded_by' => $request->user()->id,
         ]);
 
         return response()->json([

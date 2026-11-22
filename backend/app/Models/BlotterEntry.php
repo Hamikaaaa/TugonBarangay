@@ -22,7 +22,6 @@ class BlotterEntry extends Model
         'status',
         'remarks',
         'recorded_by',
-        'recorded_by_name',
     ];
 
     protected function casts(): array
