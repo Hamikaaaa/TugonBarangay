@@ -647,6 +647,7 @@ function ApplicantCamera({ stream, onCapture, onCancel }) {
 function Documents({ requests, token, onRefresh, user, verified, activeComplaintCount = 0 }) {
   const [catalogTypes, setCatalogTypes] = useState(null);
   const [documentType, setDocumentType] = useState("");
+  const [documentMenuOpen, setDocumentMenuOpen] = useState(false);
   const [formFields, setFormFields] = useState(() =>
     getApplicantDefaults(user),
   );
@@ -864,6 +865,45 @@ function Documents({ requests, token, onRefresh, user, verified, activeComplaint
     "Certificate of Good Moral Character",
   ].includes(selectedDocument?.value);
   const blockedByActiveComplaint = activeComplaintCount > 0 && complaintRestrictedDocument;
+  const chooseDocument = (nextDocumentType) => {
+    if (activeComplaintCount > 0 && [
+      "Barangay Certification",
+      "Certificate of Good Moral Character",
+    ].includes(nextDocumentType)) return;
+    setDocumentType(nextDocumentType);
+    setDocumentMenuOpen(false);
+    setPermitCertificationAccepted(false);
+    setPermitCertificationOpen(false);
+    setBusinessAttestationAccepted(false);
+    setBusinessAttestationOpen(false);
+    const applicantDefaults = getApplicantDefaults(user);
+    const isBusinessPermit = nextDocumentType === "Business Permit";
+    setFormFields({
+      ...applicantDefaults,
+      project_owner_name: applicantDefaults.full_name,
+      project_address: applicantDefaults.address,
+      construction_type: nextDocumentType === "Fencing Permit" ? "Fencing" : "",
+      ...(isBusinessPermit
+        ? {
+            address: getClearanceAddress(applicantDefaults.purok) || applicantDefaults.address,
+            amendment_type: "None",
+            transfer_type: "None",
+            business_ownership: "",
+            business_name: "",
+            tradename_franchise_name: "",
+            business_address: "",
+            business_area_sqm: "",
+            place_of_business: "",
+            monthly_rental: "",
+            lessor_name: "",
+            lessor_address: "",
+          }
+        : {}),
+    });
+    clearRequirementFiles();
+    closeApplicantCamera();
+    setCameraError("");
+  };
   const requiredFileCount =
     selectedDocument?.requirements.filter(
       (requirement) =>
@@ -1313,68 +1353,59 @@ function Documents({ requests, token, onRefresh, user, verified, activeComplaint
           onInput={clearInvalidFieldHighlight}
         >
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
-            <label className="block">
+            <div className="block">
               <span className="text-sm font-bold text-slate-700">
                 Document type
                 <span className="ml-1 text-red-600" aria-hidden="true">*</span>
               </span>
-              <select
-                required
-                data-validation-field="document_type"
-                value={documentType}
+              <button
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={documentMenuOpen}
                 disabled={catalogTypes === null || Boolean(editingRequest)}
-                onChange={(event) => {
-                  const nextDocumentType = event.target.value;
-                  setDocumentType(nextDocumentType);
-                  setPermitCertificationAccepted(false);
-                  setPermitCertificationOpen(false);
-                  setBusinessAttestationAccepted(false);
-                  setBusinessAttestationOpen(false);
-                  const applicantDefaults = getApplicantDefaults(user);
-                  const isBusinessPermit = nextDocumentType === "Business Permit";
-                  setFormFields({
-                    ...applicantDefaults,
-                    project_owner_name: applicantDefaults.full_name,
-                    project_address: applicantDefaults.address,
-                    construction_type: nextDocumentType === "Fencing Permit" ? "Fencing" : "",
-                    ...(isBusinessPermit
-                      ? {
-                          address: getClearanceAddress(applicantDefaults.purok) || applicantDefaults.address,
-                          amendment_type: "None",
-                          transfer_type: "None",
-                          business_ownership: "",
-                          business_name: "",
-                          tradename_franchise_name: "",
-                          business_address: "",
-                          business_area_sqm: "",
-                          place_of_business: "",
-                          monthly_rental: "",
-                          lessor_name: "",
-                          lessor_address: "",
-                        }
-                      : {}),
-                  });
-                  clearRequirementFiles();
-                  closeApplicantCamera();
-                  setCameraError("");
+                onClick={() => setDocumentMenuOpen((open) => !open)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") setDocumentMenuOpen(false);
                 }}
-                className={inputClass}
+                className={`${inputClass} mt-2 flex w-full items-center justify-between text-left disabled:cursor-not-allowed disabled:opacity-60`}
               >
-                <option value="">
-                  {catalogTypes === null ? "Loading document types..." : "Select a document"}
-                </option>
-                {documentOptions.map((document) => (
-                  <option
-                    key={document.value || document.label}
-                    value={document.value || document.label}
-                    disabled={!editingRequest && document.one_time && document.available === false}
-                  >
-                    {document.label}
-                    {document.one_time && document.available === false ? " (Already requested)" : ""}
-                  </option>
-                ))}
-              </select>
-            </label>
+                <span className={documentType ? "text-slate-700" : "text-slate-400"}>
+                  {documentOptions.find((item) => (item.value || item.label) === documentType)?.label || (catalogTypes === null ? "Loading document types..." : "Select a document")}
+                </span>
+                <span aria-hidden="true" className="ml-3 text-slate-500">{documentMenuOpen ? "⌃" : "⌄"}</span>
+              </button>
+              {documentMenuOpen && (
+                <div role="listbox" aria-label="Document type" className="relative z-20 mt-1 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-lg">
+                  {documentOptions.map((document) => {
+                    const value = document.value || document.label;
+                    const restricted = activeComplaintCount > 0 && [
+                      "Barangay Certification",
+                      "Certificate of Good Moral Character",
+                    ].includes(value);
+                    const unavailable = !editingRequest && document.one_time && document.available === false;
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        role="option"
+                        aria-selected={documentType === value}
+                        aria-disabled={restricted || unavailable}
+                        disabled={restricted || unavailable}
+                        onClick={() => chooseDocument(value)}
+                        className={`flex w-full items-center justify-between gap-4 rounded-lg px-3 py-2.5 text-left text-sm transition ${restricted || unavailable ? "cursor-not-allowed bg-slate-50 text-slate-400" : "text-slate-700 hover:bg-blue-50 hover:text-blue-800"}`}
+                      >
+                        <span>{document.label}{unavailable ? " (Already requested)" : ""}</span>
+                        {restricted && (
+                          <span className="max-w-[17rem] shrink-0 text-right text-xs font-medium leading-5 text-slate-500">
+                            You have an ongoing complaint, resolve it first before you can request.
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {selectedDocument && (
