@@ -213,9 +213,9 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
         const complaint = payload.data;
         setComplaints([complaint]);
         setSelected(complaint);
-        setStaffRemarks(complaint.staff_remarks || "");
+        setStaffRemarks("");
         setSentStaffRemarks(complaint.staff_remarks || "");
-        setResolutionDetails(complaint.resolution_details || "");
+        setResolutionDetails("");
         setResolutionImages([]);
         setResolutionImageError("");
         setClassificationPriority(complaint.priority || "normal");
@@ -279,9 +279,9 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
     }
 
     setSelected(complaint);
-    setStaffRemarks(complaint.staff_remarks || "");
+    setStaffRemarks("");
     setSentStaffRemarks(complaint.staff_remarks || "");
-    setResolutionDetails(complaint.resolution_details || "");
+    setResolutionDetails("");
     setResolutionImages([]);
     setResolutionImageError("");
     setClassificationPriority(complaint.priority || "normal");
@@ -309,11 +309,15 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
       if (!response.ok) throw new Error(payload.message || "Unable to update complaint.");
       setSelected(payload.data);
       setSentStaffRemarks(staffRemarks.trim());
+      setStaffRemarks("");
+      setResolutionDetails("");
       setResolutionImages([]);
       setResolutionImageError("");
       setNotice(payload.message || "Complaint updated.");
       window.dispatchEvent(new Event("staff-complaint-updated"));
       await loadComplaints();
+      setStaffRemarks("");
+      setResolutionDetails("");
     } catch (updateError) {
       setError(updateError.message);
     } finally {
