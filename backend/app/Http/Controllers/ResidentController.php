@@ -867,7 +867,11 @@ class ResidentController extends Controller
         if (! $faq) {
             $queryTerms = $this->botSearchTerms($normalizedQuestion, $language);
             if (count($queryTerms) > 1) {
-                $match = $faqs->map(function ($candidate) use ($queryTerms, $language) {
+                $asksAboutCost = preg_match(
+                    '/\b(how much|cost|price|fee|fees|expensive)\b/',
+                    $normalizedQuestion,
+                ) === 1;
+                $match = $faqs->map(function ($candidate) use ($queryTerms, $language, $asksAboutCost) {
                     $candidateQuestion = $language === 'ceb'
                         ? ($candidate->question_ceb ?: $candidate->question)
                         : $candidate->question;
@@ -886,11 +890,18 @@ class ResidentController extends Controller
                     $questionScore = $precision + $recall > 0
                         ? (2 * $precision * $recall) / ($precision + $recall)
                         : 0;
+                    $candidateAsksAboutCost = preg_match(
+                        '/\b(how much|cost|price|fee|fees|expensive)\b/',
+                        $this->normalizeBotText($candidateQuestion),
+                    ) === 1;
 
                     return [
                         'faq' => $candidate,
                         'shared_concepts' => $sharedConcepts,
-                        'score' => $questionScore + min($categoryOverlap * 0.05, 0.1) + min($answerOverlap * 0.01, 0.05),
+                        'score' => $questionScore
+                            + min($categoryOverlap * 0.05, 0.1)
+                            + min($answerOverlap * 0.01, 0.05)
+                            + ($asksAboutCost && $candidateAsksAboutCost ? 0.2 : 0),
                     ];
                 })->sortByDesc('score')->first();
 
@@ -1269,7 +1280,7 @@ class ResidentController extends Controller
     {
         $stopWords = $language === 'ceb'
             ? ['ang', 'ug', 'og', 'sa', 'nga', 'mga', 'ba', 'ko', 'ka', 'ni', 'na', 'ay', 'unsa', 'unsay', 'asa', 'kinsa', 'ngano', 'akong', 'imo', 'nako', 'nimo', 'kay', 'lang', 'usab', 'pwede', 'mahimo', 'naa', 'adunay', 'kini', 'kana', 'kung', 'para', 'gikan', 'sama', 'o', 'pa', 'man', 'unsaon', 'kamo', 'ikaw']
-            : ['a', 'an', 'and', 'are', 'can', 'do', 'does', 'for', 'have', 'how', 'i', 'if', 'in', 'is', 'it', 'my', 'of', 'on', 'or', 'the', 'to', 'what', 'when', 'where', 'who', 'why', 'will', 'with'];
+            : ['a', 'an', 'and', 'are', 'can', 'do', 'does', 'for', 'have', 'how', 'i', 'if', 'in', 'is', 'it', 'my', 'of', 'on', 'or', 'the', 'to', 'what', 'when', 'where', 'who', 'why', 'will', 'with', 'barangay'];
         $synonyms = [];
         if ($language !== 'ceb') {
             foreach (self::BOT_TERM_SYNONYMS as $canonical => $variants) {

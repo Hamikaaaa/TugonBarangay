@@ -6,7 +6,6 @@ const navItems = [
   ["dashboard", "Overview"],
   ["documents", "Documents"],
   ["complaints", "Complaints"],
-  ["bantaybot", "BantayBot"],
 ];
 
 function ResidentNav({
@@ -169,7 +168,7 @@ function ResidentNav({
             {notificationsOpen && (
               <section
                 id="resident-notifications-panel"
-                className="absolute right-0 z-50 mt-3 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-xl"
+                className="absolute -right-12 z-50 mt-3 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-xl sm:right-0"
                 aria-label="Notifications"
               >
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">

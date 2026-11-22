@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Bot } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
 import ResidentNav from "./ResidentNav";
 import { residentApi, secondaryButtonClass } from "../../services/residentApi";
@@ -72,9 +73,26 @@ function ResidentLayout({ children, view, onNavigate }) {
         )}
       </main>
 
+      {!loading && !loadError && view !== "bantaybot" && (
+        <button
+          type="button"
+          onClick={() => {
+            onNavigate("bantaybot");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          className="fixed bottom-4 right-4 z-30 inline-flex min-h-12 items-center gap-3 rounded-full bg-[#1D40B8] py-1.5 pl-2 pr-5 text-sm font-bold text-white shadow-xl shadow-blue-900/20 transition hover:bg-[#193AA7] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#2455D6]/30 sm:bottom-6 sm:right-6"
+          aria-label="Chat with BantayBot"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/15">
+            <Bot className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <span>Chat with BantayBot</span>
+        </button>
+      )}
+
       <footer className="border-t border-white/80 bg-white/70 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1440px] justify-center px-5 py-5 text-center text-xs text-slate-500 sm:px-8 lg:px-12">
-          <span>© 2026 TugonBarangay · Barangay Poblacion Oriental</span>
+          <span>© 2026 TugonBarangay · Barangay Tayud</span>
         </div>
       </footer>
     </div>
