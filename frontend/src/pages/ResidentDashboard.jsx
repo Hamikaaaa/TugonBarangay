@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import ResidentLayout from "../components/resident/ResidentLayout";
 import Overview from "./resident/Overview";
@@ -14,6 +14,12 @@ function ResidentDashboard() {
     const requestedView = searchParams.get("view");
     return ["documents", "complaints", "bantaybot"].includes(requestedView) ? requestedView : "dashboard";
   });
+
+  useLayoutEffect(() => {
+    // Switching from the long mobile dashboard can leave the new view scrolled
+    // past its content, which looks like a blank page. Start each view at its top.
+    window.scrollTo(0, 0);
+  }, [view]);
 
   return (
     <ResidentLayout view={view} onNavigate={setView}>
