@@ -486,7 +486,7 @@ function Complaints({
     feedbackTimerRef.current = window.setTimeout(() => {
       feedbackDelayElapsedRef.current = true;
       maybeOpenFeedback();
-    }, 5000);
+    }, 8000);
     setSubmitting(true);
     setMessage(null);
 

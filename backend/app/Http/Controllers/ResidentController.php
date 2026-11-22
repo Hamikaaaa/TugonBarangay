@@ -814,6 +814,7 @@ class ResidentController extends Controller
                     'answer' => $message->answer,
                     'matched' => $message->matched,
                     'intent' => $message->intent,
+                    'language' => $this->detectBotLanguage($message->question),
                     'faq' => $message->faq_id && $message->faq
                         ? [
                             'id' => $message->faq->id,
@@ -837,10 +838,12 @@ class ResidentController extends Controller
             'language' => ['sometimes', 'in:en,ceb'],
             'faq_id' => ['nullable', 'integer'],
         ]);
-        $language = $validated['language'] ?? 'en';
+        $language = $this->detectBotLanguage($validated['question'], $validated['language'] ?? 'en');
         $normalizedQuestion = $this->normalizeBotText($validated['question']);
         if ($this->isBotGreeting($normalizedQuestion)) {
-            $answer = 'Hello! Good day, and welcome to BantayBot. How can I help you with barangay services today?';
+            $answer = $language === 'ceb'
+                ? 'Maayong adlaw, ug welcome sa BantayBot. Unsa akong ikatabang kanimo bahin sa mga serbisyo sa barangay?'
+                : 'Hello! Good day, and welcome to BantayBot. How can I help you with barangay services today?';
             $message = ChatbotMessage::create([
                 'resident_id' => $request->user()->id,
                 'question' => $validated['question'],
@@ -857,6 +860,7 @@ class ResidentController extends Controller
                 'matched' => true,
                 'intent' => 'greeting',
                 'answer' => $answer,
+                'language' => $language,
                 'faq' => null,
             ]);
         }
@@ -945,6 +949,7 @@ class ResidentController extends Controller
             'received_at' => $message->answered_at?->toISOString(),
             'matched' => $matched,
             'answer' => $answer,
+            'language' => $language,
             'faq' => $faq,
         ]);
     }
@@ -1093,6 +1098,31 @@ class ResidentController extends Controller
         $text = preg_replace('/[^a-z0-9\s]/', ' ', $text) ?? $text;
 
         return trim(preg_replace('/\s+/', ' ', $text) ?? $text);
+    }
+
+    private function detectBotLanguage(string $question, string $fallback = 'en'): string
+    {
+        $terms = explode(' ', $this->normalizeBotText($question));
+        $bisayaTerms = [
+            'unsa', 'unsay', 'unsaon', 'giunsa', 'asa', 'kinsa', 'kanus', 'ngano', 'nganong',
+            'pila', 'pwede', 'mahimo', 'kinahanglan', 'akong', 'imong', 'nako', 'nimo',
+            'ninyo', 'nila', 'dili', 'wala', 'naa', 'adto', 'abrihi', 'pilia', 'susiha',
+            'buhaton', 'bayranan', 'bayad', 'reklamo', 'hangyo', 'tabang', 'palihog',
+            'salamat', 'kamusta', 'kumusta', 'maayong', 'buntag', 'hapon', 'gabii', 'dinhi', 'didto',
+        ];
+        $englishTerms = [
+            'what', 'where', 'when', 'why', 'who', 'how', 'which', 'can', 'could', 'would',
+            'should', 'does', 'did', 'is', 'are', 'my', 'your', 'fee', 'cost', 'price',
+            'document', 'complaint', 'request', 'account', 'please', 'help', 'need',
+        ];
+        $bisayaScore = count(array_intersect($terms, $bisayaTerms));
+        $englishScore = count(array_intersect($terms, $englishTerms));
+
+        if ($bisayaScore !== $englishScore) {
+            return $bisayaScore > $englishScore ? 'ceb' : 'en';
+        }
+
+        return $fallback;
     }
 
     private function isBotGreeting(string $normalizedQuestion): bool
