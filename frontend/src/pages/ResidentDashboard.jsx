@@ -42,6 +42,7 @@ function ResidentDashboard() {
               onRefresh={refreshDashboard}
               user={user}
               verified={verified}
+              activeComplaintCount={dashboard.open_complaints || 0}
             />
           )}
           {view === "complaints" && (
