@@ -644,7 +644,7 @@ function ApplicantCamera({ stream, onCapture, onCancel }) {
   );
 }
 
-function Documents({ requests, token, onRefresh, user, verified }) {
+function Documents({ requests, token, onRefresh, user, verified, activeComplaintCount = 0 }) {
   const [catalogTypes, setCatalogTypes] = useState(null);
   const [documentType, setDocumentType] = useState("");
   const [formFields, setFormFields] = useState(() =>
@@ -859,6 +859,11 @@ function Documents({ requests, token, onRefresh, user, verified }) {
     selectedDocument?.one_time &&
     selectedDocument.available === false &&
     !editingRequest;
+  const complaintRestrictedDocument = [
+    "Barangay Certification",
+    "Certificate of Good Moral Character",
+  ].includes(selectedDocument?.value);
+  const blockedByActiveComplaint = activeComplaintCount > 0 && complaintRestrictedDocument;
   const requiredFileCount =
     selectedDocument?.requirements.filter(
       (requirement) =>
@@ -977,6 +982,11 @@ function Documents({ requests, token, onRefresh, user, verified }) {
     }
     if (!selectedDocument) {
       setMessage("Choose a document type before submitting your request.");
+      setMessageTone("error");
+      return;
+    }
+    if (blockedByActiveComplaint) {
+      setMessage("You cannot request a Barangay Clearance or Certificate of Good Moral Character while you have an active complaint. You may request one after your complaint is resolved or closed.");
       setMessageTone("error");
       return;
     }
@@ -1384,6 +1394,11 @@ function Documents({ requests, token, onRefresh, user, verified }) {
                   {selectedDocument.unavailable_reason || "This document can only be requested once."}
                 </p>
               )}
+              {blockedByActiveComplaint && (
+                <p role="alert" className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold leading-6 text-amber-900">
+                  An active complaint is on your account. Barangay Clearance and Certificate of Good Moral Character requests will be available after it is resolved or closed.
+                </p>
+              )}
 
               {selectedDocument.value !== "Business Permit" && <div className="mt-6 border-t border-slate-100 pt-5">
                 <h3 className="text-sm font-bold text-[#172B4D]">
@@ -1396,18 +1411,26 @@ function Documents({ requests, token, onRefresh, user, verified }) {
                     ? "Your profile information is filled in when available. Review and complete the required applicant details."
                     : "Your profile details are filled in automatically. Complete any missing details in your profile."}
                 </p>
-                {selectedDocument.fee_mode === "assessed" ? (
-                  <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
-                    { ["Construction Permit", "Fencing Permit"].includes(selectedDocument.value)
-                      ? "The inspector will determine the fee for this permit. We will notify you when the document is ready for release."
-                      : "The barangay will assess the fee and notify you when your Business Clearance is ready for release."}
-                  </p>
-                ) : selectedDocument.fee !== undefined && (
-                            <p className="mt-3 rounded-xl bg-[#EEF4FF] px-4 py-3 text-sm font-semibold text-[#2455D6]">
-                              {Number(selectedDocument.fee) === 0
-                                ? `${selectedDocument.label} has no fee.`
-                                : `${selectedDocument.label} fee: ₱${Number(selectedDocument.fee).toFixed(2)}. Pay this at the barangay when you visit to claim your certificate.`}
-                  </p>
+                {(selectedDocument.fee_mode === "assessed" || selectedDocument.fee !== undefined) && (
+                  <div className="mt-4 flex flex-col gap-1 rounded-2xl border border-blue-200 bg-blue-50 px-5 py-4 text-[#2455D6] sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-blue-700">Document fee</p>
+                      {selectedDocument.fee_mode === "assessed" ? (
+                        <p className="mt-1 text-sm font-medium leading-6 text-blue-800">
+                          { ["Construction Permit", "Fencing Permit"].includes(selectedDocument.value)
+                            ? "The inspector will determine the fee for this permit. We will notify you when the document is ready for release."
+                            : "The barangay will assess the fee and notify you when your Business Clearance is ready for release."}
+                        </p>
+                      ) : Number(selectedDocument.fee) === 0 ? (
+                        <p className="mt-1 text-lg font-bold">No fee</p>
+                      ) : (
+                        <p className="mt-1 text-2xl font-extrabold tracking-tight">₱{Number(selectedDocument.fee).toFixed(2)}</p>
+                      )}
+                    </div>
+                    {selectedDocument.fee_mode !== "assessed" && Number(selectedDocument.fee) > 0 && (
+                      <p className="text-sm leading-6 text-blue-800 sm:max-w-xs sm:text-right">Pay at the barangay when you visit to claim your certificate.</p>
+                    )}
+                  </div>
                 )}
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   {selectedDocument.applicantFields
@@ -1785,7 +1808,7 @@ function Documents({ requests, token, onRefresh, user, verified }) {
 
           <button
             type="submit"
-            disabled={submitting || oneTimeAlreadyRequested || !verified}
+            disabled={submitting || oneTimeAlreadyRequested || blockedByActiveComplaint || !verified}
             className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-[#2455D6] px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-70"
           >
             {submitting

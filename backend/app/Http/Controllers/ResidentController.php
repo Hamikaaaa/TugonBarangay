@@ -272,6 +272,18 @@ class ResidentController extends Controller
         }
 
         $validated = $request->validate($rules);
+        if (in_array($validated['document_type'], [
+            'Barangay Certification',
+            'Certificate of Good Moral Character',
+        ], true)) {
+            abort_if(
+                Complaint::where('resident_id', $request->user()->id)
+                    ->whereNotIn('status', ['resolved', 'closed', 'rejected'])
+                    ->exists(),
+                422,
+                'You cannot request a Barangay Clearance or Certificate of Good Moral Character while you have an active complaint. You may request one after your complaint is resolved or closed.',
+            );
+        }
         if ($configuredType
             && $validated['document_type'] !== 'Barangay Residency'
             && $this->hasField($configuredType, 'age')
