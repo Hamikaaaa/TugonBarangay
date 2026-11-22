@@ -967,7 +967,7 @@ function BlotterEntryForm({ token, recordedBy, onClose, onSaved, isAdmin }) {
             <button
               type="submit"
               disabled={submitting}
-              className={`${primaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}
+              className={`${primaryButtonClass} !bg-none !bg-[#2455D6] !text-white hover:!bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-50`}
             >
               {submitting ? (
                 <>
