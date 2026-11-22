@@ -714,7 +714,11 @@ class StaffController extends Controller
 
     public function complaints(Request $request)
     {
-        $query = Complaint::query()->with(['user', 'timelineEvents']);
+        $relations = ['user'];
+        if (Schema::hasTable('complaint_timeline_events')) {
+            $relations[] = 'timelineEvents';
+        }
+        $query = Complaint::query()->with($relations);
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -802,7 +806,7 @@ class StaffController extends Controller
         });
 
         return response()->json([
-            'data' => $complaint->fresh()->load(['user', 'timelineEvents']),
+            'data' => $this->loadComplaintWithTimeline($complaint->fresh()),
         ]);
     }
 
@@ -828,7 +832,7 @@ class StaffController extends Controller
 
         return response()->json([
             'message' => 'Complaint priority updated.',
-            'data' => $complaint->fresh()->load(['user', 'timelineEvents']),
+            'data' => $this->loadComplaintWithTimeline($complaint->fresh()),
         ]);
     }
 
@@ -943,7 +947,7 @@ class StaffController extends Controller
 
         return response()->json([
             'message' => 'Complaint updated successfully.',
-            'data' => $complaint->fresh()->load(['user', 'timelineEvents']),
+            'data' => $this->loadComplaintWithTimeline($complaint->fresh()),
         ]);
     }
 
@@ -976,7 +980,7 @@ class StaffController extends Controller
 
         return response()->json([
             'message' => 'Progress update sent to the resident.',
-            'data' => $complaint->fresh()->load(['user', 'timelineEvents']),
+            'data' => $this->loadComplaintWithTimeline($complaint->fresh()),
         ]);
     }
 
@@ -1456,5 +1460,15 @@ class StaffController extends Controller
         $normalized = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $normalized) ?? '';
 
         return array_values(array_filter(explode(' ', trim($normalized)), fn (string $part) => $part !== ''));
+    }
+
+    private function loadComplaintWithTimeline(Complaint $complaint): Complaint
+    {
+        $complaint->load('user');
+        if (Schema::hasTable('complaint_timeline_events')) {
+            $complaint->load('timelineEvents');
+        }
+
+        return $complaint;
     }
 }

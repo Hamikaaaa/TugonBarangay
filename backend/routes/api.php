@@ -116,7 +116,11 @@ Route::middleware(['auth:sanctum', 'role:admin'])->prefix('admin')->group(functi
     Route::patch('/complaints/{complaint}/classification', [\App\Http\Controllers\StaffController::class, 'updateComplaintClassification']);
     Route::get('/complaints/{complaint}/evidence', [\App\Http\Controllers\StaffController::class, 'downloadComplaintEvidence']);
     Route::get('/complaints/{complaint}/resolution-images/{image}', [\App\Http\Controllers\StaffController::class, 'downloadComplaintResolutionImage'])->whereNumber('image');
+    Route::get('/blotter/incident-types', [\App\Http\Controllers\BlotterController::class, 'incidentTypes']);
     Route::get('/blotter/entries', [\App\Http\Controllers\BlotterController::class, 'index']);
+    Route::get('/blotter/registered-residents', [\App\Http\Controllers\BlotterController::class, 'registeredResidents']);
+    Route::post('/blotter/entries', [\App\Http\Controllers\BlotterController::class, 'store']);
+    Route::patch('/blotter/entries/{blotter}', [\App\Http\Controllers\BlotterController::class, 'update']);
 });
 
 Route::middleware(['auth:sanctum', 'role:staff'])->prefix('staff')->group(function () {

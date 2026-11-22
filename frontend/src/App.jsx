@@ -275,7 +275,7 @@ function App() {
             path="/admin/complaints/blotter-history"
             element={
               <ProtectedRoute allowedRoles={["admin"]}>
-                <Complaints />
+                <BlotterManagement isAdmin />
               </ProtectedRoute>
             }
           />

@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import { useAuth } from "../../context/AuthContext";
+import useAutoDismissMessage from "../../hooks/useAutoDismissMessage";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 
 const API_URL = "https://tugonbarangay.wuaze.com/api";
@@ -38,6 +39,7 @@ function StaffAccounts() {
   const [updatingId, setUpdatingId] = useState(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useAutoDismissMessage(notice, setNotice);
 
   const loadStaff = useCallback(async () => {
     if (!token) return;

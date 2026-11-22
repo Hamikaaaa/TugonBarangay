@@ -15,6 +15,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import StaffLayout from "./StaffLayout";
+import AdminLayout from "../../components/admin/AdminLayout";
 import useComplaintStaffNavigation from "../../hooks/useComplaintStaffNavigation";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 
@@ -85,13 +86,15 @@ function authHeaders(token) {
   };
 }
 
-function BlotterManagement() {
+function BlotterManagement({ isAdmin = false }) {
   const { token, user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const navigationItems = useComplaintStaffNavigation();
 
   const residentFilter = new URLSearchParams(location.search).get("resident") || "";
+  const routePrefix = isAdmin ? "/admin" : "/staff";
+  const pagePath = isAdmin ? "/admin/complaints/blotter-history" : "/staff/blotter";
   const [entries, setEntries] = useState([]);
   const [statusCounts, setStatusCounts] = useState({ all: 0, open: 0, resolved: 0, referred: 0 });
   const [pagination, setPagination] = useState({ current_page: 1, last_page: 1, total: 0 });
@@ -122,7 +125,7 @@ function BlotterManagement() {
       if (statusFilter !== "all") query.set("status", statusFilter);
       if (residentFilter) query.set("resident", residentFilter);
 
-      const response = await fetch(`${API_URL}/staff/blotter/entries?${query}`, {
+      const response = await fetch(`${API_URL}${routePrefix}/blotter/entries?${query}`, {
         headers: authHeaders(token),
       });
       const payload = await response.json();
@@ -143,13 +146,13 @@ function BlotterManagement() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch, page, residentFilter, statusFilter, token]);
+  }, [debouncedSearch, page, residentFilter, routePrefix, statusFilter, token]);
 
   const saveStatus = async (entryId, newStatus) => {
     if (!token) return;
     setStatusEditId(entryId);
     try {
-      const response = await fetch(`${API_URL}/staff/blotter/entries/${entryId}`, {
+      const response = await fetch(`${API_URL}${routePrefix}/blotter/entries/${entryId}`, {
         method: "PATCH",
         headers: {
           ...authHeaders(token),
@@ -192,14 +195,13 @@ function BlotterManagement() {
     ],
     [statusCounts],
   );
+  const Layout = isAdmin ? AdminLayout : StaffLayout;
+  const layoutProps = isAdmin
+    ? { title: "Blotter" }
+    : { title: "Barangay Blotter", navigationItems, activePath: pagePath, onNavigate: navigate };
 
   return (
-    <StaffLayout
-      title="Barangay Blotter"
-      navigationItems={navigationItems}
-      activePath="/staff/blotter"
-      onNavigate={navigate}
-    >
+    <Layout {...layoutProps}>
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-7 lg:px-9 lg:py-8">
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4" aria-label="Blotter summary">
           {summaryCards.map((card) => {
@@ -245,7 +247,7 @@ function BlotterManagement() {
                   Resident: {selectedResidentName}
                   <button
                     type="button"
-                    onClick={() => navigate("/staff/blotter")}
+                    onClick={() => navigate(pagePath)}
                     aria-label="Clear resident filter"
                     className="flex h-4 w-4 items-center justify-center rounded-full hover:bg-[#2455D6]/10"
                   >
@@ -410,6 +412,7 @@ function BlotterManagement() {
         <BlotterEntryForm
           token={token}
           recordedBy={user?.name}
+          isAdmin={isAdmin}
           onClose={() => setFormOpen(false)}
           onSaved={() => {
             setFormOpen(false);
@@ -423,17 +426,20 @@ function BlotterManagement() {
         <BlotterEntryDetails
           entry={selectedEntry}
           token={token}
+          isAdmin={isAdmin}
           onError={setError}
+          onUpdated={loadEntries}
           onClose={() => setSelectedEntry(null)}
         />
       )}
-    </StaffLayout>
+    </Layout>
   );
 }
 
-function BlotterEntryDetails({ entry, onClose, token, onError }) {
+function BlotterEntryDetails({ entry, onClose, token, onError, onUpdated, isAdmin }) {
   const meta = STATUS_META[entry.status] || STATUS_META.open;
   const [newRemark, setNewRemark] = useState("");
+  const [entryRemarks, setEntryRemarks] = useState(entry.remarks || "");
   const [saving, setSaving] = useState(false);
   const [entryStatus, setEntryStatus] = useState(entry.status);
   const [editingStatus, setEditingStatus] = useState(false);
@@ -450,7 +456,8 @@ function BlotterEntryDetails({ entry, onClose, token, onError }) {
     if (!token) return;
     setSaving(true);
     try {
-      const response = await fetch(`${API_URL}/staff/blotter/entries/${entry.id}`, {
+      const prefix = isAdmin ? "/admin" : "/staff";
+      const response = await fetch(`${API_URL}${prefix}/blotter/entries/${entry.id}`, {
         method: "PATCH",
         headers: {
           ...authHeaders(token),
@@ -463,6 +470,7 @@ function BlotterEntryDetails({ entry, onClose, token, onError }) {
         throw new Error(payload.message || "Unable to update status.");
       }
       setEntryStatus(newStatus);
+      onUpdated?.();
     } catch (err) {
       onError?.(err.message);
     } finally {
@@ -476,7 +484,8 @@ function BlotterEntryDetails({ entry, onClose, token, onError }) {
     setSaving(true);
     onError?.("");
     try {
-      const response = await fetch(`${API_URL}/staff/blotter/entries/${entry.id}`, {
+      const prefix = isAdmin ? "/admin" : "/staff";
+      const response = await fetch(`${API_URL}${prefix}/blotter/entries/${entry.id}`, {
         method: "PATCH",
         headers: {
           ...authHeaders(token),
@@ -489,7 +498,9 @@ function BlotterEntryDetails({ entry, onClose, token, onError }) {
         throw new Error(payload.message || "Unable to add remark.");
       }
       setNewRemark("");
+      setEntryRemarks(payload.data?.remarks || entryRemarks);
       setEntryStatus((payload.data?.status ?? entry.status));
+      onUpdated?.();
     } catch (err) {
       onError?.(err.message);
     } finally {
@@ -505,7 +516,7 @@ function BlotterEntryDetails({ entry, onClose, token, onError }) {
     { label: "Incident time", value: formatTime(entry.incident_time) },
     { label: "Location", value: entry.location },
     { label: "Purok", value: entry.resident?.purok },
-    { label: "Recorded by", value: entry.recorder?.name },
+    { label: "Recorded by", value: entry.recorded_by_name || entry.recorder?.name },
     { label: "Recorded on", value: formatDateTime(entry.created_at) },
   ];
 
@@ -603,7 +614,7 @@ function BlotterEntryDetails({ entry, onClose, token, onError }) {
           <div className="mt-4 border-t border-slate-100 pt-4">
             <h3 className="text-[11px] font-semibold uppercase text-[#55708F]">Remarks</h3>
             <p className="mt-1.5 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-600">
-              {entry.remarks || "No remarks recorded."}
+              {entryRemarks || "No remarks recorded."}
             </p>
             <div className="mt-3">
               <label className="block text-[11px] font-semibold uppercase text-[#55708F]">
@@ -642,7 +653,7 @@ function BlotterEntryDetails({ entry, onClose, token, onError }) {
   );
 }
 
-function BlotterEntryForm({ token, recordedBy, onClose, onSaved }) {
+function BlotterEntryForm({ token, recordedBy, onClose, onSaved, isAdmin }) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [incidentTypes, setIncidentTypes] = useState([]);
   const [registeredResidents, setRegisteredResidents] = useState([]);
@@ -654,7 +665,8 @@ function BlotterEntryForm({ token, recordedBy, onClose, onSaved }) {
     if (!token) return undefined;
 
     const controller = new AbortController();
-    fetch(`${API_URL}/staff/blotter/incident-types`, {
+    const prefix = isAdmin ? "/admin" : "/staff";
+    fetch(`${API_URL}${prefix}/blotter/incident-types`, {
       headers: authHeaders(token),
       signal: controller.signal,
     })
@@ -668,15 +680,16 @@ function BlotterEntryForm({ token, recordedBy, onClose, onSaved }) {
       });
 
     return () => controller.abort();
-  }, [token]);
+  }, [isAdmin, token]);
 
   useEffect(() => {
     if (!token) return undefined;
 
     const controller = new AbortController();
+    const prefix = isAdmin ? "/admin" : "/staff";
     const timer = window.setTimeout(() => {
       fetch(
-        `${API_URL}/staff/blotter/registered-residents${residentSearch.trim() ? `?search=${encodeURIComponent(residentSearch.trim())}` : ""}`,
+        `${API_URL}${prefix}/blotter/registered-residents${residentSearch.trim() ? `?search=${encodeURIComponent(residentSearch.trim())}` : ""}`,
         { headers: authHeaders(token), signal: controller.signal },
       )
         .then(async (response) => {
@@ -693,7 +706,7 @@ function BlotterEntryForm({ token, recordedBy, onClose, onSaved }) {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [residentSearch, token]);
+  }, [isAdmin, residentSearch, token]);
 
   const updateField = (event) => {
     const { name, value } = event.target;
@@ -715,7 +728,8 @@ function BlotterEntryForm({ token, recordedBy, onClose, onSaved }) {
     setError("");
 
     try {
-      const response = await fetch(`${API_URL}/staff/blotter/entries`, {
+      const prefix = isAdmin ? "/admin" : "/staff";
+      const response = await fetch(`${API_URL}${prefix}/blotter/entries`, {
         method: "POST",
         headers: {
           ...authHeaders(token),

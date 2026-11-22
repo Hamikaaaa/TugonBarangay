@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Schema;
 
 class ComplaintTimelineEvent extends Model
 {
@@ -23,6 +24,10 @@ class ComplaintTimelineEvent extends Model
 
     public static function record(Complaint $complaint, ?Account $actor, string $action, array $metadata = []): self
     {
+        if (!Schema::hasTable('complaint_timeline_events')) {
+            return new self();
+        }
+
         return self::create([
             'complaint_id' => $complaint->id,
             'actor_id' => $actor?->id,
