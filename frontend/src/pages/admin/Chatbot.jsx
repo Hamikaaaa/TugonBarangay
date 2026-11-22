@@ -26,7 +26,14 @@ import useAutoDismissMessage from "../../hooks/useAutoDismissMessage";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 
 const API_URL = "https://tugonbarangay.wuaze.com/api";
-const EMPTY_FAQ = { category: "", question: "", answer: "" };
+const EMPTY_FAQ = {
+  category: "",
+  keywords: "",
+  question: "",
+  answer: "",
+  question_ceb: "",
+  answer_ceb: "",
+};
 
 function Chatbot() {
   const { token } = useAuth();
@@ -165,6 +172,9 @@ function Chatbot() {
       (faq) =>
         faq.question.toLowerCase().includes(term) ||
         faq.answer.toLowerCase().includes(term) ||
+        (faq.question_ceb || "").toLowerCase().includes(term) ||
+        (faq.answer_ceb || "").toLowerCase().includes(term) ||
+        (Array.isArray(faq.keywords) ? faq.keywords.join(" ") : "").toLowerCase().includes(term) ||
         faq.category.toLowerCase().includes(term),
     );
   }, [faqSearch, faqs]);
@@ -198,8 +208,11 @@ function Chatbot() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             category: faqDraft.category.trim(),
+            keywords: faqDraft.keywords.trim(),
             question: faqDraft.question.trim(),
             answer: faqDraft.answer.trim(),
+            question_ceb: faqDraft.question_ceb.trim(),
+            answer_ceb: faqDraft.answer_ceb.trim(),
           }),
         },
       );
@@ -475,7 +488,7 @@ function Chatbot() {
               role="dialog"
               aria-modal="true"
               aria-labelledby="faq-editor-title"
-              className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
+              className="max-h-[90vh] w-full max-w-5xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl sm:p-6"
             >
               <form onSubmit={saveFaq} className="space-y-4">
                 <div className="flex items-center justify-between gap-3">
@@ -497,7 +510,7 @@ function Chatbot() {
                     <X className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
-                <div className="grid gap-4 md:grid-cols-[minmax(0,0.7fr)_minmax(0,1.3fr)]">
+                <div className="grid gap-4 md:grid-cols-2">
                   <label className="text-xs font-bold text-slate-600">
                     Category
                     <input
@@ -515,36 +528,75 @@ function Chatbot() {
                     />
                   </label>
                   <label className="text-xs font-bold text-slate-600">
-                    Question
+                    Keywords
                     <input
-                      required
-                      maxLength={255}
-                      value={faqDraft.question}
+                      maxLength={1000}
+                      value={faqDraft.keywords}
                       onChange={(event) =>
                         setFaqDraft({
                           ...faqDraft,
-                          question: event.target.value,
+                          keywords: event.target.value,
                         })
                       }
                       className={fieldClass}
-                      placeholder="Enter the resident's question"
+                      placeholder="Separate related English and Bisaya keywords with commas"
                     />
                   </label>
                 </div>
-                <label className="block text-xs font-bold text-slate-600">
-                  Answer
-                  <textarea
-                    required
-                    maxLength={5000}
-                    rows={5}
-                    value={faqDraft.answer}
-                    onChange={(event) =>
-                      setFaqDraft({ ...faqDraft, answer: event.target.value })
-                    }
-                    className={fieldClass}
-                    placeholder="Write a clear, resident-facing answer"
-                  />
-                </label>
+                <div className="grid gap-5 border-t border-slate-100 pt-4 lg:grid-cols-2">
+                  <section className="space-y-4">
+                    <h4 className="text-sm font-bold text-[#172B4D]">English</h4>
+                    <label className="block text-xs font-bold text-slate-600">
+                      Question
+                      <input
+                        required
+                        maxLength={255}
+                        value={faqDraft.question}
+                        onChange={(event) => setFaqDraft({ ...faqDraft, question: event.target.value })}
+                        className={fieldClass}
+                        placeholder="Enter the resident's question in English"
+                      />
+                    </label>
+                    <label className="block text-xs font-bold text-slate-600">
+                      Answer
+                      <textarea
+                        required
+                        maxLength={5000}
+                        rows={5}
+                        value={faqDraft.answer}
+                        onChange={(event) => setFaqDraft({ ...faqDraft, answer: event.target.value })}
+                        className={fieldClass}
+                        placeholder="Write a clear, resident-facing answer in English"
+                      />
+                    </label>
+                  </section>
+                  <section className="space-y-4">
+                    <h4 className="text-sm font-bold text-[#172B4D]">Bisaya</h4>
+                    <label className="block text-xs font-bold text-slate-600">
+                      Pangutana
+                      <input
+                        required
+                        maxLength={255}
+                        value={faqDraft.question_ceb}
+                        onChange={(event) => setFaqDraft({ ...faqDraft, question_ceb: event.target.value })}
+                        className={fieldClass}
+                        placeholder="Isulat ang pangutana sa residente sa Bisaya"
+                      />
+                    </label>
+                    <label className="block text-xs font-bold text-slate-600">
+                      Tubag
+                      <textarea
+                        required
+                        maxLength={5000}
+                        rows={5}
+                        value={faqDraft.answer_ceb}
+                        onChange={(event) => setFaqDraft({ ...faqDraft, answer_ceb: event.target.value })}
+                        className={fieldClass}
+                        placeholder="Isulat ang klaro nga tubag sa Bisaya"
+                      />
+                    </label>
+                  </section>
+                </div>
                 <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
                   <button
                     type="button"
@@ -729,8 +781,11 @@ function Chatbot() {
                         setFaqDraft({
                           id: faq.id,
                           category: faq.category,
+                          keywords: Array.isArray(faq.keywords) ? faq.keywords.join(", ") : "",
                           question: faq.question,
                           answer: faq.answer,
+                          question_ceb: faq.question_ceb || "",
+                          answer_ceb: faq.answer_ceb || "",
                         });
                       }}
                       aria-label={`Edit ${faq.question}`}
