@@ -1054,7 +1054,7 @@ function Documents({ requests, token, onRefresh, user, verified, activeComplaint
     feedbackTimerRef.current = window.setTimeout(() => {
       feedbackDelayElapsedRef.current = true;
       maybeShowFeedback();
-    }, 5000);
+    }, 8000);
     setConfirmationOpen(true);
   };
 

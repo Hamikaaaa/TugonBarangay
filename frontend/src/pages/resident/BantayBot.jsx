@@ -79,21 +79,38 @@ const getSavedLanguage = () => {
 const getFaqQuestion = (faq, language) =>
   language === "ceb" && faq.question_ceb ? faq.question_ceb : faq.question;
 
-const getMessageQuestion = (message, language) =>
-  message.answer?.faq
-    ? getFaqQuestion(message.answer.faq, language)
-    : message.question;
+const detectQuestionLanguage = (question, fallback = "en") => {
+  const terms = question.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/);
+  const bisayaTerms = new Set([
+    "unsa", "unsay", "unsaon", "giunsa", "asa", "kinsa", "kanus", "ngano", "nganong",
+    "pila", "pwede", "mahimo", "kinahanglan", "akong", "imong", "nako", "nimo", "ninyo",
+    "nila", "dili", "wala", "naa", "adto", "abrihi", "pilia", "susiha", "buhaton",
+    "bayranan", "bayad", "reklamo", "hangyo", "tabang", "palihog", "salamat", "kamusta",
+    "kumusta", "maayong", "buntag", "hapon", "gabii", "dinhi", "didto",
+  ]);
+  const englishTerms = new Set([
+    "what", "where", "when", "why", "who", "how", "which", "can", "could", "would",
+    "should", "does", "did", "is", "are", "my", "your", "fee", "cost", "price",
+    "document", "complaint", "request", "account", "please", "help", "need",
+  ]);
+  const bisayaScore = terms.filter((term) => bisayaTerms.has(term)).length;
+  const englishScore = terms.filter((term) => englishTerms.has(term)).length;
+  return bisayaScore === englishScore ? fallback : bisayaScore > englishScore ? "ceb" : "en";
+};
+
+const getMessageQuestion = (message) => message.question;
 
 const getMessageAnswer = (message, language) => {
+  const answerLanguage = message.answer?.language || detectQuestionLanguage(message.question, language);
   const faq = message.answer?.faq;
   if (!faq) {
-    if (language === "ceb" && message.answer?.matched === false) {
+    if (answerLanguage === "ceb" && message.answer?.matched === false) {
       return "Wala koy kasaligan nga tubag niini. Mahimo nimong ipangutana kini sa laing paagi o ipadala sa staff sa barangay para sa tabang.";
     }
     return message.answer?.answer || "";
   }
 
-  return language === "ceb" && faq.answer_ceb
+  return answerLanguage === "ceb" && faq.answer_ceb
     ? faq.answer_ceb
     : faq.answer || message.answer.answer;
 };
@@ -393,7 +410,7 @@ function BantayBot({ token, userId }) {
       feedbackTimersRef.current.delete(feedbackTimer);
       delayElapsed = true;
       openFeedbackIfReady();
-    }, 5000);
+    }, 8000);
     feedbackTimersRef.current.add(feedbackTimer);
     try {
       const data = await residentApi("/resident/bantaybot/ask", token, {
@@ -649,7 +666,7 @@ function BantayBot({ token, userId }) {
                     {t.you}
                   </p>
                   <div className="rounded-2xl rounded-br-sm bg-[#2455D6] px-4 py-3 text-sm leading-6 text-white shadow-sm">
-                    {getMessageQuestion(message, language)}
+                      {getMessageQuestion(message)}
                   </div>
                   <p className="mt-1.5 text-right text-[11px] text-slate-400">
                     {t.sent} {new Date(message.sentAt).toLocaleString()}
