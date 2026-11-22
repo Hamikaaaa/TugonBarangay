@@ -21,6 +21,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
+import useAutoDismissMessage from "../../hooks/useAutoDismissMessage";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 import { PUROKS } from "../../constants/puroks";
 
@@ -61,6 +62,7 @@ function Residents() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useAutoDismissMessage(notice, setNotice);
   const [showRegistryForm, setShowRegistryForm] = useState(false);
   const [registrySaving, setRegistrySaving] = useState(false);
   const [registryEditingId, setRegistryEditingId] = useState(null);

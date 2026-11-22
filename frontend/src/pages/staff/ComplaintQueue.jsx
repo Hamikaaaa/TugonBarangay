@@ -20,6 +20,7 @@ import {
 import { useLocation, useNavigate } from "react-router-dom";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
+import useAutoDismissMessage from "../../hooks/useAutoDismissMessage";
 import { COMPLAINT_CATEGORIES } from "../../constants/complaintCategories";
 
 const API_URL = "https://tugonbarangay.wuaze.com/api";
@@ -37,8 +38,6 @@ const FILTER_STATUS_LABELS = {
   resubmitted: STATUS_LABELS.resubmitted,
   in_progress: STATUS_LABELS.in_progress,
   resolved: STATUS_LABELS.resolved,
-  rejected: STATUS_LABELS.rejected,
-  closed: STATUS_LABELS.closed,
 };
 const PROGRESS_STAGES = ["pending", "in_progress", "resolved"];
 const STATUS_COLORS = {
@@ -95,6 +94,7 @@ function ComplaintQueue({ isAdmin = false, initialStatus = "all", isDashboard = 
   const [savingClassification, setSavingClassification] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useAutoDismissMessage(notice, setNotice, isAdmin);
 
   const endpoint = isAdmin ? "/admin/complaints" : "/staff/complaints";
   const statusLocked = Object.hasOwn(STATUS_LABELS, initialStatus);

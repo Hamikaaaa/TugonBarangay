@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Download, FileText, Save, Trash2, Upload } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import useAutoDismissMessage from "../../hooks/useAutoDismissMessage";
 import { DEFAULT_SUMMONS_SETTINGS } from "../../constants/summonsSettings";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 
@@ -26,6 +27,7 @@ function SummonsSettings() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useAutoDismissMessage(notice, setNotice);
   const [templateFile, setTemplateFile] = useState(null);
   const [removeTemplate, setRemoveTemplate] = useState(false);
   const [templatePreview, setTemplatePreview] = useState(null);

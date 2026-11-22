@@ -5,6 +5,7 @@ import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import DocumentRequestTabs from "../../components/admin/DocumentRequestTabs";
 import { useAuth } from "../../context/AuthContext";
+import useAutoDismissMessage from "../../hooks/useAutoDismissMessage";
 import { primaryButtonClass } from "../../utils/buttonStyles";
 import { BUSINESS_CLEARANCE_WORDING, CONSTRUCTION_PERMIT_WORDING, FENCING_PERMIT_WORDING, isLegacyBusinessClearanceWording } from "../../utils/documentWording";
 
@@ -93,6 +94,7 @@ function DocumentTypes() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState(location.state?.notice || "");
+  useAutoDismissMessage(notice, setNotice);
   const [deletingTypeId, setDeletingTypeId] = useState(null);
   const [downloadingTemplateId, setDownloadingTemplateId] = useState(null);
   const loadTypes = useCallback(async () => {

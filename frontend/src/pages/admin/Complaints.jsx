@@ -4,6 +4,7 @@ import { Link, useLocation } from "react-router-dom";
 import AdminLayout from "../../components/admin/AdminLayout";
 import AdminPageHeader from "../../components/admin/AdminPageHeader";
 import { useAuth } from "../../context/AuthContext";
+import useAutoDismissMessage from "../../hooks/useAutoDismissMessage";
 import AddComplaintCategory from "./AddComplaintCategory";
 import ComplaintQueue from "../staff/ComplaintQueue";
 import SummonsSettings from "./SummonsSettings";
@@ -24,6 +25,7 @@ function Complaints() {
   const [categoryEditError, setCategoryEditError] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  useAutoDismissMessage(notice, setNotice);
   const [categorySearch, setCategorySearch] = useState("");
   const [categoryPage, setCategoryPage] = useState(1);
   const activeSection = location.pathname.includes("/categories")

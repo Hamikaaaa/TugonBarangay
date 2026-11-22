@@ -93,43 +93,76 @@ export default function SummonHistory() {
     setSelected(entry);
     setTemplateUrl("");
     setError("");
-    let templateEndpoint = `${API_URL}/admin/complaints/summon-history/${entry.id}/template`;
-    let templateName = entry.template_name || "Saved summons template";
-    if (!entry.template_path) {
-      try {
-        if (!currentTemplateName) {
-          const settingsResponse = await fetch(`${API_URL}/admin/complaints/summons-settings`, { headers: authHeaders(token) });
-          const settingsPayload = await settingsResponse.json();
-          if (!settingsResponse.ok) throw new Error(settingsPayload.message || "Unable to load the current summon template.");
-          setCurrentTemplateName(settingsPayload.data?.uploaded_template_name || "");
-          templateName = settingsPayload.data?.uploaded_template_name || "Uploaded summons template";
-        } else {
-          templateName = currentTemplateName;
-        }
-        templateEndpoint = `${API_URL}/admin/complaints/summons-settings/template`;
-        setSelected({ ...entry, template_name: templateName, template_path: "current", template_is_current_fallback: true });
-      } catch (fallbackError) {
-        setError(fallbackError.message);
-        return;
-      }
-    }
     setTemplateLoading(true);
     try {
-      const response = await fetch(templateEndpoint, { headers: authHeaders(token) });
-      if (!response.ok) throw new Error("Unable to load the template saved with this notice.");
-      const blob = await response.blob();
-      const contentType = response.headers.get("content-type") || blob.type;
-      if (/\.jpe?g$/i.test(templateName) || contentType.startsWith("image/")) {
-        const objectUrl = URL.createObjectURL(blob);
+      let templateBlob = null;
+      let templateName = entry.template_name || entry.template_path || "";
+      let isCurrentFallback = false;
+
+      if (entry.template_path) {
+        try {
+          const savedResponse = await fetch(`${API_URL}/admin/complaints/summon-history/${entry.id}/template`, { headers: authHeaders(token) });
+          if (savedResponse.ok) {
+            templateBlob = await savedResponse.blob();
+          }
+        } catch {
+          // Try the current uploaded template or the generated notice preview instead.
+        }
+      }
+
+      if (!templateBlob) {
+        let uploadedTemplateName = currentTemplateName;
+        if (!uploadedTemplateName) {
+          try {
+            const settingsResponse = await fetch(`${API_URL}/admin/complaints/summons-settings`, { headers: authHeaders(token) });
+            if (settingsResponse.ok) {
+              const settingsPayload = await settingsResponse.json();
+              uploadedTemplateName = settingsPayload.data?.uploaded_template_name || "";
+              setCurrentTemplateName(uploadedTemplateName);
+            }
+          } catch {
+            // The built-in notice preview below does not depend on an uploaded template.
+          }
+        }
+
+        if (uploadedTemplateName) {
+          try {
+            const currentResponse = await fetch(`${API_URL}/admin/complaints/summons-settings/template`, { headers: authHeaders(token) });
+            if (currentResponse.ok) {
+              templateBlob = await currentResponse.blob();
+              templateName = uploadedTemplateName;
+              isCurrentFallback = true;
+            }
+          } catch {
+            // Keep the generated notice preview available if the uploaded file is unavailable.
+          }
+        }
+      }
+
+      if (templateBlob) {
+        const contentType = templateBlob.type;
+        setSelected({
+          ...entry,
+          template_name: templateName || (contentType.includes("pdf") ? "summons-template.pdf" : "summons-template.jpg"),
+          template_path: isCurrentFallback ? "current" : entry.template_path,
+          template_is_current_fallback: isCurrentFallback,
+        });
+      } else {
+        setSelected({ ...entry, template_name: "", template_path: "", template_is_current_fallback: false });
+      }
+
+      const contentType = templateBlob?.type || "";
+      if (templateBlob && (/\.(jpe?g|png)$/i.test(templateName) || contentType.startsWith("image/"))) {
+        const objectUrl = URL.createObjectURL(templateBlob);
         const image = new Image();
         image.onload = () => setTemplateRatio(`${image.naturalWidth} / ${image.naturalHeight}`);
         image.src = objectUrl;
         setTemplateUrl(objectUrl);
-      } else if (/\.pdf$/i.test(templateName) || contentType.includes("application/pdf")) {
-        setTemplateUrl(URL.createObjectURL(blob));
+      } else if (templateBlob && (/\.pdf$/i.test(templateName) || contentType.includes("application/pdf"))) {
+        setTemplateUrl(URL.createObjectURL(templateBlob));
       }
     } catch (templateError) {
-      setError(templateError.message);
+      setError(templateError.message || "Unable to prepare this summon notice preview.");
     } finally {
       setTemplateLoading(false);
     }
