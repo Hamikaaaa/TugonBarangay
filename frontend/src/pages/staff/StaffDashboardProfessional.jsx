@@ -153,6 +153,18 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
   const [requirementPreview, setRequirementPreview] = useState(null);
 
   useEffect(() => {
+    if (!notice) return undefined;
+    const timeoutId = window.setTimeout(() => setNotice(""), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [notice]);
+
+  useEffect(() => {
+    if (!error) return undefined;
+    const timeoutId = window.setTimeout(() => setError(""), 5000);
+    return () => window.clearTimeout(timeoutId);
+  }, [error]);
+
+  useEffect(() => {
     return () => {
       if (requirementPreview?.url) URL.revokeObjectURL(requirementPreview.url);
     };
@@ -257,10 +269,43 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
       if (dateFrom) query.set("from", dateFrom);
       if (dateTo) query.set("to", dateTo);
 
-      const response = await fetch(`${API_URL}/staff/document-requests?${query}`, {
+      let response = await fetch(`${API_URL}/staff/document-requests?${query}`, {
         headers: authHeaders(token),
       });
-      const payload = await response.json();
+      let payload = await response.json();
+      if (!response.ok && statusFilter === "pending" && response.status === 422) {
+        // Older deployed APIs combine pending requests with under-review results.
+        // Use that supported filter, then apply the pending filter across all pages.
+        const fallbackQuery = new URLSearchParams(query);
+        fallbackQuery.set("status", "under_review");
+        fallbackQuery.set("page", "1");
+        response = await fetch(`${API_URL}/staff/document-requests?${fallbackQuery}`, {
+          headers: authHeaders(token),
+        });
+        payload = await response.json();
+        if (response.ok) {
+          const fallbackRequests = (payload.data || []).map(normalizeDocumentRequest);
+          const fallbackLastPage = payload.last_page || 1;
+          for (let fallbackPage = 2; fallbackPage <= fallbackLastPage; fallbackPage += 1) {
+            fallbackQuery.set("page", String(fallbackPage));
+            const fallbackResponse = await fetch(`${API_URL}/staff/document-requests?${fallbackQuery}`, {
+              headers: authHeaders(token),
+            });
+            const fallbackPayload = await fallbackResponse.json();
+            if (!fallbackResponse.ok) throw new Error(fallbackPayload.message || "Unable to load pending requests.");
+            fallbackRequests.push(...(fallbackPayload.data || []).map(normalizeDocumentRequest));
+          }
+          const pendingRequests = fallbackRequests.filter((request) => request.status === "pending");
+          const filteredTotal = pendingRequests.length;
+          const filteredLastPage = Math.max(1, Math.ceil(filteredTotal / 15));
+          payload = {
+            data: pendingRequests.slice((page - 1) * 15, page * 15),
+            current_page: page,
+            last_page: filteredLastPage,
+            total: filteredTotal,
+          };
+        }
+      }
       if (!response.ok) throw new Error(payload.message || "Unable to load document requests.");
       const nextRequests = (payload.data || []).map(normalizeDocumentRequest);
       setRequests((current) => JSON.stringify(current) === JSON.stringify(nextRequests) ? current : nextRequests);
@@ -483,7 +528,6 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
       setStaffRemarks(updatedRequest.staff_remarks || "");
       setRejectionReason(payload.data.rejection_reason || "");
       setNotice(payload.message);
-      setTimeout(() => setNotice(""), 4000);
       await Promise.all([loadRequests(requestPage, true), loadDashboardSummary()]);
     } catch (requestError) {
       setError(requestError.message);
@@ -601,22 +645,22 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                 <table className="w-full min-w-[980px] border-collapse text-left">
                   <thead>
                     <tr className="border-b border-[#E6ECF5] bg-[#F6F8FC] text-[10px] font-bold tracking-[0.12em] text-[#55708F]">
-                      <th className="px-5 py-3.5">Request Id</th>
-                      <th className="px-5 py-3.5">Resident Name</th>
-                      <th className="px-5 py-3.5">Document Type</th>
-                      <th className="px-5 py-3.5">Date Requested</th>
-                      <th className="min-w-40 px-3 py-2">
+                      <th className="px-5 py-3.5 text-left">Request Id</th>
+                      <th className="px-5 py-3.5 text-left">Resident Name</th>
+                      <th className="px-5 py-3.5 text-left">Document Type</th>
+                      <th className="px-5 py-3.5 text-left">Date Requested</th>
+                      <th className="min-w-40 px-3 py-2 text-left">
                         <select
                           value={statusFilter}
                           onChange={(event) => { setStatusFilter(event.target.value); setRequestPage(1); }}
                           aria-label="Filter document requests by status"
-                          className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-semibold tracking-normal text-slate-600 outline-none focus:border-[#2455D6]"
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-left text-xs font-semibold tracking-normal text-slate-600 outline-none focus:border-[#2455D6]"
                         >
                           <option value="all">All statuses</option>
                           {STATUS_FILTERS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                         </select>
                       </th>
-                      <th className="px-5 py-3.5">Actions</th>
+                      <th className="px-5 py-3.5 text-left">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -626,8 +670,8 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                       const isSelected = selectedRequest?.id === request.id;
                       return (
                         <tr key={request.id} className={`group transition hover:bg-[#2455D6]/[0.03] ${isSelected ? "bg-[#2455D6]/[0.05]" : ""}`}>
-                          <td className="px-5 py-4 text-xs font-bold text-[#2455D6]">{formatDocumentRequestId(request.id)}</td>
-                          <td className="px-5 py-4">
+                          <td className="px-5 py-4 text-left text-xs font-bold text-[#2455D6]">{formatDocumentRequestId(request.id)}</td>
+                          <td className="px-5 py-4 text-left">
                             <div className="flex items-center justify-start gap-3">
                               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-600">{(request.resident?.name || "R").charAt(0)}</span>
                               <div className="text-left">
@@ -636,14 +680,14 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                               </div>
                             </div>
                           </td>
-                          <td className="px-5 py-4 text-xs font-semibold text-slate-600">{request.document_type_label || DOCUMENT_LABELS[request.document_type] || request.document_type}</td>
-                          <td className="px-5 py-4 text-xs text-slate-500">{formatDate(request.created_at)}</td>
-                          <td className="px-5 py-4">
+                          <td className="px-5 py-4 text-left text-xs font-semibold text-slate-600">{request.document_type_label || DOCUMENT_LABELS[request.document_type] || request.document_type}</td>
+                          <td className="px-5 py-4 text-left text-xs text-slate-500">{formatDate(request.created_at)}</td>
+                          <td className="px-5 py-4 text-left">
                             <span className={`text-[10px] font-bold ${status.textClassName}`}>
                               {status.label}
                             </span>
                           </td>
-                          <td className="px-5 py-4">
+                          <td className="px-5 py-4 text-left">
                             <div className="flex items-center justify-start gap-1.5">
                               <button type="button" onClick={() => viewRequest(request)} className="inline-flex h-9 min-w-24 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200" aria-label={`View details for request ${formatDocumentRequestId(request.id)}`}>
                                 View
@@ -837,7 +881,7 @@ function StaffDashboardProfessional({ documentType = "", requestId = "" }) {
                         </>
                       )}
                       {selectedRequest.status === "ready_for_release" && (
-                        <button type="button" onClick={() => updateStatus("completed")} disabled={submitting} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#21864A] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#176A39] focus:outline-none focus:ring-2 focus:ring-[#21864A]/30 disabled:opacity-50"><CheckCircle2 size={14} /> {submitting ? "Updating request..." : "Resident claimed document — complete request"}</button>
+                        <button type="button" onClick={() => updateStatus("completed")} disabled={submitting} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-[#21864A] px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-[#176A39] focus:outline-none focus:ring-2 focus:ring-[#21864A]/30 disabled:opacity-50"><CheckCircle2 size={14} /> {submitting ? "Updating request..." : "Mark as done"}</button>
                       )}
                       {selectedRequest.status === "under_review" && (
                         <>
