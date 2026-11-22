@@ -60,6 +60,20 @@ function formatTime(value) {
   return time.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
+function formatDateTime(value) {
+  if (!value) return "Date unavailable";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "Date unavailable"
+    : date.toLocaleString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+      });
+}
+
 function StatusBadge({ status }) {
   const normalized = (status || "pending").replaceAll("_", " ").toLowerCase();
   const resolved = ["resolved", "closed"].includes(normalized);
@@ -220,7 +234,8 @@ function ComplaintRow({ complaint, token, onResubmitted, verified }) {
           id={detailsId}
           className="mt-3 rounded-xl border border-[#E6ECF5] bg-[#F6F1FD]/40 p-4"
         >
-          <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+          <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(260px,1fr)]">
+          <dl className="grid content-start gap-x-6 gap-y-4 sm:grid-cols-2">
             <Detail label="Category" value={complaint.category} />
             <Detail
               label="Priority"
@@ -251,13 +266,6 @@ function ComplaintRow({ complaint, token, onResubmitted, verified }) {
                 wide
               />
             )}
-            {complaint.staff_remarks && (
-              <Detail
-                label="Staff remarks"
-                value={complaint.staff_remarks}
-                wide
-              />
-            )}
             {complaint.resolution_details && (
               <Detail
                 label={
@@ -273,6 +281,51 @@ function ComplaintRow({ complaint, token, onResubmitted, verified }) {
               <ResolutionImageDownloads complaint={complaint} token={token} />
             )}
           </dl>
+
+          <section className="rounded-xl border border-[#E6ECF5] bg-white p-4" aria-label="Complaint processing and remarks">
+            <h4 className="text-sm font-bold text-[#172B4D]">Processing &amp; remarks</h4>
+            <div className="mt-4 space-y-4">
+              {(complaint.timeline_events || [])
+                .filter((event) => ["status_updated", "staff_remark_added"].includes(event.action))
+                .map((event) => {
+                  const metadata = event.metadata || {};
+                  const statusLabel = metadata.status
+                    ? metadata.status.replaceAll("_", " ")
+                    : event.action === "staff_remark_added" ? "Progress update" : "Case processed";
+                  return (
+                    <article key={event.id} className="border-l-2 border-[#2455D6]/25 pl-3">
+                      <p className="text-xs font-bold capitalize text-[#2455D6]">{statusLabel}</p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {event.actor_name || "Barangay staff"}
+                        {event.actor_role ? ` · ${event.actor_role}` : ""}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(event.created_at)}</p>
+                      {metadata.staff_remarks && (
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-5 text-[#172B4D]">
+                          <span className="font-semibold">Remark: </span>{metadata.staff_remarks}
+                        </p>
+                      )}
+                      {metadata.resolution_details && (
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-5 text-[#172B4D]">
+                          <span className="font-semibold">Outcome: </span>{metadata.resolution_details}
+                        </p>
+                      )}
+                    </article>
+                  );
+                })}
+              {!(complaint.timeline_events || []).some((event) => ["status_updated", "staff_remark_added"].includes(event.action)) && complaint.staff_remarks && (
+                <article className="border-l-2 border-[#2455D6]/25 pl-3">
+                  <p className="text-xs font-bold text-[#2455D6]">Staff remark</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{formatDateTime(complaint.status_updated_at || complaint.updated_at)}</p>
+                  <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-5 text-[#172B4D]">{complaint.staff_remarks}</p>
+                </article>
+              )}
+              {!(complaint.timeline_events || []).some((event) => ["status_updated", "staff_remark_added"].includes(event.action)) && !complaint.staff_remarks && (
+                <p className="text-sm text-slate-500">No staff processing updates or remarks yet.</p>
+              )}
+            </div>
+          </section>
+          </div>
 
           {complaint.evidence_path && (
             <div className="mt-4 border-t border-[#E6ECF5] pt-4">

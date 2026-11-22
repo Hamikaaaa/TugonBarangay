@@ -580,7 +580,12 @@ class ResidentController extends Controller
 
     public function complaints(Request $request)
     {
-        return Complaint::where('resident_id', $request->user()->id)->latest()->paginate(15);
+        $query = Complaint::query()->where('resident_id', $request->user()->id);
+        if (Schema::hasTable('complaint_timeline_events')) {
+            $query->with('timelineEvents');
+        }
+
+        return $query->latest()->paginate(15);
     }
 
     public function storeComplaint(Request $request)
