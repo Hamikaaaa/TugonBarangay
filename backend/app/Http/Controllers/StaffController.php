@@ -24,7 +24,7 @@ class StaffController extends Controller
     public function documentRequests(Request $request)
     {
         $validated = $request->validate([
-            'status' => ['sometimes', 'string', 'in:all,under_review,for_correction,ready_for_release,completed,rejected'],
+            'status' => ['sometimes', 'string', 'in:all,pending,under_review,for_correction,ready_for_release,completed,rejected'],
             'document_type' => ['sometimes', 'string', 'max:100'],
             'search' => ['sometimes', 'string', 'max:150'],
             'from' => ['sometimes', 'date_format:Y-m-d'],
@@ -39,7 +39,7 @@ class StaffController extends Controller
             $status = $validated['status'];
             if ($status !== 'all') {
                 if ($status === 'under_review') {
-                    $query->whereIn('status', ['pending', 'under_review', 'processing']);
+                    $query->whereIn('status', ['under_review', 'processing']);
                 } else {
                     $query->where('status', $status);
                 }
