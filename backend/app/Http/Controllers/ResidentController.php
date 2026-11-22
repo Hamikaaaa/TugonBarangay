@@ -795,7 +795,10 @@ class ResidentController extends Controller
 
     public function faqs()
     {
-        return ChatbotFaq::where('is_active', true)->orderBy('category')->get();
+        return ChatbotFaq::where('is_active', true)
+            ->orderBy('category')
+            ->get()
+            ->map(fn (ChatbotFaq $faq) => $this->botFaqPayload($faq));
     }
 
     public function botMessages(Request $request)
@@ -820,9 +823,9 @@ class ResidentController extends Controller
                             'id' => $message->faq->id,
                             'category' => $message->faq->category,
                             'question' => $message->faq->question,
-                            'question_ceb' => $message->faq->question_ceb,
+                            'question_ceb' => $this->botFaqQuestion($message->faq, 'ceb'),
                             'answer' => $message->faq->answer,
-                            'answer_ceb' => $message->faq->answer_ceb,
+                            'answer_ceb' => $this->botFaqAnswer($message->faq, 'ceb'),
                         ]
                         : null,
                 ],
@@ -872,9 +875,7 @@ class ResidentController extends Controller
 
         if (! $faq) {
             $faq = $faqs->first(function ($candidate) use ($normalizedQuestion, $language) {
-                $candidateQuestion = $language === 'ceb'
-                    ? ($candidate->question_ceb ?: $candidate->question)
-                    : $candidate->question;
+                $candidateQuestion = $this->botFaqQuestion($candidate, $language);
 
                 return $this->normalizeBotText($candidateQuestion) === $normalizedQuestion;
             });
@@ -888,19 +889,22 @@ class ResidentController extends Controller
                     $normalizedQuestion,
                 ) === 1;
                 $match = $faqs->map(function ($candidate) use ($queryTerms, $language, $asksAboutCost) {
-                    $candidateQuestion = $language === 'ceb'
-                        ? ($candidate->question_ceb ?: $candidate->question)
-                        : $candidate->question;
-                    $candidateAnswer = $language === 'ceb'
-                        ? ($candidate->answer_ceb ?: $candidate->answer)
-                        : $candidate->answer;
+                    $candidateQuestion = $this->botFaqQuestion($candidate, $language);
+                    $candidateAnswer = $this->botFaqAnswer($candidate, $language);
                     $questionTerms = $this->botSearchTerms($candidateQuestion, $language);
                     $categoryTerms = $this->botSearchTerms($candidate->category, $language);
                     $answerTerms = $this->botSearchTerms($candidateAnswer, $language);
                     $questionOverlap = count(array_intersect($queryTerms, $questionTerms));
+                    $storedKeywords = $language === 'ceb'
+                        ? ($candidate->keywords_ceb ?? [])
+                        : ($candidate->keywords ?? []);
+                    $keywordTerms = is_array($storedKeywords)
+                        ? $this->botSearchTerms(implode(' ', $storedKeywords), $language)
+                        : [];
+                    $keywordOverlap = count(array_intersect($queryTerms, $keywordTerms));
                     $categoryOverlap = count(array_intersect($queryTerms, $categoryTerms));
                     $answerOverlap = count(array_intersect($queryTerms, $answerTerms));
-                    $sharedConcepts = $questionOverlap + $categoryOverlap;
+                    $sharedConcepts = max($questionOverlap, $keywordOverlap) + $categoryOverlap;
                     $precision = $questionOverlap / max(count($questionTerms), 1);
                     $recall = $questionOverlap / count($queryTerms);
                     $questionScore = $precision + $recall > 0
@@ -914,6 +918,9 @@ class ResidentController extends Controller
                     return [
                         'faq' => $candidate,
                         'shared_concepts' => $sharedConcepts,
+                        'keyword_overlap' => $keywordOverlap,
+                        'question_overlap' => $questionOverlap,
+                        'query_recall' => max($questionOverlap, $keywordOverlap) / count($queryTerms),
                         'score' => $questionScore
                             + min($categoryOverlap * 0.05, 0.1)
                             + min($answerOverlap * 0.01, 0.05)
@@ -921,7 +928,9 @@ class ResidentController extends Controller
                     ];
                 })->sortByDesc('score')->first();
 
-                if ($match && $match['shared_concepts'] >= 2 && $match['score'] >= 0.4) {
+                if ($match
+                    && max($match['question_overlap'], $match['keyword_overlap']) >= 1
+                    && ($match['score'] >= 0.3 || ($match['query_recall'] >= 0.5 && count($queryTerms) <= 3))) {
                     $faq = $match['faq'];
                 }
             }
@@ -929,7 +938,7 @@ class ResidentController extends Controller
 
         $matched = (bool) $faq;
         $answer = $faq
-            ? ($language === 'ceb' ? ($faq->answer_ceb ?: $faq->answer) : $faq->answer)
+            ? $this->botFaqAnswer($faq, $language)
             : ($language === 'ceb'
                 ? 'Wala koy kasaligan nga tubag niini. Mahimo nimong ipangutana kini sa laing paagi o ipadala sa staff sa barangay para sa tabang.'
                 : 'I do not have a confident answer for that question. You can rephrase it or escalate it to barangay staff for follow-up.');
@@ -950,7 +959,7 @@ class ResidentController extends Controller
             'matched' => $matched,
             'answer' => $answer,
             'language' => $language,
-            'faq' => $faq,
+            'faq' => $faq ? $this->botFaqPayload($faq) : null,
         ]);
     }
 
@@ -1004,7 +1013,10 @@ class ResidentController extends Controller
     public function adminBotFaqs()
     {
         return response()->json([
-            'data' => ChatbotFaq::orderBy('category')->orderBy('question')->get(),
+            'data' => ChatbotFaq::orderBy('category')
+                ->orderBy('question')
+                ->get()
+                ->map(fn (ChatbotFaq $faq) => $this->botFaqPayload($faq)),
         ]);
     }
 
@@ -1027,9 +1039,13 @@ class ResidentController extends Controller
     {
         $validated = $request->validate([
             'category' => ['required', 'string', 'max:100'],
+            'keywords' => ['nullable', 'string', 'max:1000'],
             'question' => ['required', 'string', 'max:255'],
             'answer' => ['required', 'string', 'max:5000'],
+            'question_ceb' => ['required', 'string', 'max:255'],
+            'answer_ceb' => ['required', 'string', 'max:5000'],
         ]);
+        $validated = $this->prepareBotFaqKeywords($validated);
 
         $faq = ChatbotFaq::create($validated + ['is_active' => true]);
 
@@ -1043,9 +1059,13 @@ class ResidentController extends Controller
     {
         $validated = $request->validate([
             'category' => ['required', 'string', 'max:100'],
+            'keywords' => ['nullable', 'string', 'max:1000'],
             'question' => ['required', 'string', 'max:255'],
             'answer' => ['required', 'string', 'max:5000'],
+            'question_ceb' => ['required', 'string', 'max:255'],
+            'answer_ceb' => ['required', 'string', 'max:5000'],
         ]);
+        $validated = $this->prepareBotFaqKeywords($validated);
 
         $chatbotFaq->update($validated);
 
@@ -1096,8 +1116,58 @@ class ResidentController extends Controller
     {
         $text = strtolower($text);
         $text = preg_replace('/[^a-z0-9\s]/', ' ', $text) ?? $text;
+        $text = str_replace(['mayng hapon', 'mayng buntag', 'maayng hapon', 'maayng buntag'], ['maayong hapon', 'maayong buntag', 'maayong hapon', 'maayong buntag'], $text);
 
         return trim(preg_replace('/\s+/', ' ', $text) ?? $text);
+    }
+
+    private function botFaqQuestion(ChatbotFaq $faq, string $language): string
+    {
+        if ($language !== 'ceb') {
+            return $faq->question;
+        }
+
+        return $faq->question_ceb ?: $faq->question;
+    }
+
+    private function botFaqAnswer(ChatbotFaq $faq, string $language): string
+    {
+        if ($language !== 'ceb') {
+            return $faq->answer;
+        }
+
+        return $faq->answer_ceb ?: $faq->answer;
+    }
+
+    private function botFaqPayload(ChatbotFaq $faq): array
+    {
+        $payload = $faq->toArray();
+        $payload['question_ceb'] = $this->botFaqQuestion($faq, 'ceb');
+        $payload['answer_ceb'] = $this->botFaqAnswer($faq, 'ceb');
+        $payload['keywords_ceb'] = $faq->keywords_ceb
+            ?: $this->botSearchTerms($payload['question_ceb'], 'ceb');
+
+        return $payload;
+    }
+
+    private function prepareBotFaqKeywords(array $validated): array
+    {
+        $manualKeywords = collect(preg_split('/[,;\n]+/', $validated['keywords'] ?? '') ?: [])
+            ->map(fn (string $keyword) => trim($keyword))
+            ->filter()
+            ->unique(fn (string $keyword) => strtolower($keyword))
+            ->values()
+            ->all();
+        $validated['keywords'] = array_values(array_unique(array_merge(
+            $this->botSearchTerms($validated['question'], 'en'),
+            $this->botSearchTerms(implode(' ', $manualKeywords), 'en'),
+        )));
+        $validated['keywords_ceb'] = array_values(array_unique(array_merge(
+            $this->botSearchTerms($validated['question_ceb'], 'ceb'),
+            $this->botSearchTerms(implode(' ', $manualKeywords), 'ceb'),
+        )));
+
+        return $validated;
     }
 
     private function detectBotLanguage(string $question, string $fallback = 'en'): string
@@ -1324,7 +1394,25 @@ class ResidentController extends Controller
             ? ['ang', 'ug', 'og', 'sa', 'nga', 'mga', 'ba', 'ko', 'ka', 'ni', 'na', 'ay', 'unsa', 'unsay', 'asa', 'kinsa', 'ngano', 'akong', 'imo', 'nako', 'nimo', 'kay', 'lang', 'usab', 'pwede', 'mahimo', 'naa', 'adunay', 'kini', 'kana', 'kung', 'para', 'gikan', 'sama', 'o', 'pa', 'man', 'unsaon', 'kamo', 'ikaw']
             : ['a', 'an', 'and', 'are', 'can', 'do', 'does', 'for', 'have', 'how', 'i', 'if', 'in', 'is', 'it', 'my', 'of', 'on', 'or', 'the', 'to', 'what', 'when', 'where', 'who', 'why', 'will', 'with', 'barangay'];
         $synonyms = [];
-        if ($language !== 'ceb') {
+        if ($language === 'ceb') {
+            $cebuanoSynonyms = [
+                'dokumento' => 'document',
+                'dokumentoha' => 'document',
+                'reklamo' => 'complaint',
+                'reklamoha' => 'complaint',
+                'hangyo' => 'request',
+                'pangayo' => 'request',
+                'pagpangayo' => 'request',
+                'bayranan' => 'fee',
+                'bayad' => 'fee',
+                'presyo' => 'fee',
+                'opisina' => 'office',
+                'account' => 'account',
+                'kumpirma' => 'verify',
+                'beripikasyon' => 'verify',
+            ];
+            $synonyms = $cebuanoSynonyms;
+        } else {
             foreach (self::BOT_TERM_SYNONYMS as $canonical => $variants) {
                 foreach ($variants as $variant) {
                     $synonyms[$variant] = $canonical;
