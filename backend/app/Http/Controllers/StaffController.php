@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Complaint;
+use App\Models\ComplaintTimelineEvent;
 use App\Models\BarangayRegistry;
 use App\Models\BlotterEntry;
 use App\Models\DocumentRequest;
@@ -713,7 +714,7 @@ class StaffController extends Controller
 
     public function complaints(Request $request)
     {
-        $query = Complaint::query()->with('user');
+        $query = Complaint::query()->with(['user', 'timelineEvents']);
 
         if ($request->filled('status')) {
             $query->where('status', $request->input('status'));
@@ -769,9 +770,9 @@ class StaffController extends Controller
         ]));
     }
 
-    public function showComplaint(Complaint $complaint)
+    public function showComplaint(Request $request, Complaint $complaint)
     {
-        DB::transaction(function () use ($complaint): void {
+        DB::transaction(function () use ($complaint, $request): void {
             $complaint = Complaint::query()
                 ->lockForUpdate()
                 ->findOrFail($complaint->id);
@@ -785,6 +786,9 @@ class StaffController extends Controller
             $complaint->resolved_at = null;
             $complaint->status_updated_at = now();
             $complaint->save();
+            ComplaintTimelineEvent::record($complaint, $request->user(), 'status_updated', [
+                'status' => 'in_progress',
+            ]);
 
             $caseReference = 'CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT);
             ResidentNotification::create([
@@ -798,7 +802,7 @@ class StaffController extends Controller
         });
 
         return response()->json([
-            'data' => $complaint->fresh()->load('user'),
+            'data' => $complaint->fresh()->load(['user', 'timelineEvents']),
         ]);
     }
 
@@ -808,11 +812,23 @@ class StaffController extends Controller
             'priority' => ['required', 'string', 'in:normal,urgent'],
         ]);
 
-        $complaint->update(['priority' => $validated['priority']]);
+        DB::transaction(function () use ($complaint, $validated, $request): void {
+            $lockedComplaint = Complaint::query()->lockForUpdate()->findOrFail($complaint->id);
+            $previousPriority = $lockedComplaint->priority;
+            if ($previousPriority === $validated['priority']) {
+                return;
+            }
+
+            $lockedComplaint->update(['priority' => $validated['priority']]);
+            ComplaintTimelineEvent::record($lockedComplaint, $request->user(), 'priority_changed', [
+                'from_priority' => $previousPriority,
+                'to_priority' => $validated['priority'],
+            ]);
+        });
 
         return response()->json([
             'message' => 'Complaint priority updated.',
-            'data' => $complaint->fresh()->load('user'),
+            'data' => $complaint->fresh()->load(['user', 'timelineEvents']),
         ]);
     }
 
@@ -848,6 +864,7 @@ class StaffController extends Controller
                     return false;
                 }
 
+                $firstImageIndex = count($complaint->resolution_images ?? []);
                 foreach ($request->file('resolution_images', []) as $image) {
                     $path = $image->store(
                         "complaints/{$complaint->resident_id}/resolutions/{$complaint->id}",
@@ -875,6 +892,21 @@ class StaffController extends Controller
                     ? ($complaint->resolved_at ?? now())
                     : null;
                 $complaint->save();
+
+                $timelineMetadata = [];
+                if (filled($validated['staff_remarks'] ?? null)) {
+                    $timelineMetadata['staff_remarks'] = $validated['staff_remarks'];
+                }
+                if (filled($validated['resolution_details'] ?? null)) {
+                    $timelineMetadata['resolution_details'] = $validated['resolution_details'];
+                }
+                if ($storedImagePaths) {
+                    $timelineMetadata['image_indexes'] = range($firstImageIndex, $firstImageIndex + count($storedImagePaths) - 1);
+                }
+                ComplaintTimelineEvent::record($complaint, $request->user(), 'status_updated', array_merge(
+                    ['status' => $validated['status']],
+                    $timelineMetadata,
+                ));
 
                 $statusLabel = str_replace('_', ' ', ucfirst($validated['status']));
                 $caseReference = 'CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT);
@@ -911,7 +943,7 @@ class StaffController extends Controller
 
         return response()->json([
             'message' => 'Complaint updated successfully.',
-            'data' => $complaint->fresh()->load('user'),
+            'data' => $complaint->fresh()->load(['user', 'timelineEvents']),
         ]);
     }
 
@@ -921,12 +953,15 @@ class StaffController extends Controller
             'staff_remarks' => ['required', 'string', 'max:2000'],
         ]);
 
-        $complaint = DB::transaction(function () use ($complaint, $validated): Complaint {
+        $complaint = DB::transaction(function () use ($complaint, $validated, $request): Complaint {
             $complaint = Complaint::query()
                 ->lockForUpdate()
                 ->findOrFail($complaint->id);
             $complaint->staff_remarks = trim($validated['staff_remarks']);
             $complaint->save();
+            ComplaintTimelineEvent::record($complaint, $request->user(), 'staff_remark_added', [
+                'staff_remarks' => $complaint->staff_remarks,
+            ]);
 
             $caseReference = 'CMP-'.str_pad((string) $complaint->id, 5, '0', STR_PAD_LEFT);
             ResidentNotification::create([
@@ -941,7 +976,7 @@ class StaffController extends Controller
 
         return response()->json([
             'message' => 'Progress update sent to the resident.',
-            'data' => $complaint->fresh()->load('user'),
+            'data' => $complaint->fresh()->load(['user', 'timelineEvents']),
         ]);
     }
 

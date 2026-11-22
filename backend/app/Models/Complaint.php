@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Complaint extends Model
 {
@@ -48,5 +49,10 @@ class Complaint extends Model
     public function assignedStaff(): BelongsTo
     {
         return $this->belongsTo(Staff::class, 'assigned_staff_id');
+    }
+
+    public function timelineEvents(): HasMany
+    {
+        return $this->hasMany(ComplaintTimelineEvent::class, 'complaint_id')->orderBy('created_at');
     }
 }
