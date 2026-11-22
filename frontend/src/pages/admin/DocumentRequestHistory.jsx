@@ -467,7 +467,7 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
 
             <div className="grid gap-3 sm:grid-cols-2">
               <Info label="Assigned handler" value={currentRequest.assigned_staff?.name || "Not assigned yet"} />
-              <Info label="Fee" value={`₱${Number(currentRequest.fee || 0).toFixed(2)}`} />
+              <Info label="Fee" value={`₱${Number(currentRequest.fee || 0).toFixed(2)}`} highlight />
               <Info label="Submitted" value={formatDateTime(currentRequest.created_at)} />
               <Info label="Status last changed" value={formatDateTime(currentRequest.status_changed_at || currentRequest.updated_at)} />
               {currentRequest.rejection_reason && <Info label="Rejection reason" value={currentRequest.rejection_reason} />}
@@ -503,11 +503,11 @@ function RequestHistoryModal({ request, token, onClose, onUpdated }) {
   );
 }
 
-function Info({ label, value }) {
+function Info({ label, value, highlight = false }) {
   return (
-    <div className="min-w-0 rounded-xl bg-slate-50 p-3">
-      <dt className="text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd className="mt-1 wrap-break-word text-sm font-medium text-slate-800">{String(value || "Not provided")}</dd>
+    <div className={`min-w-0 rounded-xl p-3 ${highlight ? "border border-[#D9E6FF] bg-[#EEF4FF]" : "bg-slate-50"}`}>
+      <dt className={`text-[10px] font-bold uppercase tracking-wide ${highlight ? "text-[#2455D6]" : "text-slate-500"}`}>{label}</dt>
+      <dd className={`mt-1 wrap-break-word ${highlight ? "text-base font-bold text-[#2455D6]" : "text-sm font-medium text-slate-800"}`}>{String(value || "Not provided")}</dd>
     </div>
   );
 }

@@ -41,9 +41,9 @@ function FeeAssessment({ request, token, role, onUpdated }) {
 
   if (!assessed) {
     return (
-      <div className="rounded-xl border border-[#E6ECF5] bg-white p-3">
-        <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-slate-400">Fee</p>
-        <p className="mt-1.5 text-xs font-semibold text-slate-700">
+      <div className="rounded-xl border border-[#BBD1FF] bg-[#EEF4FF] p-3 shadow-sm">
+        <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-[#2455D6]">Fee</p>
+        <p className="mt-1.5 text-base font-bold text-[#2455D6]">
           {Number(request.fee || 0) === 0 ? "No fee" : `₱${Number(request.fee).toFixed(2)}`}
         </p>
         {Number(request.fee || 0) > 0 && (
@@ -54,8 +54,8 @@ function FeeAssessment({ request, token, role, onUpdated }) {
   }
 
   return (
-    <form onSubmit={saveFee} className="rounded-xl border border-[#D9E6FF] bg-[#EEF4FF]/70 p-3">
-      <label className="block text-[9px] font-bold uppercase tracking-[0.14em] text-slate-500">
+    <form onSubmit={saveFee} className="rounded-xl border border-[#BBD1FF] bg-[#EEF4FF] p-3 shadow-sm">
+      <label className="block text-[9px] font-bold uppercase tracking-[0.14em] text-[#2455D6]">
         Assessed fee (₱)
         <div className="mt-1.5 flex gap-2">
           <input

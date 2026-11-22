@@ -1,10 +1,6 @@
 import { Bot, Check, CircleAlert, FileText } from "lucide-react";
 import { RequestRow } from "../../components/resident/ResidentUI";
 
-/* Same brand gradient as the Login button */
-const BRAND_GRADIENT =
-  "bg-gradient-to-r from-[#2455D6] via-[#7138E8] to-[#E52B32]";
-
 function Overview({ firstName, verified, dashboard, onNavigate, token, user }) {
   const stats = dashboard?.stats || {};
   const requests = dashboard?.requests || [];
@@ -165,7 +161,7 @@ function Overview({ firstName, verified, dashboard, onNavigate, token, user }) {
                     onClick={() => onNavigate(service.to)}
                     className={
                       isPrimary
-                        ? `group flex w-full items-center gap-4 rounded-2xl px-4 py-4 text-left text-white shadow-lg shadow-blue-500/10 transition duration-200 hover:-translate-y-0.5 hover:shadow-xl ${BRAND_GRADIENT}`
+                        ? "group flex w-full items-center gap-4 rounded-2xl bg-[#2455D6] px-4 py-4 text-left text-white shadow-lg shadow-blue-500/10 transition duration-200 hover:-translate-y-0.5 hover:bg-[#1D46B5] hover:shadow-xl"
                         : "group flex w-full items-center gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 px-4 py-4 text-left transition duration-200 hover:-translate-y-0.5 hover:border-[#2455D6]/30 hover:bg-white hover:shadow-md"
                     }
                   >
@@ -313,7 +309,7 @@ function Overview({ firstName, verified, dashboard, onNavigate, token, user }) {
                   <button
                     type="button"
                     onClick={() => onNavigate("documents")}
-                    className={`mt-5 rounded-xl px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 hover:shadow-lg ${BRAND_GRADIENT}`}
+                    className="mt-5 rounded-xl bg-[#2455D6] px-4 py-2.5 text-sm font-semibold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-[#1D46B5] hover:shadow-lg"
                   >
                     Request a document
                   </button>

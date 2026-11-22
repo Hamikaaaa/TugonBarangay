@@ -694,13 +694,15 @@ function DocumentTypes() {
                     <p className="font-bold text-[#172B4D]">{type.label}</p>
                     {type.description && <p className="mt-1 max-w-2xl text-sm text-slate-500">{type.description}</p>}
                     <p className="mt-1 text-xs text-slate-500">
-                      {type.fee_mode === "assessed" ? "Fee assessed by staff" : `₱${Number(type.fee).toFixed(2)}`}
-                      {" · "}{type.applicant_fields.length + type.fields.length} form fields
+                      <span className="inline-flex rounded-md bg-[#EEF4FF] px-2 py-1 font-bold text-[#2455D6]">
+                        {type.fee_mode === "assessed" ? "Fee assessed by staff" : `₱${Number(type.fee).toFixed(2)}`}
+                      </span>
+                      <span>{" · "}{type.applicant_fields.length + type.fields.length} form fields
                       {" · "}{type.requirements.length} upload requirements
                       {type.uploaded_template_name ? ` · ${type.uploaded_template_name}` : ""}
                       {type.one_time ? " · One-time" : ""}
                       {type.active ? "" : " · Disabled"}
-                      {type.template_enabled === false ? " · Templates disabled" : ""}
+                      {type.template_enabled === false ? " · Templates disabled" : ""}</span>
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">

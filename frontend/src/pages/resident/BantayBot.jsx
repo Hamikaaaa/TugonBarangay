@@ -11,7 +11,6 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   inputClass,
-  primaryButtonClass,
   residentApi,
 } from "../../services/residentApi";
 import { shouldPromptForFeatureFeedback } from "../../services/featureFeedback";
@@ -762,9 +761,9 @@ function BantayBot({ token, userId }) {
                 type="submit"
                 aria-label={asking ? t.finding : t.send}
                 disabled={asking || !question.trim()}
-                className={`${primaryButtonClass} h-10 w-10 shrink-0 justify-center rounded-xl px-0`}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#2455D6] text-white shadow-sm transition hover:bg-[#1D46B5] disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <Send className="h-4 w-4" aria-hidden="true" />
+                <Send className="h-4 w-4 text-white" strokeWidth={2.2} aria-hidden="true" />
               </button>
             </div>
             <div className="mt-2 flex items-center justify-between gap-3 px-1">
